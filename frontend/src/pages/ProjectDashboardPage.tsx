@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { MaterialIcon } from "../components/MaterialIcon";
-import { Button, Card, Modal, StatusPill } from "../components/primitives";
+import { Button, Card, IconButton, Modal, StatusPill } from "../components/primitives";
 import {
   createDemoSlide,
   getProject,
@@ -232,6 +232,13 @@ function SlideRow({ slide, projectId }: { slide: Slide; projectId: number }) {
             <Button variant="primary" onClick={() => navigate(`/projects/${projectId}/slides/${slide.id}/workspace`)}>
               Annotate
             </Button>
+          )}
+          {canAnnotate && (
+            <IconButton
+              icon="file_download"
+              onClick={() => navigate(`/projects/${projectId}/slides/${slide.id}/export`)}
+              title="Export this slide's annotations"
+            />
           )}
         </div>
       </td>

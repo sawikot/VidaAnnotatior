@@ -184,6 +184,7 @@ export function ProjectManagerPage() {
               menuOpen={openMenuId === p.id}
               onToggleMenu={() => setOpenMenuId(openMenuId === p.id ? null : p.id)}
               onOpen={() => navigate(`/projects/${p.id}`)}
+              onOpenVersions={() => navigate(`/projects/${p.id}/versions`)}
             />
           ))}
         </div>
@@ -271,15 +272,17 @@ function ProjectCard({
   menuOpen,
   onToggleMenu,
   onOpen,
+  onOpenVersions,
 }: {
   project: Project;
   menuOpen: boolean;
   onToggleMenu: () => void;
   onOpen: () => void;
+  onOpenVersions: () => void;
 }) {
   return (
-    <div className="flex flex-col bg-surface-container-lowest rounded shadow-sm overflow-hidden group hover:shadow-md transition-shadow">
-      <div className="h-24 bg-gradient-to-br from-primary-fixed to-primary-fixed-dim relative flex items-center justify-between px-space-sm py-space-sm">
+    <div className="flex flex-col bg-surface-container-lowest rounded shadow-sm group hover:shadow-md transition-shadow">
+      <div className="h-24 rounded-t bg-gradient-to-br from-primary-fixed to-primary-fixed-dim relative flex items-center justify-between px-space-sm py-space-sm">
         {project.organ && (
           <span className="px-space-sm py-0.5 rounded-full bg-surface-container-lowest/90 backdrop-blur text-label-sm">
             {project.organ}
@@ -311,8 +314,8 @@ function ProjectCard({
           {menuOpen && (
             <div className="absolute right-0 top-9 z-20 w-44 bg-surface-container-lowest rounded shadow-lg border border-outline-variant py-1">
               <MenuItem icon="grid_view" label="Dashboard" onClick={onOpen} />
-              <MenuItem icon="account_tree" label="Config Versions" onClick={onOpen} />
-              <MenuItem icon="file_download" label="Export" onClick={onOpen} />
+              <MenuItem icon="account_tree" label="Config Versions" onClick={onOpenVersions} />
+              <MenuItem icon="file_download" label="Export (pick a slide)" onClick={onOpen} />
             </div>
           )}
         </div>
