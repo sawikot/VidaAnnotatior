@@ -1,6 +1,7 @@
 import OpenSeadragon from "openseadragon";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { MaterialIcon } from "../../components/MaterialIcon";
 import { dziUrl } from "../../services/api";
 
 export interface ViewportBbox {
@@ -14,6 +15,10 @@ interface Props {
   slideId: number;
   className?: string;
   showNavigator?: boolean;
+  /** Custom zoom/fit/fullscreen control cluster (styled to match the app,
+   * unlike OpenSeadragon's default sprite-image buttons). Off by default for
+   * small embedded/non-interactive uses (e.g. the workspace's minimap). */
+  showControls?: boolean;
   onViewportChange?: (bbox: ViewportBbox, zoom: number) => void;
   onViewerReady?: (viewer: OpenSeadragon.Viewer) => void;
   /** Rendered inside a single full-image SVG overlay whose viewBox is
@@ -22,7 +27,15 @@ interface Props {
   children?: React.ReactNode;
 }
 
-export function WsiViewer({ slideId, className = "", showNavigator = true, onViewportChange, onViewerReady, children }: Props) {
+export function WsiViewer({
+  slideId,
+  className = "",
+  showNavigator = true,
+  showControls = true,
+  onViewportChange,
+  onViewerReady,
+  children,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<OpenSeadragon.Viewer | null>(null);
   const overlayElRef = useRef<HTMLDivElement>(document.createElement("div"));
@@ -40,11 +53,10 @@ export function WsiViewer({ slideId, className = "", showNavigator = true, onVie
       navigatorPosition: "BOTTOM_LEFT",
       showRotationControl: false,
       gestureSettingsMouse: { clickToZoom: false },
-      zoomInButton: undefined,
-      zoomOutButton: undefined,
-      showZoomControl: true,
-      showHomeControl: true,
-      showFullPageControl: true,
+      // OpenSeadragon's own zoom/home/fullpage buttons render from a sprite-sheet
+      // image path we don't serve; we draw our own matching-styled controls
+      // instead (see the `showControls` overlay below).
+      showNavigationControl: false,
       crossOriginPolicy: "Anonymous",
       minZoomImageRatio: 0.5,
       maxZoomPixelRatio: 4,
@@ -108,14 +120,31 @@ export function WsiViewer({ slideId, className = "", showNavigator = true, onVie
           </svg>,
           overlayElRef.current,
         )}
+      {showControls && contentSize && (
+        <div className="absolute bottom-3 right-3 z-30 flex items-center gap-0.5 bg-[#0f172a]/90 backdrop-blur-md rounded-lg shadow-lg p-1">
+          <ViewerControlButton icon="zoom_in" title="Zoom in" onClick={() => viewerRef.current?.viewport.zoomBy(1.4).applyConstraints()} />
+          <ViewerControlButton icon="zoom_out" title="Zoom out" onClick={() => viewerRef.current?.viewport.zoomBy(1 / 1.4).applyConstraints()} />
+          <ViewerControlButton icon="crop_free" title="Fit to screen" onClick={() => viewerRef.current?.viewport.goHome()} />
+          <ViewerControlButton
+            icon="fullscreen"
+            title="Toggle full page"
+            onClick={() => viewerRef.current?.setFullScreen(!viewerRef.current.isFullPage())}
+          />
+        </div>
+      )}
     </div>
   );
 }
 
-export function useOpenSeadragonZoomControls(viewer: OpenSeadragon.Viewer | null) {
-  return {
-    zoomIn: () => viewer?.viewport.zoomBy(1.4).applyConstraints(),
-    zoomOut: () => viewer?.viewport.zoomBy(1 / 1.4).applyConstraints(),
-    fit: () => viewer?.viewport.goHome(),
-  };
+function ViewerControlButton({ icon, title, onClick }: { icon: string; title: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      className="w-8 h-8 rounded flex items-center justify-center text-slate-300 hover:bg-white/10 hover:text-white transition-colors"
+    >
+      <MaterialIcon name={icon} className="!text-[18px]" />
+    </button>
+  );
 }

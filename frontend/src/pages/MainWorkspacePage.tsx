@@ -275,7 +275,7 @@ export function MainWorkspacePage() {
         {/* Left: navigator */}
         <div className="w-64 bg-[#0f172a] border-r border-[#1e293b] flex flex-col overflow-hidden">
           <div className="h-44 relative border-b border-[#1e293b]">
-            <WsiViewer slideId={sid} className="w-full h-full" showNavigator={false} onViewportChange={setBbox}>
+            <WsiViewer slideId={sid} className="w-full h-full" showNavigator={false} showControls={false} onViewportChange={setBbox}>
               <PatchGridOverlay slideId={sid} bbox={bbox} activePatchId={patch.id} refreshKey={gridRefresh} onPatchClick={(p) => setPatch(p)} />
             </WsiViewer>
           </div>
