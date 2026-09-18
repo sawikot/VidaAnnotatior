@@ -4,6 +4,7 @@ import { MaterialIcon } from "../components/MaterialIcon";
 import { Button, Card } from "../components/primitives";
 import { WsiViewer, type ViewportBbox } from "../features/viewer/WsiViewer";
 import { PatchGridOverlay } from "../features/viewer/PatchGridOverlay";
+import { ImportAnnotationsModal } from "../features/annotations/ImportAnnotationsModal";
 import { detectTissue, generatePatches, getConfig, getSlide, tissueMaskUrl } from "../services/api";
 import type { ConfigVersion, Slide } from "../types/api";
 import { useContextStore } from "../stores/contextStore";
@@ -25,6 +26,7 @@ export function SlideProcessingPage() {
   const [bbox, setBbox] = useState<ViewportBbox | null>(null);
   const [busy, setBusy] = useState(false);
   const [gridRefresh, setGridRefresh] = useState(0);
+  const [importOpen, setImportOpen] = useState(false);
 
   const [otsuSensitivity, setOtsuSensitivity] = useState(0.65);
   const [tissueFracPct, setTissueFracPct] = useState(60);
@@ -135,6 +137,15 @@ export function SlideProcessingPage() {
           </Button>
           <Button variant="secondary" icon="tune" onClick={handleGeneratePatches} disabled={busy || !slide.tissue_mask_path}>
             Generate Coords
+          </Button>
+          <Button
+            variant="secondary"
+            icon="upload_file"
+            onClick={() => setImportOpen(true)}
+            disabled={slide.status === "imported" || slide.status === "tissue_detected"}
+            title="Import annotations from a previously exported WSI JSON file"
+          >
+            Import Annotations
           </Button>
           <Button
             variant="primary"
@@ -249,6 +260,16 @@ export function SlideProcessingPage() {
           </Card>
         </div>
       </div>
+
+      <ImportAnnotationsModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        slideId={sid}
+        onImported={() => {
+          setGridRefresh((n) => n + 1);
+          refresh();
+        }}
+      />
     </div>
   );
 }

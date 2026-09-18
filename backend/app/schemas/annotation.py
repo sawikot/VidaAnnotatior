@@ -25,6 +25,35 @@ class GeometryAnnotationUpdate(BaseModel):
     excluded: bool | None = None
 
 
+class ImportAnnotationEntry(BaseModel):
+    """One entry from a previously exported WSI JSON `annotations[]` array."""
+
+    type: str
+    label: str | None = None
+    unsure: bool = False
+    flagged: bool = False
+    source_patch: dict
+    coordinates: list[list[float]]
+
+
+class ImportAnnotationsRequest(BaseModel):
+    """Body shape matches the WSI JSON export's top level loosely -- only
+    `annotations` is required, so a full previously-exported file can be
+    posted as-is."""
+
+    config_version_id: int | None = None
+    created_by: str | None = None
+    annotations: list[ImportAnnotationEntry]
+
+
+class ImportAnnotationsResponse(BaseModel):
+    total: int
+    imported: int
+    skipped_no_matching_patch: int
+    skipped_unknown_class: int
+    skipped_duplicate: int
+
+
 class GeometryAnnotationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

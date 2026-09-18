@@ -115,6 +115,16 @@ Open `http://localhost:5173`.
    whole slide in Level-0 space).
 6. **Export**: *Export* screen → *Full WSI JSON* is fully implemented and downloadable; the schema
    matches the spec exactly, including `source_patch` provenance and Level-0 `coordinates`.
+7. **Import annotations** (the inverse of export): on *Slide Processing*, *Import Annotations* accepts a
+   previously exported `wsi_json` file (or a bare `annotations` array) and re-creates those annotations
+   against this slide. Requires tissue detection + *Generate Coords* to have already been run with a
+   matching grid — annotations are matched to *existing* patches by exact Level-0 origin, never fabricated
+   from unverified import data. Class labels are matched by name (unrecognized ones are skipped, not
+   invented), and re-importing the same file is a safe no-op (near-identical geometry on the same patch is
+   detected and skipped).
+8. **Delete a project**: from the project card's `⋮` menu, *Delete Project* requires typing the project's
+   exact slug to confirm (the same pattern GitHub uses for deleting a repo) before it becomes clickable.
+   Deletion removes every DB row under the project *and* its files on disk (`data/uploads/<project_id>/`).
 
 ## Database
 

@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+import shutil
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_project_or_404
+from app.core.config import get_settings
 from app.database.session import get_db
-from app.models.config_version import ProjectConfigVersion
+from app.models.annotation import GeometryAnnotation
+from app.models.config_version import AnnotationClass, ProjectConfigVersion
 from app.models.patch import Patch
 from app.models.project import Project
 from app.models.slide import Slide
 from app.schemas.project import ProjectCreate, ProjectDetailOut, ProjectOut, ProjectStats, ProjectUpdate
+from app.services import reader_cache
 from app.services.config_versioning import compute_config_hash
 from app.services.slugify import slugify, unique_project_slug
 
@@ -83,6 +88,44 @@ def update_project(
 
 @router.delete("/{project_id}", status_code=204, response_model=None)
 def delete_project(project: Project = Depends(get_project_or_404), db: Session = Depends(get_db)) -> None:
+    slide_ids = [row[0] for row in db.query(Slide.id).filter(Slide.project_id == project.id)]
+    config_ids = [row[0] for row in db.query(ProjectConfigVersion.id).filter(ProjectConfigVersion.project_id == project.id)]
+
+    for slide_id in slide_ids:
+        reader_cache.invalidate(slide_id)
+
+    # Delete in explicit dependency order. Project.config_versions and
+    # Project.slides both cascade via SQLAlchemy relationships, but
+    # Patch.config_version_id, GeometryAnnotation.config_version_id, and
+    # Slide.active_config_version_id are plain FK columns (no relationship
+    # mapped the other way), so the ORM's automatic cascade doesn't know to
+    # clear them before deleting project_config_versions -- SQLite's
+    # foreign_keys=ON then rejects the delete. Do it by hand instead of
+    # relying on cascade ordering.
+    if slide_ids:
+        db.query(GeometryAnnotation).filter(GeometryAnnotation.slide_id.in_(slide_ids)).delete(synchronize_session=False)
+        db.query(Patch).filter(Patch.slide_id.in_(slide_ids)).delete(synchronize_session=False)
+        db.query(Slide).filter(Slide.id.in_(slide_ids)).update(
+            {Slide.active_config_version_id: None}, synchronize_session=False
+        )
+        db.query(Slide).filter(Slide.id.in_(slide_ids)).delete(synchronize_session=False)
+    if config_ids:
+        db.query(AnnotationClass).filter(AnnotationClass.config_version_id.in_(config_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(ProjectConfigVersion).filter(ProjectConfigVersion.id.in_(config_ids)).update(
+            {ProjectConfigVersion.parent_version_id: None}, synchronize_session=False
+        )
+    project.active_config_version_id = None
+    db.flush()
+    if config_ids:
+        db.query(ProjectConfigVersion).filter(ProjectConfigVersion.id.in_(config_ids)).delete(synchronize_session=False)
+
+    settings = get_settings()
+    project_dir = settings.wsi_storage_dir / str(project.id)
+    if project_dir.exists():
+        shutil.rmtree(project_dir, ignore_errors=True)
+
     db.delete(project)
     db.commit()
 

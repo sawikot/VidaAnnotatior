@@ -1,15 +1,24 @@
 from __future__ import annotations
 
+from collections import defaultdict
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_patch_or_404, get_slide_or_404
 from app.database.session import get_db
 from app.models.annotation import GeometryAnnotation
+from app.models.config_version import ProjectConfigVersion
 from app.models.patch import Patch
 from app.models.slide import Slide
-from app.schemas.annotation import GeometryAnnotationCreate, GeometryAnnotationOut, GeometryAnnotationUpdate
-from app.services.coordinate_transform import PatchOrigin, polygon_patch_local_to_level0
+from app.schemas.annotation import (
+    GeometryAnnotationCreate,
+    GeometryAnnotationOut,
+    GeometryAnnotationUpdate,
+    ImportAnnotationsRequest,
+    ImportAnnotationsResponse,
+)
+from app.services.coordinate_transform import PatchOrigin, polygon_level0_to_patch_local, polygon_patch_local_to_level0
 
 router = APIRouter(tags=["annotations"])
 
@@ -36,6 +45,105 @@ def list_slide_annotations(
 def _origin_for_patch(patch: Patch) -> PatchOrigin:
     downsample = (patch.width_l0 / patch.width) if patch.width else 1.0
     return PatchOrigin(x=patch.x, y=patch.y, level=patch.level, downsample=downsample)
+
+
+def _coords_close(a: list[list[float]], b: list[list[float]], tol: float = 0.5) -> bool:
+    if len(a) != len(b):
+        return False
+    return all(abs(ax - bx) <= tol and abs(ay - by) <= tol for (ax, ay), (bx, by) in zip(a, b))
+
+
+@router.post("/slides/{slide_id}/import-annotations", response_model=ImportAnnotationsResponse)
+def import_annotations(
+    payload: ImportAnnotationsRequest,
+    slide: Slide = Depends(get_slide_or_404),
+    db: Session = Depends(get_db),
+):
+    """Re-import annotations from a previously exported WSI JSON file (or any
+    payload shaped like its `annotations[]` array).
+
+    Annotations are matched to *existing* patches in this slide by exact
+    Level-0 origin (`source_patch.x`, `source_patch.y`) -- patches must already
+    be generated (via tissue detection + "Generate Coords") with a config that
+    produces the same grid before importing. This is deliberate: fabricating a
+    patch from unverified import data (unknown tissue_fraction, no re-run
+    tissue check) would silently corrupt the coordinate-generation provenance
+    the rest of the app relies on.
+
+    Diagnostic classes are matched by exact (case-insensitive) name against
+    the target config version's classes; an unrecognized label is skipped
+    rather than inventing a new class. Already-present annotations (same
+    patch, type, and near-identical Level-0 coordinates) are skipped so
+    re-running an import is safe.
+    """
+    config_id = payload.config_version_id or slide.active_config_version_id
+    config = db.get(ProjectConfigVersion, config_id) if config_id else None
+    if config is None:
+        raise HTTPException(status_code=422, detail="Slide has no active config version to import against")
+
+    classes_by_name = {c.name.strip().lower(): c for c in config.annotation_classes}
+
+    patches = db.query(Patch).filter(Patch.slide_id == slide.id, Patch.config_version_id == config.id).all()
+    patch_by_origin = {(p.x, p.y): p for p in patches}
+
+    existing_by_patch: dict[int, list[GeometryAnnotation]] = defaultdict(list)
+    for ann in db.query(GeometryAnnotation).filter(GeometryAnnotation.slide_id == slide.id):
+        existing_by_patch[ann.patch_id].append(ann)
+
+    imported = skipped_no_patch = skipped_no_class = skipped_duplicate = 0
+
+    for entry in payload.annotations:
+        x = entry.source_patch.get("x")
+        y = entry.source_patch.get("y")
+        patch = patch_by_origin.get((x, y)) if x is not None and y is not None else None
+        if patch is None:
+            skipped_no_patch += 1
+            continue
+
+        class_obj = None
+        if entry.label:
+            class_obj = classes_by_name.get(entry.label.strip().lower())
+            if class_obj is None:
+                skipped_no_class += 1
+                continue
+
+        if any(
+            existing.type == entry.type and _coords_close(existing.coordinates_level0, entry.coordinates)
+            for existing in existing_by_patch.get(patch.id, [])
+        ):
+            skipped_duplicate += 1
+            continue
+
+        origin = _origin_for_patch(patch)
+        local_coords = polygon_level0_to_patch_local(origin, entry.coordinates)
+
+        annotation = GeometryAnnotation(
+            patch_id=patch.id,
+            slide_id=slide.id,
+            config_version_id=config.id,
+            class_id=class_obj.id if class_obj else None,
+            type=entry.type,
+            coordinates_patch_local=local_coords,
+            coordinates_level0=entry.coordinates,
+            created_by=payload.created_by or "Imported",
+            unsure=entry.unsure,
+            flagged=entry.flagged,
+        )
+        db.add(annotation)
+        existing_by_patch[patch.id].append(annotation)
+        if patch.status == "unannotated":
+            patch.status = "annotated"
+        imported += 1
+
+    db.commit()
+
+    return ImportAnnotationsResponse(
+        total=len(payload.annotations),
+        imported=imported,
+        skipped_no_matching_patch=skipped_no_patch,
+        skipped_unknown_class=skipped_no_class,
+        skipped_duplicate=skipped_duplicate,
+    )
 
 
 @router.get("/patches/{patch_id}/annotations", response_model=list[GeometryAnnotationOut])

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { MaterialIcon } from "./MaterialIcon";
 
@@ -115,5 +116,73 @@ export function StatusPill({ status }: { status: string }) {
     <span className={`px-space-sm py-0.5 rounded-full text-label-sm font-headline-sm capitalize ${style}`}>
       {status.replace(/_/g, " ")}
     </span>
+  );
+}
+
+/** A destructive-action confirmation that requires typing an exact phrase
+ * (usually the resource's own name/slug) before the confirm button unlocks --
+ * the same pattern GitHub uses for deleting a repository. Prevents a stray
+ * click from destroying something irreversible. */
+export function ConfirmDeleteModal({
+  open,
+  onClose,
+  onConfirm,
+  title,
+  description,
+  confirmPhrase,
+  confirmLabel = "Delete",
+  busy = false,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void | Promise<void>;
+  title: string;
+  description: ReactNode;
+  confirmPhrase: string;
+  confirmLabel?: string;
+  busy?: boolean;
+}) {
+  const [typed, setTyped] = useState("");
+  const matches = typed === confirmPhrase;
+
+  function handleClose() {
+    setTyped("");
+    onClose();
+  }
+
+  return (
+    <Modal open={open} onClose={handleClose} widthClass="max-w-md">
+      <div className="p-space-lg flex flex-col gap-space-md">
+        <div className="flex items-center gap-space-sm">
+          <span className="w-10 h-10 rounded-full bg-error-container flex items-center justify-center shrink-0">
+            <MaterialIcon name="warning" className="text-error" />
+          </span>
+          <h2 className="font-headline-md text-headline-md text-on-surface">{title}</h2>
+        </div>
+        <div className="text-body-md text-on-surface-variant">{description}</div>
+        <label className="flex flex-col gap-1">
+          <span className="text-label-md text-on-surface-variant">
+            Type <span className="font-mono text-on-surface">{confirmPhrase}</span> to confirm
+          </span>
+          <input
+            className="input font-mono"
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            placeholder={confirmPhrase}
+            autoFocus
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </label>
+        <div className="flex justify-end gap-space-sm">
+          <Button variant="ghost" onClick={handleClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button variant="danger" disabled={!matches || busy} onClick={onConfirm}>
+            {busy ? "Deleting..." : confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }

@@ -3,6 +3,7 @@ import pytest
 from app.models.config_version import AnnotationClass, ProjectConfigVersion
 from app.models.patch import Patch
 from app.models.project import Project
+from app.models.slide import Slide
 from app.services.config_versioning import ConfigLockedError, assert_mutable, compute_config_hash, fork_config
 
 
@@ -34,9 +35,12 @@ def test_mutable_when_no_patches_generated(db):
 
 def test_locked_once_patches_exist(db):
     project, config = _seed(db)
+    slide = Slide(project_id=project.id, filename="Patient_001.svs", source_type="demo")
+    db.add(slide)
+    db.flush()
     db.add(
         Patch(
-            slide_id=1, config_version_id=config.id, patch_index=0,
+            slide_id=slide.id, config_version_id=config.id, patch_index=0,
             x=0, y=0, level=0, width=512, height=512, width_l0=512, height_l0=512,
         )
     )

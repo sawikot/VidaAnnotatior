@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MaterialIcon } from "../components/MaterialIcon";
-import { Button, Card, StatusPill } from "../components/primitives";
-import { listProjects, seedDemoProject } from "../services/api";
+import { Button, Card, ConfirmDeleteModal, StatusPill } from "../components/primitives";
+import { deleteProject, listProjects, seedDemoProject } from "../services/api";
 import type { Project } from "../types/api";
 import { useUiStore } from "../stores/uiStore";
 
@@ -16,6 +16,8 @@ export function ProjectManagerPage() {
   const [organFilter, setOrganFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     refresh();
@@ -50,6 +52,21 @@ export function ProjectManagerPage() {
       refresh();
     } catch {
       pushToast("Failed to seed demo project", "error");
+    }
+  }
+
+  async function handleDeleteConfirmed() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteProject(deleteTarget.id);
+      pushToast(`${deleteTarget.name} deleted`, "success");
+      setDeleteTarget(null);
+      refresh();
+    } catch {
+      pushToast("Failed to delete project", "error");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -185,6 +202,10 @@ export function ProjectManagerPage() {
               onToggleMenu={() => setOpenMenuId(openMenuId === p.id ? null : p.id)}
               onOpen={() => navigate(`/projects/${p.id}`)}
               onOpenVersions={() => navigate(`/projects/${p.id}/versions`)}
+              onDelete={() => {
+                setOpenMenuId(null);
+                setDeleteTarget(p);
+              }}
             />
           ))}
         </div>
@@ -231,6 +252,22 @@ export function ProjectManagerPage() {
           </table>
         </Card>
       )}
+
+      <ConfirmDeleteModal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirmed}
+        busy={deleting}
+        title="Delete this project?"
+        confirmPhrase={deleteTarget?.slug ?? ""}
+        description={
+          <>
+            This permanently deletes <strong>{deleteTarget?.name}</strong> and everything under it -- every
+            slide, generated patch coordinate, annotation, and config version. WSI files and cached tissue masks
+            on disk are also removed. This cannot be undone.
+          </>
+        }
+      />
     </div>
   );
 }
@@ -273,12 +310,14 @@ function ProjectCard({
   onToggleMenu,
   onOpen,
   onOpenVersions,
+  onDelete,
 }: {
   project: Project;
   menuOpen: boolean;
   onToggleMenu: () => void;
   onOpen: () => void;
   onOpenVersions: () => void;
+  onDelete: () => void;
 }) {
   return (
     <div className="flex flex-col bg-surface-container-lowest rounded shadow-sm group hover:shadow-md transition-shadow">
@@ -316,6 +355,8 @@ function ProjectCard({
               <MenuItem icon="grid_view" label="Dashboard" onClick={onOpen} />
               <MenuItem icon="account_tree" label="Config Versions" onClick={onOpenVersions} />
               <MenuItem icon="file_download" label="Export (pick a slide)" onClick={onOpen} />
+              <div className="h-px bg-outline-variant my-1" />
+              <MenuItem icon="delete" label="Delete Project" onClick={onDelete} destructive />
             </div>
           )}
         </div>
@@ -324,11 +365,23 @@ function ProjectCard({
   );
 }
 
-function MenuItem({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
+function MenuItem({
+  icon,
+  label,
+  onClick,
+  destructive,
+}: {
+  icon: string;
+  label: string;
+  onClick: () => void;
+  destructive?: boolean;
+}) {
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center gap-2 px-space-md py-1.5 text-body-md hover:bg-surface-container-low text-left"
+      className={`w-full flex items-center gap-2 px-space-md py-1.5 text-body-md text-left ${
+        destructive ? "text-error hover:bg-error-container" : "hover:bg-surface-container-low"
+      }`}
     >
       <MaterialIcon name={icon} className="!text-[16px]" />
       {label}

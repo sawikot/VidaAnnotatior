@@ -172,6 +172,22 @@ export const updateAnnotation = (
 ) => request<GeometryAnnotation>(`/annotations/${id}`, { method: "PUT", body: JSON.stringify(payload) });
 export const deleteAnnotation = (id: number) => request<void>(`/annotations/${id}`, { method: "DELETE" });
 
+export interface ImportAnnotationsResult {
+  total: number;
+  imported: number;
+  skipped_no_matching_patch: number;
+  skipped_unknown_class: number;
+  skipped_duplicate: number;
+}
+export const importAnnotations = (
+  slideId: number,
+  payload: { annotations: unknown[]; config_version_id?: number; created_by?: string },
+) =>
+  request<ImportAnnotationsResult>(`/slides/${slideId}/import-annotations`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
 // ---- Export ----
 export const exportSlideUrl = (slideId: number, formatId: string) => `${API_BASE}/slides/${slideId}/export/${formatId}`;
 
