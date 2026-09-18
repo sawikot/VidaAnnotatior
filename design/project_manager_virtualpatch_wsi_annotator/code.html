@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{"colors":{"surface-container":"#e5eeff","on-secondary-container":"#5c647a","primary-fixed":"#cce5ff","on-surface-variant":"#3f4850","surface-tint":"#006398","tertiary-container":"#008096","on-primary-fixed-variant":"#004b73","on-secondary":"#ffffff","tertiary-fixed-dim":"#4cd7f6","on-primary":"#ffffff","background":"#f8f9ff","surface-container-lowest":"#ffffff","error":"#ba1a1a","surface-container-low":"#eff4ff","primary-fixed-dim":"#93ccff","on-tertiary":"#ffffff","surface-variant":"#d3e4fe","surface-dim":"#cbdbf5","primary-container":"#007bb9","secondary-container":"#dae2fd","surface-container-highest":"#d3e4fe","tertiary-fixed":"#acedff","inverse-on-surface":"#eaf1ff","on-background":"#0b1c30","secondary-fixed":"#dae2fd","on-error":"#ffffff","inverse-primary":"#93ccff","on-primary-fixed":"#001d31","on-secondary-fixed-variant":"#3f465c","secondary":"#565e74","on-tertiary-container":"#f9fdff","outline":"#707881","secondary-fixed-dim":"#bec6e0","on-error-container":"#93000a","on-surface":"#0b1c30","surface-bright":"#f8f9ff","primary":"#006194","surface-container-high":"#dce9ff","error-container":"#ffdad6","outline-variant":"#bfc7d2","on-tertiary-fixed-variant":"#004e5c","on-tertiary-fixed":"#001f26","surface":"#f8f9ff","on-primary-container":"#fdfcff","tertiary":"#006577","inverse-surface":"#213145","on-secondary-fixed":"#131b2e"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"gutter":"0.75rem","space-lg":"1rem","space-md":"0.75rem","space-xs":"0.25rem","space-sm":"0.375rem","margin":"1rem","space-xl":"1.5rem"},"fontFamily":{"body-sm":["Inter"],"headline-md":["Inter"],"headline-lg":["Inter"],"label-lg":["JetBrains Mono"],"body-lg":["Inter"],"body-md":["Inter"],"label-sm":["JetBrains Mono"],"label-md":["JetBrains Mono"],"headline-sm":["Inter"]},"fontSize":{"body-sm":["11px",{"lineHeight":"14px","fontWeight":"400"}],"headline-md":["16px",{"lineHeight":"24px","letterSpacing":"-0.01em","fontWeight":"600"}],"headline-lg":["20px",{"lineHeight":"28px","letterSpacing":"-0.015em","fontWeight":"600"}],"label-lg":["12px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}],"body-lg":["14px",{"lineHeight":"20px","fontWeight":"400"}],"body-md":["12px",{"lineHeight":"16px","fontWeight":"400"}],"label-sm":["10px",{"lineHeight":"12px","letterSpacing":"0.03em","fontWeight":"400"}],"label-md":["11px",{"lineHeight":"14px","letterSpacing":"0.01em","fontWeight":"500"}],"headline-sm":["13px",{"lineHeight":"18px","letterSpacing":"-0.005em","fontWeight":"600"}]}}}}</script></head><body class="bg-surface font-body-md text-on-surface"><aside class="fixed left-0 top-0 h-full w-14 bg-[#0f172a] z-50 flex flex-col justify-between items-center py-space-sm border-r border-[#1e293b]"><div class="flex flex-col items-center w-full gap-space-sm"><div class="h-10 w-full flex items-center justify-center"><div class="h-8 w-8 rounded-lg bg-[#1e293b] flex items-center justify-center text-primary-fixed-dim"><span class="material-symbols-outlined text-[18px]">biotech</span></div></div><div class="w-8 h-[1px] bg-[#1e293b] my-space-xs"></div><nav class="flex flex-col items-center w-full gap-space-xs" data-active-classes="bg-[#007bb9] text-[#fdfcff] shadow-sm"><a aria-current="page" class="w-10 h-10 flex items-center justify-center rounded-lg transition-colors bg-[#007bb9] text-[#fdfcff] shadow-sm" data-path="projects" href="#" title="Project Home"><span class="material-symbols-outlined text-[20px]">folder</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="dashboard" href="#" title="Dashboard"><span class="material-symbols-outlined text-[20px]">grid_view</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="slide-processing" href="#" title="Slide Processing"><span class="material-symbols-outlined text-[20px]">filter_center_focus</span></a><a class="relative w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="workspace-annotator" href="#" title="Workspace Annotator"><span class="material-symbols-outlined text-[20px]">adjust</span><span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#0f172a]"></span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="patch-gallery" href="#" title="Patch Gallery"><span class="material-symbols-outlined text-[20px]">grid_on</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="full-wsi-overview" href="#" title="Full WSI Viewer"><span class="material-symbols-outlined text-[20px]">aspect_ratio</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="versioning" href="#" title="Config Versions"><span class="material-symbols-outlined text-[20px]">account_tree</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="export" href="#" title="Export Data"><span class="material-symbols-outlined text-[20px]">file_download</span></a></nav></div><div class="flex flex-col items-center w-full gap-space-xs"><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="documentation" href="#" title="Documentation"><span class="material-symbols-outlined text-[20px]">menu_book</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="settings" href="#" title="System Settings"><span class="material-symbols-outlined text-[20px]">settings</span></a></div></aside><div class="pl-14"><header class="fixed top-0 left-14 right-0 h-14 bg-[#0f172a] text-slate-100 z-40 flex items-center justify-between px-space-md border-b border-[#1e293b] shadow-sm"><div class="flex items-center gap-space-md"><div class="flex items-center gap-space-sm"><img alt="VirtualPatch WSI Annotator Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1X4twrp5Tqi8NJBq5NgAb_1ecczseo_PmJLV4TbR5juzv1LzlAxErGDirf4ficIungXHVmFf01bK-kYyxQ3gawoNYtS9ldrhPUUl85E_7RT3G7n40PHMiIbrBrOnjD-6EQ0tEIuTLBY5P85InorvRxK6f7oyYf0BDB0wbRWZZrP4MVJVVbnUZuWxxdfJR0JiGrIz9FM0oKR05nSJYU7XD0ffS6gP1QHq87qLV6U5CD4kInE8ZPx6J8w"/><div class="flex flex-col"><span class="font-headline-sm text-headline-sm text-white tracking-tight leading-none">VirtualPatch WSI Annotator</span><span class="font-label-sm text-label-sm text-slate-400 leading-tight mt-0.5">Digital Pathology Research Suite (Level-0 Coordinate Engine)</span></div></div><div class="h-6 w-[1px] bg-[#1e293b] mx-space-xs"></div><div class="inline-flex items-center gap-space-xs px-space-sm py-0.5 rounded-lg bg-[#1e293b] border border-slate-700"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span><span class="font-label-sm text-label-sm text-cyan-200">BCA_2026: Breast Cancer Annotation [v1.0 - 512px @ 20x]</span></div><div class="h-6 w-[1px] bg-[#1e293b] mx-space-xs hidden xl:block"></div><nav class="hidden xl:flex items-center gap-1" data-active-classes="bg-[#1e293b] text-white font-headline-sm rounded-lg"><a aria-current="page" class="px-space-sm py-1 transition-colors bg-[#1e293b] text-white font-headline-sm rounded-lg" data-path="projects" href="#">Projects</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="dashboard" href="#">Dashboard</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="slide-processing" href="#">Slide Processing</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="workspace-annotator" href="#">Workspace</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="patch-gallery" href="#">Patch Gallery</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="full-wsi-overview" href="#">Overview</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="versioning" href="#">Versioning</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="export" href="#">Export</a></nav></div><div class="flex items-center gap-space-md"><div class="hidden lg:flex items-center gap-space-xs px-space-sm py-1 rounded-lg bg-[#1e293b]/70 border border-slate-700/80"><span class="material-symbols-outlined text-emerald-400 text-[14px]">check_circle</span><span class="font-label-sm text-label-sm text-slate-300">Dynamic Coordinate Engine: Active</span><span class="text-slate-500 font-label-sm text-label-sm">|</span><span class="font-label-sm text-label-sm text-slate-400">0 Patches</span></div><div class="relative hidden md:block w-52"><span class="material-symbols-outlined absolute left-2 top-2 text-slate-400 text-[16px]">search</span><input class="w-full h-8 pl-7 pr-space-sm bg-[#1e293b] border border-slate-700 rounded-lg text-slate-200 placeholder-slate-400 font-body-sm text-body-sm focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container" placeholder="Search slides &amp; coords..." type="text"/></div><div class="flex items-center gap-space-xs"><button class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" title="Platform Documentation"><span class="material-symbols-outlined text-[18px]">help_outline</span></button><button class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" title="Settings"><span class="material-symbols-outlined text-[18px]">tune</span></button></div><div class="h-6 w-[1px] bg-[#1e293b]"></div><div class="flex items-center gap-space-sm pl-space-xs"><div class="flex flex-col text-right hidden sm:flex"><span class="font-headline-sm text-headline-sm text-white leading-tight">Dr. Eliza Chen, MD, PhD</span><span class="font-label-sm text-label-sm text-slate-400 leading-none">Senior Computational Pathologist</span></div><img alt="Profile" class="w-8 h-8 rounded-full object-cover ring-1 ring-slate-600" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD06VCVZeM-utr85SFdhAMY1jx1M21lwohLut1hC_n6n5toao5HojmkIak5QbUKh-txUBQQOPjgHNy2S17pkmRqwIaTzVtFqipSwDP4IgIhvJIGRzflDGX0sp-di-3ae0JgxEx9oLFme52ZBDpsKTg8L3DkTvxsGepIcnHFy8CqtLcEELD7Mz6Qm9xgnAgTacptEmtOapgbq9rZBCL79gQ7bt5eihKJIdo5O1SdvMdlH1on7_b1VlNm"/></div></div></header><main class="w-full pt-14 bg-surface min-h-screen"><div class="flex flex-col w-full">
+<!-- Repository Header Banner -->
+<div class="relative overflow-hidden bg-surface-container-low px-gutter py-space-xl sm:px-margin">
+<div class="absolute -right-20 -top-24 w-96 h-96 rounded-full bg-primary-fixed-dim/20 blur-3xl pointer-events-none"></div>
+<div class="relative flex flex-col md:flex-row md:items-center justify-between gap-space-md max-w-[1720px] mx-auto">
+<div class="space-y-space-xs max-w-4xl">
+<div class="inline-flex items-center gap-space-xs px-space-sm py-0.5 rounded bg-surface-container text-on-surface-variant font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[14px] text-primary">hub</span>
+<span class="tracking-wide uppercase">Core Architecture</span>
+<span class="text-outline">/</span>
+<span class="font-semibold text-primary">Dynamic Coordinate Engine Active</span>
+</div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface tracking-tight">
+          Computational Pathology Project Repository
+        </h1>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+          All projects execute virtual patch extraction on-the-fly; annotations are anchored to Level-0 WSI coordinates without duplicate image file storage.
+        </p>
+</div>
+<!-- Quick Action / Ingestion Trigger -->
+<div class="flex items-center gap-space-sm self-start md:self-auto">
+<button class="inline-flex items-center gap-space-xs px-space-lg h-9 rounded bg-primary text-on-primary font-headline-sm text-headline-sm hover:bg-primary-container transition-colors shadow-sm" id="btnOpenNewProjectModal">
+<span class="material-symbols-outlined text-[18px]">add_box</span>
+<span>+ New Project</span>
+</button>
+<button class="inline-flex items-center justify-center w-9 h-9 rounded bg-surface-container hover:bg-surface-container-high text-on-surface transition-colors" title="Sync Project Repositories">
+<span class="material-symbols-outlined text-[18px]">sync</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Main Worksurface -->
+<div class="px-gutter sm:px-margin py-space-lg max-w-[1720px] mx-auto w-full space-y-space-lg">
+<!-- Metrics Overview Strip -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-space-md">
+<!-- Metric 1 -->
+<div class="relative p-space-md rounded bg-surface-container-lowest shadow-sm flex flex-col justify-between overflow-hidden">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant tracking-wider uppercase">Active Cohorts</span>
+<span class="material-symbols-outlined text-primary text-[20px]">folder_special</span>
+</div>
+<div class="mt-space-sm flex items-baseline gap-space-xs">
+<span class="font-headline-lg text-headline-lg text-on-surface font-semibold">12</span>
+<span class="font-label-md text-label-md text-primary font-medium">Projects</span>
+</div>
+<div class="mt-space-xs flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant">
+<span>9 Research · 3 QA/Norm</span>
+<span class="text-primary font-semibold">100% Online</span>
+</div>
+<div class="absolute bottom-0 left-0 right-0 h-0.5 bg-primary/20">
+<div class="h-full bg-primary w-3/4"></div>
+</div>
+</div>
+<!-- Metric 2 -->
+<div class="relative p-space-md rounded bg-surface-container-lowest shadow-sm flex flex-col justify-between overflow-hidden">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant tracking-wider uppercase">Connected WSIs</span>
+<span class="material-symbols-outlined text-tertiary text-[20px]">aspect_ratio</span>
+</div>
+<div class="mt-space-sm flex items-baseline gap-space-xs">
+<span class="font-headline-lg text-headline-lg text-on-surface font-semibold">342</span>
+<span class="font-label-md text-label-md text-tertiary font-medium">Slides</span>
+</div>
+<div class="mt-space-xs flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant">
+<span>.svs · .ndpi · .mrxs</span>
+<span>97.8% Validated</span>
+</div>
+<div class="absolute bottom-0 left-0 right-0 h-0.5 bg-tertiary/20">
+<div class="h-full bg-tertiary w-full"></div>
+</div>
+</div>
+<!-- Metric 3 -->
+<div class="relative p-space-md rounded bg-surface-container-lowest shadow-sm flex flex-col justify-between overflow-hidden">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant tracking-wider uppercase">Virtual Patches</span>
+<span class="material-symbols-outlined text-secondary text-[20px]">grid_4x4</span>
+</div>
+<div class="mt-space-sm flex items-baseline gap-space-xs">
+<span class="font-headline-lg text-headline-lg text-on-surface font-semibold">2,840,150</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Indexed</span>
+</div>
+<div class="mt-space-xs flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant">
+<span>Level-0 Coords Streamed</span>
+<span class="font-label-sm text-label-sm text-secondary font-medium">0ms Cache Miss</span>
+</div>
+<div class="absolute bottom-0 left-0 right-0 h-0.5 bg-secondary/20">
+<div class="h-full bg-secondary w-5/6"></div>
+</div>
+</div>
+<!-- Metric 4 (Storage Saved highlight) -->
+<div class="relative p-space-md rounded bg-surface-container-high shadow-sm flex flex-col justify-between overflow-hidden">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-primary font-bold tracking-wider uppercase">Storage Preserved</span>
+<span class="material-symbols-outlined text-primary text-[20px]">savings</span>
+</div>
+<div class="mt-space-sm flex items-baseline gap-space-xs">
+<span class="font-headline-lg text-headline-lg text-on-surface font-semibold">4.12 TB</span>
+<span class="font-label-sm text-label-sm text-primary font-semibold">100% Virtualized</span>
+</div>
+<div class="mt-space-xs flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant">
+<span>Static Tiling Zeroed</span>
+<span class="text-on-surface font-medium">Saved $480/mo Cloud</span>
+</div>
+<div class="absolute bottom-0 left-0 right-0 h-1 bg-primary"></div>
+</div>
+</div>
+<!-- Filter & Action Control Bar -->
+<div class="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-space-md bg-surface-container-lowest p-space-sm rounded shadow-sm">
+<!-- Search & Filters -->
+<div class="flex flex-wrap items-center gap-space-sm flex-1">
+<!-- Search Input -->
+<div class="relative min-w-[240px] max-w-sm flex-1">
+<span class="material-symbols-outlined absolute left-2.5 top-2 text-outline text-[18px]">search</span>
+<input class="w-full h-8 pl-8 pr-space-sm bg-surface-container-low text-on-surface font-body-sm text-body-sm rounded focus:bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary" id="projectSearchInput" placeholder="Search cohort, ID, pathology tags..." type="text"/>
+</div>
+<!-- Filter: Organ -->
+<div class="flex items-center gap-space-xs bg-surface-container-low px-space-sm h-8 rounded">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Organ:</span>
+<select class="bg-transparent text-on-surface font-body-sm text-body-sm focus:outline-none cursor-pointer" id="organFilter">
+<option value="all">All Organs</option>
+<option selected="" value="breast">Breast</option>
+<option value="lung">Lung</option>
+<option value="colon">Colon</option>
+<option value="prostate">Prostate</option>
+</select>
+</div>
+<!-- Filter: Staining -->
+<div class="flex items-center gap-space-xs bg-surface-container-low px-space-sm h-8 rounded">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Stain:</span>
+<select class="bg-transparent text-on-surface font-body-sm text-body-sm focus:outline-none cursor-pointer" id="stainFilter">
+<option value="all">All Stains</option>
+<option value="he">H&amp;E</option>
+<option value="ihc">IHC (Ki-67/HER2)</option>
+<option value="multi">Multispectral</option>
+</select>
+</div>
+<!-- Filter: Status -->
+<div class="flex items-center gap-space-xs bg-surface-container-low px-space-sm h-8 rounded">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Status:</span>
+<select class="bg-transparent text-on-surface font-body-sm text-body-sm focus:outline-none cursor-pointer" id="statusFilter">
+<option value="all">All Statuses</option>
+<option value="progress">In Progress</option>
+<option value="review">Review Phase</option>
+<option value="completed">Completed / Export Ready</option>
+</select>
+</div>
+<!-- Clear Reset -->
+<button class="h-8 px-space-sm text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm rounded hover:bg-surface-container-low transition-colors">
+          Reset Filters
+        </button>
+</div>
+<!-- View Controls & Density Switcher -->
+<div class="flex items-center justify-between sm:justify-end gap-space-md">
+<span class="font-label-sm text-label-sm text-on-surface-variant hidden xl:inline">Displaying 3 of 12 Projects</span>
+<!-- Toggle: Grid Cards vs Data Table -->
+<div class="inline-flex p-0.5 rounded bg-surface-container">
+<button class="flex items-center gap-1 px-space-sm h-7 rounded bg-surface-container-lowest text-on-surface font-label-sm text-label-sm shadow-sm transition-all" id="viewToggleGrid" title="Card Matrix View">
+<span class="material-symbols-outlined text-[16px]">grid_view</span>
+<span>Cards</span>
+</button>
+<button class="flex items-center gap-1 px-space-sm h-7 rounded text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm transition-all" id="viewToggleTable" title="Dense Table View">
+<span class="material-symbols-outlined text-[16px]">table_rows</span>
+<span>Table</span>
+</button>
+</div>
+</div>
+</div>
+<!-- VIEW 1: Featured Project Cards (Matrix View) -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-space-md" id="projectGridSection">
+<!-- Card 1: BCA_2026 -->
+<div class="flex flex-col bg-surface-container-lowest rounded shadow-sm overflow-hidden group hover:shadow-md transition-shadow">
+<!-- Top Status Bar & Thumbnail Visual -->
+<div class="relative h-32 w-full overflow-hidden bg-surface-container">
+<div class="bg-cover bg-center w-full h-full transform group-hover:scale-105 transition-transform duration-500" data-alt="Microscopic whole slide image preview of breast tissue with infiltrating ductal carcinoma showing hematoxylin and eosin cellular staining in shades of deep violet and eosin pink with a virtual patch grid overlay." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCobfVDMHcL2C5-JAFeCpVW86KaG6LDyl13C6Z8f4Px_RwbzbZyTSFerlFCMvo2pWghDApYkKlgqzvPEcwMJ7xkppsLHNHtpKAnrRcrDX3L5J32fjoausO9pXE165N7N1aBVCoHGyPd-O0yjMPY0wrcrc4bmZnAluYJo7Of4s7ZWC4VfMhlIaO6m3Lt28XpVB4DkqhkyCoFdT8ONmEzF4M4BDojuYlBGAA1SksVZtWSl7YaIswxxF4q')"></div>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container-lowest via-transparent to-transparent"></div>
+<div class="absolute top-2 left-2 flex items-center gap-1.5">
+<span class="px-space-sm py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-on-surface font-bold">H&amp;E</span>
+<span class="px-space-sm py-0.5 rounded bg-primary-fixed text-on-primary-fixed-variant font-label-sm text-label-sm font-semibold">Level 0 Transform</span>
+</div>
+<div class="absolute top-2 right-2 flex items-center gap-1">
+<span class="inline-flex items-center gap-1 px-space-sm py-0.5 rounded-full bg-emerald-500/10 text-emerald-800 font-label-sm text-label-sm font-semibold backdrop-blur">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+              Active
+            </span>
+</div>
+</div>
+<!-- Content Body -->
+<div class="p-space-md flex-1 flex flex-col justify-between space-y-space-md">
+<div>
+<div class="flex items-center justify-between gap-space-xs">
+<span class="font-label-sm text-label-sm text-primary font-semibold tracking-wider">PROJECT ID: BCA_2026</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Modified 12m ago</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-surface mt-1 group-hover:text-primary transition-colors">
+              Breast Cancer Annotation
+            </h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1.5 line-clamp-2">
+              Infiltrating ductal carcinoma region-of-interest tiling for multi-instance learning model validation and stroma separation.
+            </p>
+</div>
+<!-- Progress Bar & Virtual Patch Metric -->
+<div class="space-y-1.5 p-space-sm rounded bg-surface-container-low">
+<div class="flex items-center justify-between font-label-sm text-label-sm">
+<span class="text-on-surface font-medium">Patch Annotation Progress</span>
+<span class="text-primary font-semibold">45.6%</span>
+</div>
+<div class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full" style="width: 45.6%"></div>
+</div>
+<div class="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant pt-0.5">
+<span>Annotated: <strong class="text-on-surface">312,421</strong></span>
+<span>Target: 685,420</span>
+</div>
+</div>
+<!-- Technical Specs Strip -->
+<div class="grid grid-cols-2 gap-x-2 gap-y-1 py-space-xs text-on-surface-variant font-label-sm text-label-sm">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px] text-outline">layers</span>
+<span>Slides: <strong class="text-on-surface">85 Total</strong> (81 Proc)</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px] text-outline">zoom_in</span>
+<span>Mag: <strong class="text-on-surface">20x (0.50 µm)</strong></span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px] text-outline">crop_square</span>
+<span>Size: <strong class="text-on-surface">512 × 512 px</strong></span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px] text-outline">tune</span>
+<span>Tissue Cut: <strong class="text-on-surface">≥ 60%</strong></span>
+</div>
+</div>
+<!-- Author attribution & Primary Action Dock -->
+<div class="pt-space-sm flex items-center justify-between gap-space-xs">
+<div class="flex items-center gap-1.5">
+<span class="w-6 h-6 rounded-full bg-surface-container-high flex items-center justify-center font-label-sm text-label-sm font-bold text-primary">EC</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate max-w-[110px]">Dr. E. Chen</span>
+</div>
+<!-- Action Buttons -->
+<div class="flex items-center gap-1">
+<a class="inline-flex items-center gap-1 px-space-sm h-8 rounded bg-primary text-on-primary font-headline-sm text-headline-sm hover:bg-primary-container transition-colors shadow-sm" data-path="workspace-annotator" href="#">
+<span>Workspace</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</a>
+<!-- Secondary Actions Dropdown Trigger -->
+<div class="relative">
+<button class="card-action-menu-btn w-8 h-8 rounded flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+<div class="card-menu-dropdown hidden absolute right-0 bottom-full mb-1 w-44 rounded bg-surface-container-lowest shadow-md p-1 z-30 font-body-sm text-body-sm">
+<a class="flex items-center gap-2 px-space-sm py-1.5 rounded hover:bg-surface-container text-on-surface" data-path="dashboard" href="#">
+<span class="material-symbols-outlined text-[16px]">monitoring</span> Dashboard
+                  </a>
+<a class="flex items-center gap-2 px-space-sm py-1.5 rounded hover:bg-surface-container text-on-surface" data-path="slide-processing" href="#">
+<span class="material-symbols-outlined text-[16px]">settings</span> Config Specs
+                  </a>
+<a class="flex items-center gap-2 px-space-sm py-1.5 rounded hover:bg-surface-container text-on-surface" data-path="export" href="#">
+<span class="material-symbols-outlined text-[16px]">download</span> Export Coords
+                  </a>
+<div class="h-px bg-surface-container-high my-1"></div>
+<button class="w-full text-left flex items-center gap-2 px-space-sm py-1.5 rounded hover:bg-surface-container text-on-surface">
+<span class="material-symbols-outlined text-[16px]">content_copy</span> Duplicate
+                  </button>
+<button class="w-full text-left flex items-center gap-2 px-space-sm py-1.5 rounded hover:bg-error-container text-error">
+<span class="material-symbols-outlined text-[16px]">archive</span> Archive
+                  </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Card 2: LUNG_ADENO_V3 -->
+<div class="flex flex-col bg-surface-container-lowest rounded shadow-sm overflow-hidden group hover:shadow-md transition-shadow">
+<!-- Top Status Bar & Thumbnail Visual -->
+<div class="relative h-32 w-full overflow-hidden bg-surface-container">
+<div class="bg-cover bg-center w-full h-full transform group-hover:scale-105 transition-transform duration-500" data-alt="High-resolution digital whole slide image section of human lung biopsy presenting non-small cell adenocarcinoma alveolar patterns with faint pen-mark boundary artifacts rendered in cellular purples." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCxB4BKGngEvuZ1Evjb5_7H_GNZsyZHOwtmFWsGKahzwRJnze15c2yzUz0K30SkyjQtKhj4x-Gsb68JblCKl7Zbms1LkOy_49NzSjorcJQ40868oHIHxsZv-TH_9KZPbfFSMgS8Q-OQPuerLEFLmFX5f8HLo98ejK-Lv1fxndWxyxhOnN9KAMvqQgjOuSEC8tM3f1YjAGh0ztxAJXMdn7-O8AGjMEfY7eAh_uGvj_33rqs-lHrrCFXz')"></div>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container-lowest via-transparent to-transparent"></div>
+<div class="absolute top-2 left-2 flex items-center gap-1.5">
+<span class="px-space-sm py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-on-surface font-bold">H&amp;E</span>
+<span class="px-space-sm py-0.5 rounded bg-primary-fixed text-on-primary-fixed-variant font-label-sm text-label-sm font-semibold">Pen-Mark Clean</span>
+</div>
+<div class="absolute top-2 right-2 flex items-center gap-1">
+<span class="inline-flex items-center gap-1 px-space-sm py-0.5 rounded-full bg-amber-500/15 text-amber-900 font-label-sm text-label-sm font-semibold backdrop-blur">
+<span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
+              Review Phase
+            </span>
+</div>
+</div>
+<!-- Content Body -->
+<div class="p-space-md flex-1 flex flex-col justify-between space-y-space-md">
+<div>
+<div class="flex items-center justify-between gap-space-xs">
+<span class="font-label-sm text-label-sm text-secondary font-semibold tracking-wider">PROJECT ID: LUNG_ADENO_V3</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Yesterday</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-surface mt-1 group-hover:text-primary transition-colors">
+              Lung Histology Study
+            </h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1.5 line-clamp-2">
+              NSCLC adenocarcinoma vs squamous cell carcinoma tissue segmentation with pen-mark filtering and necrosis exclusion.
+            </p>
+</div>
+<!-- Progress Bar & Virtual Patch Metric -->
+<div class="space-y-1.5 p-space-sm rounded bg-surface-container-low">
+<div class="flex items-center justify-between font-label-sm text-label-sm">
+<span class="text-on-surface font-medium">Patch Annotation Progress</span>
+<span class="text-secondary font-semibold">95.7%</span>
+</div>
+<div class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-secondary rounded-full" style="width: 95.7%"></div>
+</div>
+<div class="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant pt-0.5">
+<span>Annotated: <strong class="text-on-surface">490,110</strong></span>
+<span>Target: 512,000</span>
+</div>
+</div>
+<!-- Technical Specs Strip -->
+<div class="grid grid-cols-2 gap-x-2 gap-y-1 py-space-xs text-on-surface-variant font-label-sm text-label-sm">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px] text-outline">layers</span>
+<span>Slides: <strong class="text-on-surface">120 / 120 Proc</strong></span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px] text-outline">zoom_in</span>
+<span>Mag: <strong class="text-on-surface">40x (0.25 µm)</strong></span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px] text-outline">crop_square</span>
+<span>Size: <strong class="text-on-surface">1024 × 1024 px</strong></span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px] text-outline">tune</span>
+<span>Tissue Cut: <strong class="text-on-surface">≥ 70%</strong></span>
+</div>
+</div>
+<!-- Author attribution & Primary Action Dock -->
+<div class="pt-space-sm flex items-center justify-between gap-space-xs">
+<div class="flex items-center gap-1.5">
+<span class="w-6 h-6 rounded-full bg-surface-container-high flex items-center justify-center font-label-sm text-label-sm font-bold text-secondary">KV</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate max-w-[110px]">Dr. K. Vance</span>
+</div>
+<!-- Action Buttons -->
+<div class="flex items-center gap-1">
+<a class="inline-flex items-center gap-1 px-space-sm h-8 rounded bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-headline-sm text-headline-sm transition-colors" data-path="workspace-annotator" href="#">
+<span>Workspace</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</a>
+<!-- Secondary Actions Dropdown Trigger -->
+<div class="relative">
+<button class="card-action-menu-btn w-8 h-8 rounded flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+<div class="card-menu-dropdown hidden absolute right-0 bottom-full mb-1 w-44 rounded bg-surface-container-lowest shadow-md p-1 z-30 font-body-sm text-body-sm">
+<a class="flex items-center gap-2 px-space-sm py-1.5 rounded hover:bg-surface-container text-on-surface" data-path="dashboard" href="#">
+<span class="material-symbols-outlined text-[16px]">monitoring</span> Dashboard
+                  </a>
+<a class="flex items-center gap-2 px-space-sm py-1.5 rounded hover:bg-surface-container text-on-surface" data-path="slide-processing" href="#">
+<span class="material-symbols-outlined text-[16px]">settings</span> Config Specs
+                  </a>
+<a class="flex items-center gap-2 px-space-sm py-1.5 rounded hover:bg-surface-container text-on-surface" data-path="export" href="#">
+<span class="material-symbols-outlined text-[16px]">download</span> Export Coords
+                  </a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Card 3: CRC_MICROSAT_2025 -->
+<div class="flex flex-col bg-surface-container-lowest rounded shadow-sm overflow-hidden group hover:shadow-md transition-shadow">
+<!-- Top Status Bar & Thumbnail Visual -->
+<div class="relative h-32 w-full overflow-hidden bg-surface-container">
+<div class="bg-cover bg-center w-full h-full transform group-hover:scale-105 transition-transform duration-500" data-alt="Immunohistochemistry and H&amp;E composite digital slide scan of colon tissue showing microsatellite instability tumor budding clusters in deep magenta and brown DAB markers." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAuSJThAURcF912S627mLmKTXVW0-YyNTyF294zG0zrMLsMGJflpZRzKjPJUXeSOLYEjeh4RjpaohBoscRvLngDjNPBAn-2B37ytr1ET6i5wRCKsIhr9HRZqUx5BSaZwz8t7bxQP1o8M7oy0AwsLHN64DhdRt7Od-ycSpojklj1k3XwLjAHA6Wq2SNxUBPX4x4z9i894PSo-zZDZqolmFQ8Doz2JpM6J9a_1yL5H_4fbrMDUsVvJESE')"></div>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container-lowest via-transparent to-transparent"></div>
+<div class="absolute top-2 left-2 flex items-center gap-1.5">
+<span class="px-space-sm py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-on-surface font-bold">H&amp;E + IHC</span>
+<span class="px-space-sm py-0.5 rounded bg-tertiary-fixed text-on-tertiary-fixed font-label-sm text-label-sm font-semibold">Dual-Stained</span>
+</div>
+<div class="absolute top-2 right-2 flex items-center gap-1">
+<span class="inline-flex items-center gap-1 px-space-sm py-0.5 rounded-full bg-blue-500/10 text-blue-800 font-label-sm text-label-sm font-semibold backdrop-blur">
+<span class="material-symbols-outlined text-[14px]">check_circle</span>
+              Completed
+            </span>
+</div>
+</div>
+<!-- Content Body -->
+<div class="p-space-md flex-1 flex flex-col justify-between space-y-space-md">
+<div>
+<div class="flex items-center justify-between gap-space-xs">
+<span class="font-label-sm text-label-sm text-tertiary font-semibold tracking-wider">PROJECT ID: CRC_MICROSAT_2025</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">3 days ago</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-surface mt-1 group-hover:text-primary transition-colors">
+              Colon Tumor Dataset
+            </h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1.5 line-clamp-2">
+              Colorectal adenocarcinoma mucosal stromal invasion &amp; tumor budding dense point annotations. Ready for downstream model export.
+            </p>
+</div>
+<!-- Progress Bar & Virtual Patch Metric -->
+<div class="space-y-1.5 p-space-sm rounded bg-surface-container-low">
+<div class="flex items-center justify-between font-label-sm text-label-sm">
+<span class="text-on-surface font-medium">Patch Annotation Progress</span>
+<span class="text-tertiary font-semibold">100.0%</span>
+</div>
+<div class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-tertiary rounded-full" style="width: 100%"></div>
+</div>
+<div class="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant pt-0.5">
+<span>Annotated: <strong class="text-on-surface">180,200</strong></span>
+<span class="text-tertiary font-medium">Export Ready (TFRecord/HDF5)</span>
+</div>
+</div>
+<!-- Technical Specs Strip -->
+<div class="grid grid-cols-2 gap-x-2 gap-y-1 py-space-xs text-on-surface-variant font-label-sm text-label-sm">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px] text-outline">layers</span>
+<span>Slides: <strong class="text-on-surface">64 Total</strong> (Complete)</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px] text-outline">zoom_in</span>
+<span>Mag: <strong class="text-on-surface">20x (0.50 µm)</strong></span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px] text-outline">crop_square</span>
+<span>Size: <strong class="text-on-surface">256 × 256 px</strong></span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px] text-outline">tune</span>
+<span>Tissue Cut: <strong class="text-on-surface">≥ 50%</strong></span>
+</div>
+</div>
+<!-- Author attribution & Primary Action Dock -->
+<div class="pt-space-sm flex items-center justify-between gap-space-xs">
+<div class="flex items-center gap-1.5">
+<span class="w-6 h-6 rounded-full bg-surface-container-high flex items-center justify-center font-label-sm text-label-sm font-bold text-tertiary">ML</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate max-w-[110px]">Lab Automated</span>
+</div>
+<!-- Action Buttons -->
+<div class="flex items-center gap-1">
+<a class="inline-flex items-center gap-1 px-space-sm h-8 rounded bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-headline-sm text-headline-sm transition-colors" data-path="export" href="#">
+<span class="material-symbols-outlined text-[15px]">file_download</span>
+<span>Export</span>
+</a>
+<!-- Secondary Actions Dropdown Trigger -->
+<div class="relative">
+<button class="card-action-menu-btn w-8 h-8 rounded flex items-center justify-center text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+<div class="card-menu-dropdown hidden absolute right-0 bottom-full mb-1 w-44 rounded bg-surface-container-lowest shadow-md p-1 z-30 font-body-sm text-body-sm">
+<a class="flex items-center gap-2 px-space-sm py-1.5 rounded hover:bg-surface-container text-on-surface" data-path="workspace-annotator" href="#">
+<span class="material-symbols-outlined text-[16px]">adjust</span> Revisit Viewer
+                  </a>
+<a class="flex items-center gap-2 px-space-sm py-1.5 rounded hover:bg-surface-container text-on-surface" data-path="dashboard" href="#">
+<span class="material-symbols-outlined text-[16px]">monitoring</span> Analytics
+                  </a>
+<a class="flex items-center gap-2 px-space-sm py-1.5 rounded hover:bg-surface-container text-on-surface" data-path="versioning" href="#">
+<span class="material-symbols-outlined text-[16px]">history</span> Config History
+                  </a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- VIEW 2: Detailed Data Table View (Hidden by default, toggled via JavaScript) -->
+<div class="hidden bg-surface-container-lowest rounded shadow-sm overflow-hidden" id="projectTableSection">
+<div class="overflow-x-auto">
+<table class="w-full text-left font-body-sm text-body-sm text-on-surface">
+<thead class="bg-surface-container font-label-sm text-label-sm text-on-surface-variant uppercase">
+<tr>
+<th class="px-space-md py-space-sm">Cohort / Project ID</th>
+<th class="px-space-md py-space-sm">Stain &amp; Organ</th>
+<th class="px-space-md py-space-sm">Slide Ingestion</th>
+<th class="px-space-md py-space-sm">Virtual Patches (L-0)</th>
+<th class="px-space-md py-space-sm">Tiling Geometry</th>
+<th class="px-space-md py-space-sm">Status</th>
+<th class="px-space-md py-space-sm text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y-0">
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-space-md py-space-sm">
+<div class="font-headline-sm text-headline-sm text-on-surface">Breast Cancer Annotation</div>
+<div class="font-label-sm text-label-sm text-primary font-mono">BCA_2026</div>
+</td>
+<td class="px-space-md py-space-sm">
+<div class="flex items-center gap-1.5">
+<span class="px-1.5 py-0.5 rounded bg-surface-container font-semibold">H&amp;E</span>
+<span>Infiltrating Ductal</span>
+</div>
+</td>
+<td class="px-space-md py-space-sm">
+<span>81 / 85 Slides</span>
+<div class="w-24 h-1 bg-surface-container rounded-full mt-1">
+<div class="h-full bg-primary rounded-full" style="width: 95%"></div>
+</div>
+</td>
+<td class="px-space-md py-space-sm font-label-sm text-label-sm">
+<div>312,421 / 685,420</div>
+<div class="text-on-surface-variant">45.6% Annotated</div>
+</td>
+<td class="px-space-md py-space-sm font-label-sm text-label-sm">
+<div>512 × 512 px @ 20x</div>
+<div class="text-outline">≥ 60% Tissue</div>
+</td>
+<td class="px-space-md py-space-sm">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 font-label-sm text-label-sm font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span> Active
+                </span>
+</td>
+<td class="px-space-md py-space-sm text-right">
+<a class="px-space-sm py-1 rounded bg-primary text-on-primary font-headline-sm text-headline-sm" data-path="workspace-annotator" href="#">Open</a>
+</td>
+</tr>
+<tr class="bg-surface-container-low/40 hover:bg-surface-container-low transition-colors">
+<td class="px-space-md py-space-sm">
+<div class="font-headline-sm text-headline-sm text-on-surface">Lung Histology Study</div>
+<div class="font-label-sm text-label-sm text-secondary font-mono">LUNG_ADENO_V3</div>
+</td>
+<td class="px-space-md py-space-sm">
+<div class="flex items-center gap-1.5">
+<span class="px-1.5 py-0.5 rounded bg-surface-container font-semibold">H&amp;E</span>
+<span>NSCLC Adeno</span>
+</div>
+</td>
+<td class="px-space-md py-space-sm">
+<span>120 / 120 Slides</span>
+<div class="w-24 h-1 bg-surface-container rounded-full mt-1">
+<div class="h-full bg-secondary rounded-full" style="width: 100%"></div>
+</div>
+</td>
+<td class="px-space-md py-space-sm font-label-sm text-label-sm">
+<div>490,110 / 512,000</div>
+<div class="text-on-surface-variant">95.7% Annotated</div>
+</td>
+<td class="px-space-md py-space-sm font-label-sm text-label-sm">
+<div>1024 × 1024 px @ 40x</div>
+<div class="text-outline">≥ 70% Tissue</div>
+</td>
+<td class="px-space-md py-space-sm">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-label-sm text-label-sm font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span> Review Phase
+                </span>
+</td>
+<td class="px-space-md py-space-sm text-right">
+<a class="px-space-sm py-1 rounded bg-surface-container-high text-on-surface font-headline-sm text-headline-sm" data-path="workspace-annotator" href="#">Open</a>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors">
+<td class="px-space-md py-space-sm">
+<div class="font-headline-sm text-headline-sm text-on-surface">Colon Tumor Dataset</div>
+<div class="font-label-sm text-label-sm text-tertiary font-mono">CRC_MICROSAT_2025</div>
+</td>
+<td class="px-space-md py-space-sm">
+<div class="flex items-center gap-1.5">
+<span class="px-1.5 py-0.5 rounded bg-surface-container font-semibold">H&amp;E + IHC</span>
+<span>Adenocarcinoma</span>
+</div>
+</td>
+<td class="px-space-md py-space-sm">
+<span>64 / 64 Slides</span>
+<div class="w-24 h-1 bg-surface-container rounded-full mt-1">
+<div class="h-full bg-tertiary rounded-full" style="width: 100%"></div>
+</div>
+</td>
+<td class="px-space-md py-space-sm font-label-sm text-label-sm">
+<div>180,200 / 180,200</div>
+<div class="text-on-surface-variant">100.0% Complete</div>
+</td>
+<td class="px-space-md py-space-sm font-label-sm text-label-sm">
+<div>256 × 256 px @ 20x</div>
+<div class="text-outline">≥ 50% Tissue</div>
+</td>
+<td class="px-space-md py-space-sm">
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-100 text-blue-900 font-label-sm text-label-sm font-semibold">
+<span class="material-symbols-outlined text-[12px]">check</span> Complete
+                </span>
+</td>
+<td class="px-space-md py-space-sm text-right">
+<a class="px-space-sm py-1 rounded bg-surface-container-high text-on-surface font-headline-sm text-headline-sm" data-path="export" href="#">Export</a>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Secondary Split Section: Recent Slide Ingestions & Collaborator Telemetry -->
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-space-md pt-space-xs">
+<!-- Recent Slide Ingestions (2 Cols on XL) -->
+<div class="xl:col-span-2 bg-surface-container-lowest rounded shadow-sm p-space-md flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between pb-space-sm">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-primary text-[20px]">queue</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Recent Slide Ingestions &amp; Pyramid Pyramidal Level Mapping</h3>
+</div>
+<a class="font-label-sm text-label-sm text-primary hover:underline" data-path="slide-processing" href="#">View All 342 Slides →</a>
+</div>
+<!-- Ingest List -->
+<div class="space-y-space-xs pt-space-xs">
+<!-- Slide Item 1 -->
+<div class="flex items-center justify-between p-space-sm rounded bg-surface-container-low hover:bg-surface-container transition-colors">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-8 h-8 rounded bg-surface-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary text-[18px]">biotech</span>
+</div>
+<div class="min-w-0">
+<div class="font-headline-sm text-headline-sm text-on-surface truncate">TCGA-BRCA-A2-A0T0-01Z-00-DX1.svs</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-2">
+<span>Target: BCA_2026</span>
+<span>•</span>
+<span>118,400 × 94,620 px</span>
+<span>•</span>
+<span class="text-primary font-medium">0.252 µm/px</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-space-md shrink-0">
+<div class="text-right hidden sm:block">
+<div class="font-label-sm text-label-sm text-on-surface font-semibold">14,210 Patches</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Level-0 Ready</div>
+</div>
+<span class="material-symbols-outlined text-emerald-600 text-[18px]" title="Valid Coords">verified</span>
+</div>
+</div>
+<!-- Slide Item 2 -->
+<div class="flex items-center justify-between p-space-sm rounded bg-surface-container-low hover:bg-surface-container transition-colors">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-8 h-8 rounded bg-surface-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-secondary text-[18px]">biotech</span>
+</div>
+<div class="min-w-0">
+<div class="font-headline-sm text-headline-sm text-on-surface truncate">LUNG-SURG-2026-X092-HE-04.ndpi</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-2">
+<span>Target: LUNG_ADENO_V3</span>
+<span>•</span>
+<span>152,000 × 88,400 px</span>
+<span>•</span>
+<span class="text-secondary font-medium">0.228 µm/px</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-space-md shrink-0">
+<div class="text-right hidden sm:block">
+<div class="font-label-sm text-label-sm text-on-surface font-semibold">22,890 Patches</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Pen Marks Filtered</div>
+</div>
+<span class="material-symbols-outlined text-emerald-600 text-[18px]" title="Valid Coords">verified</span>
+</div>
+</div>
+<!-- Slide Item 3 -->
+<div class="flex items-center justify-between p-space-sm rounded bg-surface-container-low hover:bg-surface-container transition-colors">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-8 h-8 rounded bg-surface-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-tertiary text-[18px]">biotech</span>
+</div>
+<div class="min-w-0">
+<div class="font-headline-sm text-headline-sm text-on-surface truncate">CRC-NODE-BIOPSY-S55-IHC-KI67.mrxs</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-2">
+<span>Target: CRC_MICROSAT_2025</span>
+<span>•</span>
+<span>98,000 × 76,000 px</span>
+<span>•</span>
+<span class="text-tertiary font-medium">0.490 µm/px</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-space-md shrink-0">
+<div class="text-right hidden sm:block">
+<div class="font-label-sm text-label-sm text-on-surface font-semibold">8,410 Patches</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">IHC Thresholded</div>
+</div>
+<span class="material-symbols-outlined text-emerald-600 text-[18px]" title="Valid Coords">verified</span>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-space-sm pt-space-xs flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant">
+<span>Supported Formats: OpenSlide compatible, DICOM-WSI, Philips iSyntax (Virtual Driver)</span>
+<span class="text-primary font-mono">RAM Overhead: 0 MB / tile cache</span>
+</div>
+</div>
+<!-- Collaborator Activity & Model Inferencing Stream -->
+<div class="bg-surface-container-lowest rounded shadow-sm p-space-md flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between pb-space-sm">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-tertiary text-[20px]">notifications_active</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Collaborator Stream</h3>
+</div>
+<span class="font-label-sm text-label-sm text-outline">Real-Time</span>
+</div>
+<div class="space-y-space-sm pt-space-xs font-body-sm text-body-sm">
+<!-- Feed Item 1 -->
+<div class="flex items-start gap-space-sm">
+<div class="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 shrink-0"></div>
+<div>
+<span class="font-headline-sm text-headline-sm text-on-surface">Dr. Eliza Chen</span>
+<span class="text-on-surface-variant">committed 450 annotations in</span>
+<span class="font-label-sm text-label-sm text-primary font-semibold">BCA_2026</span>
+<div class="font-label-sm text-label-sm text-outline mt-0.5">14 minutes ago · ROI #4 Ductal Lumen</div>
+</div>
+</div>
+<!-- Feed Item 2 -->
+<div class="flex items-start gap-space-sm">
+<div class="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0"></div>
+<div>
+<span class="font-headline-sm text-headline-sm text-on-surface">Auto-Tissue Masker</span>
+<span class="text-on-surface-variant">completed OTSU thresholding on 12 slides in</span>
+<span class="font-label-sm text-label-sm text-secondary font-semibold">LUNG_ADENO_V3</span>
+<div class="font-label-sm text-label-sm text-outline mt-0.5">1 hour ago · Non-tissue background rejected</div>
+</div>
+</div>
+<!-- Feed Item 3 -->
+<div class="flex items-start gap-space-sm">
+<div class="w-2 h-2 rounded-full bg-tertiary mt-1.5 shrink-0"></div>
+<div>
+<span class="font-headline-sm text-headline-sm text-on-surface">System Pipeline</span>
+<span class="text-on-surface-variant">generated TFRecord export package for</span>
+<span class="font-label-sm text-label-sm text-tertiary font-semibold">CRC_MICROSAT_2025</span>
+<div class="font-label-sm text-label-sm text-outline mt-0.5">3 hours ago · Hash SHA-256 verified</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Quick System Status Badge -->
+<div class="mt-space-md p-space-sm rounded bg-surface-container flex items-center justify-between font-label-sm text-label-sm">
+<span class="text-on-surface-variant">Dynamic Level-0 Server:</span>
+<span class="text-emerald-700 font-semibold font-mono">127.0.0.1:8088 [OK]</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Wizard Modal: + New Project Setup (Level-0 Dynamic Geometry Config) -->
+<div class="fixed inset-0 bg-inverse-surface/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-space-md" id="newProjectModal">
+<div class="bg-surface-container-lowest rounded-xl max-w-2xl w-full p-space-lg shadow-xl space-y-space-lg">
+<div class="flex items-center justify-between">
+<div class="space-y-0.5">
+<span class="font-label-sm text-label-sm text-primary uppercase font-bold tracking-wider">Step 1 of 3 · Geometry Specification</span>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Create New Pathology Project</h2>
+</div>
+<button class="w-8 h-8 rounded flex items-center justify-center text-on-surface-variant hover:bg-surface-container" id="btnCloseModal">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div>
+<!-- Form Elements -->
+<div class="space-y-space-md font-body-sm text-body-sm text-on-surface">
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1">Project Name</label>
+<input class="w-full h-9 px-space-sm bg-surface-container-low rounded focus:bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary" placeholder="e.g. Prostate Carcinoma Gleason Grading Cohort" type="text"/>
+</div>
+<div class="grid grid-cols-2 gap-space-md">
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1">Project Identifier (Auto Slug)</label>
+<input class="w-full h-9 px-space-sm bg-surface-container-low font-mono text-label-sm rounded focus:bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary" type="text" value="PROSTATE_GLEASON_2026"/>
+</div>
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1">Primary Organ / Anatomy</label>
+<select class="w-full h-9 px-space-sm bg-surface-container-low rounded focus:bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary">
+<option>Prostate</option>
+<option>Breast</option>
+<option>Lung</option>
+<option>Colon / Gastrointestinal</option>
+<option>Kidney</option>
+<option>Brain / Neuropathology</option>
+</select>
+</div>
+</div>
+<!-- Virtual Tiling Parameters -->
+<div class="p-space-md rounded bg-surface-container-low space-y-space-sm">
+<span class="font-label-sm text-label-sm text-primary font-bold uppercase">Dynamic Virtual Patch Extraction Defaults</span>
+<div class="grid grid-cols-3 gap-space-sm">
+<div>
+<span class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Patch Size</span>
+<select class="w-full h-8 px-2 bg-surface-container-lowest rounded font-label-sm text-label-sm">
+<option>256 × 256 px</option>
+<option selected="">512 × 512 px</option>
+<option>1024 × 1024 px</option>
+</select>
+</div>
+<div>
+<span class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Base Magnification</span>
+<select class="w-full h-8 px-2 bg-surface-container-lowest rounded font-label-sm text-label-sm">
+<option>10x (1.00 µm/px)</option>
+<option selected="">20x (0.50 µm/px)</option>
+<option>40x (0.25 µm/px)</option>
+</select>
+</div>
+<div>
+<span class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Tissue Threshold</span>
+<select class="w-full h-8 px-2 bg-surface-container-lowest rounded font-label-sm text-label-sm">
+<option>≥ 40% tissue</option>
+<option>≥ 50% tissue</option>
+<option selected="">≥ 60% tissue</option>
+<option>≥ 80% tissue</option>
+</select>
+</div>
+</div>
+<div class="flex items-center gap-2 pt-1 font-label-sm text-label-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-[15px] text-primary">info</span>
+<span>Zero static tiles will be written to disk. Extraction occurs on demand via OpenSlide Level 0 matrix.</span>
+</div>
+</div>
+</div>
+<!-- Modal Footer -->
+<div class="flex items-center justify-between pt-space-sm">
+<button class="px-space-md h-9 rounded text-on-surface-variant hover:bg-surface-container font-headline-sm text-headline-sm" id="btnCancelModal">
+          Cancel
+        </button>
+<div class="flex items-center gap-space-sm">
+<button class="px-space-md h-9 rounded bg-surface-container text-on-surface font-headline-sm text-headline-sm hover:bg-surface-container-high">
+            Save as Draft
+          </button>
+<button class="px-space-lg h-9 rounded bg-primary text-on-primary font-headline-sm text-headline-sm hover:bg-primary-container shadow-sm">
+            Proceed to Slide Attachment →
+          </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Inline Interaction Behavior -->
+<script>
+  // View switcher logic (Cards vs Table)
+  const gridBtn = document.getElementById('viewToggleGrid');
+  const tableBtn = document.getElementById('viewToggleTable');
+  const gridSection = document.getElementById('projectGridSection');
+  const tableSection = document.getElementById('projectTableSection');
+
+  gridBtn?.addEventListener('click', () => {
+    gridSection.classList.remove('hidden');
+    tableSection.classList.add('hidden');
+    gridBtn.classList.add('bg-surface-container-lowest', 'shadow-sm', 'text-on-surface');
+    gridBtn.classList.remove('text-on-surface-variant');
+    tableBtn.classList.remove('bg-surface-container-lowest', 'shadow-sm', 'text-on-surface');
+    tableBtn.classList.add('text-on-surface-variant');
+  });
+
+  tableBtn?.addEventListener('click', () => {
+    gridSection.classList.add('hidden');
+    tableSection.classList.remove('hidden');
+    tableBtn.classList.add('bg-surface-container-lowest', 'shadow-sm', 'text-on-surface');
+    tableBtn.classList.remove('text-on-surface-variant');
+    gridBtn.classList.remove('bg-surface-container-lowest', 'shadow-sm', 'text-on-surface');
+    gridBtn.classList.add('text-on-surface-variant');
+  });
+
+  // Action Menu dropdown triggers
+  document.querySelectorAll('.card-action-menu-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const dropdown = btn.nextElementSibling;
+      // Close other dropdowns
+      document.querySelectorAll('.card-menu-dropdown').forEach(d => {
+        if (d !== dropdown) d.classList.add('hidden');
+      });
+      dropdown.classList.toggle('hidden');
+    });
+  });
+
+  // Close dropdowns on outside click
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.card-menu-dropdown').forEach(d => d.classList.add('hidden'));
+  });
+
+  // Modal handlers
+  const openModalBtn = document.getElementById('btnOpenNewProjectModal');
+  const closeModalBtn = document.getElementById('btnCloseModal');
+  const cancelModalBtn = document.getElementById('btnCancelModal');
+  const modal = document.getElementById('newProjectModal');
+
+  openModalBtn?.addEventListener('click', () => modal?.classList.remove('hidden'));
+  closeModalBtn?.addEventListener('click', () => modal?.classList.add('hidden'));
+  cancelModalBtn?.addEventListener('click', () => modal?.classList.add('hidden'));
+</script></main></div></body></html>

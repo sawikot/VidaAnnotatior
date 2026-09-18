@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{"colors":{"surface-container":"#e5eeff","on-secondary-container":"#5c647a","primary-fixed":"#cce5ff","on-surface-variant":"#3f4850","surface-tint":"#006398","tertiary-container":"#008096","on-primary-fixed-variant":"#004b73","on-secondary":"#ffffff","tertiary-fixed-dim":"#4cd7f6","on-primary":"#ffffff","background":"#f8f9ff","surface-container-lowest":"#ffffff","error":"#ba1a1a","surface-container-low":"#eff4ff","primary-fixed-dim":"#93ccff","on-tertiary":"#ffffff","surface-variant":"#d3e4fe","surface-dim":"#cbdbf5","primary-container":"#007bb9","secondary-container":"#dae2fd","surface-container-highest":"#d3e4fe","tertiary-fixed":"#acedff","inverse-on-surface":"#eaf1ff","on-background":"#0b1c30","secondary-fixed":"#dae2fd","on-error":"#ffffff","inverse-primary":"#93ccff","on-primary-fixed":"#001d31","on-secondary-fixed-variant":"#3f465c","secondary":"#565e74","on-tertiary-container":"#f9fdff","outline":"#707881","secondary-fixed-dim":"#bec6e0","on-error-container":"#93000a","on-surface":"#0b1c30","surface-bright":"#f8f9ff","primary":"#006194","surface-container-high":"#dce9ff","error-container":"#ffdad6","outline-variant":"#bfc7d2","on-tertiary-fixed-variant":"#004e5c","on-tertiary-fixed":"#001f26","surface":"#f8f9ff","on-primary-container":"#fdfcff","tertiary":"#006577","inverse-surface":"#213145","on-secondary-fixed":"#131b2e"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"gutter":"0.75rem","space-lg":"1rem","space-md":"0.75rem","space-xs":"0.25rem","space-sm":"0.375rem","margin":"1rem","space-xl":"1.5rem"},"fontFamily":{"body-sm":["Inter"],"headline-md":["Inter"],"headline-lg":["Inter"],"label-lg":["JetBrains Mono"],"body-lg":["Inter"],"body-md":["Inter"],"label-sm":["JetBrains Mono"],"label-md":["JetBrains Mono"],"headline-sm":["Inter"]},"fontSize":{"body-sm":["11px",{"lineHeight":"14px","fontWeight":"400"}],"headline-md":["16px",{"lineHeight":"24px","letterSpacing":"-0.01em","fontWeight":"600"}],"headline-lg":["20px",{"lineHeight":"28px","letterSpacing":"-0.015em","fontWeight":"600"}],"label-lg":["12px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}],"body-lg":["14px",{"lineHeight":"20px","fontWeight":"400"}],"body-md":["12px",{"lineHeight":"16px","fontWeight":"400"}],"label-sm":["10px",{"lineHeight":"12px","letterSpacing":"0.03em","fontWeight":"400"}],"label-md":["11px",{"lineHeight":"14px","letterSpacing":"0.01em","fontWeight":"500"}],"headline-sm":["13px",{"lineHeight":"18px","letterSpacing":"-0.005em","fontWeight":"600"}]}}}}</script></head><body class="bg-surface font-body-md text-on-surface"><aside class="fixed left-0 top-0 h-full w-14 bg-[#0f172a] z-50 flex flex-col justify-between items-center py-space-sm border-r border-[#1e293b]"><div class="flex flex-col items-center w-full gap-space-sm"><div class="h-10 w-full flex items-center justify-center"><div class="h-8 w-8 rounded-lg bg-[#1e293b] flex items-center justify-center text-primary-fixed-dim"><span class="material-symbols-outlined text-[18px]">biotech</span></div></div><div class="w-8 h-[1px] bg-[#1e293b] my-space-xs"></div><nav class="flex flex-col items-center w-full gap-space-xs" data-active-classes="bg-[#007bb9] text-[#fdfcff] shadow-sm"><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="projects" href="#" title="Project Home"><span class="material-symbols-outlined text-[20px]">folder</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="dashboard" href="#" title="Dashboard"><span class="material-symbols-outlined text-[20px]">grid_view</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="slide-processing" href="#" title="Slide Processing"><span class="material-symbols-outlined text-[20px]">filter_center_focus</span></a><a class="relative w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="workspace-annotator" href="#" title="Workspace Annotator"><span class="material-symbols-outlined text-[20px]">adjust</span><span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#0f172a]"></span></a><a aria-current="page" class="w-10 h-10 flex items-center justify-center rounded-lg transition-colors bg-[#007bb9] text-[#fdfcff] shadow-sm" data-path="patch-gallery" href="#" title="Patch Gallery"><span class="material-symbols-outlined text-[20px]">grid_on</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="full-wsi-overview" href="#" title="Full WSI Viewer"><span class="material-symbols-outlined text-[20px]">aspect_ratio</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="versioning" href="#" title="Config Versions"><span class="material-symbols-outlined text-[20px]">account_tree</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="export" href="#" title="Export Data"><span class="material-symbols-outlined text-[20px]">file_download</span></a></nav></div><div class="flex flex-col items-center w-full gap-space-xs"><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="documentation" href="#" title="Documentation"><span class="material-symbols-outlined text-[20px]">menu_book</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="settings" href="#" title="System Settings"><span class="material-symbols-outlined text-[20px]">settings</span></a></div></aside><div class="pl-14"><header class="fixed top-0 left-14 right-0 h-14 bg-[#0f172a] text-slate-100 z-40 flex items-center justify-between px-space-md border-b border-[#1e293b] shadow-sm"><div class="flex items-center gap-space-md"><div class="flex items-center gap-space-sm"><img alt="VirtualPatch WSI Annotator Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1X4twrp5Tqi8NJBq5NgAb_1ecczseo_PmJLV4TbR5juzv1LzlAxErGDirf4ficIungXHVmFf01bK-kYyxQ3gawoNYtS9ldrhPUUl85E_7RT3G7n40PHMiIbrBrOnjD-6EQ0tEIuTLBY5P85InorvRxK6f7oyYf0BDB0wbRWZZrP4MVJVVbnUZuWxxdfJR0JiGrIz9FM0oKR05nSJYU7XD0ffS6gP1QHq87qLV6U5CD4kInE8ZPx6J8w"/><div class="flex flex-col"><span class="font-headline-sm text-headline-sm text-white tracking-tight leading-none">VirtualPatch WSI Annotator</span><span class="font-label-sm text-label-sm text-slate-400 leading-tight mt-0.5">Digital Pathology Research Suite (Level-0 Coordinate Engine)</span></div></div><div class="h-6 w-[1px] bg-[#1e293b] mx-space-xs"></div><div class="inline-flex items-center gap-space-xs px-space-sm py-0.5 rounded-lg bg-[#1e293b] border border-slate-700"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span><span class="font-label-sm text-label-sm text-cyan-200">BCA_2026: Breast Cancer Annotation [v1.0 - 512px @ 20x]</span></div><div class="h-6 w-[1px] bg-[#1e293b] mx-space-xs hidden xl:block"></div><nav class="hidden xl:flex items-center gap-1" data-active-classes="bg-[#1e293b] text-white font-headline-sm rounded-lg"><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="projects" href="#">Projects</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="dashboard" href="#">Dashboard</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="slide-processing" href="#">Slide Processing</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="workspace-annotator" href="#">Workspace</a><a aria-current="page" class="px-space-sm py-1 transition-colors bg-[#1e293b] text-white font-headline-sm rounded-lg" data-path="patch-gallery" href="#">Patch Gallery</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="full-wsi-overview" href="#">Overview</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="versioning" href="#">Versioning</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="export" href="#">Export</a></nav></div><div class="flex items-center gap-space-md"><div class="hidden lg:flex items-center gap-space-xs px-space-sm py-1 rounded-lg bg-[#1e293b]/70 border border-slate-700/80"><span class="material-symbols-outlined text-emerald-400 text-[14px]">check_circle</span><span class="font-label-sm text-label-sm text-slate-300">Dynamic Coordinate Engine: Active</span><span class="text-slate-500 font-label-sm text-label-sm">|</span><span class="font-label-sm text-label-sm text-slate-400">0 Patches</span></div><div class="relative hidden md:block w-52"><span class="material-symbols-outlined absolute left-2 top-2 text-slate-400 text-[16px]">search</span><input class="w-full h-8 pl-7 pr-space-sm bg-[#1e293b] border border-slate-700 rounded-lg text-slate-200 placeholder-slate-400 font-body-sm text-body-sm focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container" placeholder="Search slides &amp; coords..." type="text"/></div><div class="flex items-center gap-space-xs"><button class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" title="Platform Documentation"><span class="material-symbols-outlined text-[18px]">help_outline</span></button><button class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" title="Settings"><span class="material-symbols-outlined text-[18px]">tune</span></button></div><div class="h-6 w-[1px] bg-[#1e293b]"></div><div class="flex items-center gap-space-sm pl-space-xs"><div class="flex flex-col text-right hidden sm:flex"><span class="font-headline-sm text-headline-sm text-white leading-tight">Dr. Eliza Chen, MD, PhD</span><span class="font-label-sm text-label-sm text-slate-400 leading-none">Senior Computational Pathologist</span></div><img alt="Profile" class="w-8 h-8 rounded-full object-cover ring-1 ring-slate-600" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD06VCVZeM-utr85SFdhAMY1jx1M21lwohLut1hC_n6n5toao5HojmkIak5QbUKh-txUBQQOPjgHNy2S17pkmRqwIaTzVtFqipSwDP4IgIhvJIGRzflDGX0sp-di-3ae0JgxEx9oLFme52ZBDpsKTg8L3DkTvxsGepIcnHFy8CqtLcEELD7Mz6Qm9xgnAgTacptEmtOapgbq9rZBCL79gQ7bt5eihKJIdo5O1SdvMdlH1on7_b1VlNm"/></div></div></header><main class="w-full pt-14 bg-surface min-h-screen"><div class="flex flex-col w-full">
+<!-- Dynamic Gallery Sticky Command Center -->
+<div class="sticky top-14 z-30 bg-surface-container-lowest/95 backdrop-blur-md px-space-xl py-space-md shadow-sm">
+<!-- Top Metadata Level -->
+<div class="flex flex-wrap items-center justify-between gap-space-md pb-space-sm">
+<div class="flex items-center gap-space-md">
+<div class="flex items-center gap-space-xs px-space-sm py-1 bg-surface-container rounded-lg">
+<span class="material-symbols-outlined text-primary text-[18px]">grid_view</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">Slide: Patient_001.svs</span>
+<span class="text-outline-variant font-label-sm">/</span>
+<span class="font-label-md text-label-md text-secondary">Virtual Patch Gallery</span>
+<span class="px-space-xs py-0.5 bg-primary/10 text-primary font-label-sm text-label-sm rounded">12,432 Tiles</span>
+</div>
+<div class="inline-flex items-center gap-space-xs px-space-sm py-1 bg-surface-container-high rounded-full">
+<span class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>
+<span class="font-label-sm text-label-sm text-tertiary">Dynamic On-Demand Patch Loading • Zero Disk Bloat</span>
+</div>
+</div>
+<!-- Batch Actions & Grid Scaler -->
+<div class="flex items-center gap-space-md">
+<!-- Scale Switcher -->
+<div class="hidden md:flex items-center gap-space-xs bg-surface-container p-0.5 rounded-lg">
+<button class="px-space-sm py-1 text-on-surface-variant hover:text-on-surface text-label-sm font-label-sm rounded transition-colors flex items-center gap-1" id="btn-zoom-compact">
+<span class="material-symbols-outlined text-[14px]">view_comfy</span>Compact
+          </button>
+<button class="px-space-sm py-1 bg-surface-container-lowest text-primary shadow-sm text-label-sm font-label-sm rounded transition-all flex items-center gap-1" id="btn-zoom-standard">
+<span class="material-symbols-outlined text-[14px]">grid_view</span>Standard
+          </button>
+<button class="px-space-sm py-1 text-on-surface-variant hover:text-on-surface text-label-sm font-label-sm rounded transition-colors flex items-center gap-1" id="btn-zoom-expanded">
+<span class="material-symbols-outlined text-[14px]">crop_square</span>Large
+          </button>
+</div>
+<div class="flex items-center gap-space-xs">
+<button class="px-space-sm py-1.5 bg-surface-container-high hover:bg-surface-variant text-on-surface font-headline-sm text-headline-sm rounded-lg flex items-center gap-1 transition-colors">
+<span class="material-symbols-outlined text-[16px]">select_all</span>
+<span>Select All</span>
+</button>
+<button class="px-space-sm py-1.5 bg-primary text-on-primary hover:bg-primary-container font-headline-sm text-headline-sm rounded-lg flex items-center gap-1 transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[16px]">label</span>
+<span>Batch Classify</span>
+</button>
+<button class="px-space-sm py-1.5 bg-surface-container-high hover:bg-surface-variant text-on-surface font-headline-sm text-headline-sm rounded-lg flex items-center gap-1 transition-colors">
+<span class="material-symbols-outlined text-[16px]">file_download</span>
+<span>Export</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Category Filter Ribbon & Sort Toolbar -->
+<div class="flex flex-wrap items-center justify-between gap-space-sm pt-space-xs">
+<div class="flex flex-wrap items-center gap-space-xs" id="category-pills">
+<button class="px-space-sm py-1 bg-primary text-on-primary rounded-full font-label-sm text-label-sm flex items-center gap-1.5 shadow-sm">
+<span>All Patches</span>
+<span class="bg-primary-container/60 px-1 py-0.2 rounded font-label-sm text-label-sm text-on-primary">12,432</span>
+</button>
+<button class="px-space-sm py-1 bg-surface-container-low hover:bg-surface-container text-on-surface-variant rounded-full font-label-sm text-label-sm flex items-center gap-1.5 transition-colors">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+<span>Unannotated</span>
+<span class="text-secondary font-label-sm">5,592</span>
+</button>
+<button class="px-space-sm py-1 bg-surface-container-low hover:bg-surface-container text-on-surface-variant rounded-full font-label-sm text-label-sm flex items-center gap-1.5 transition-colors">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+<span>Tumor</span>
+<span class="text-secondary font-label-sm">3,410</span>
+</button>
+<button class="px-space-sm py-1 bg-surface-container-low hover:bg-surface-container text-on-surface-variant rounded-full font-label-sm text-label-sm flex items-center gap-1.5 transition-colors">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+<span>Stroma</span>
+<span class="text-secondary font-label-sm">2,180</span>
+</button>
+<button class="px-space-sm py-1 bg-surface-container-low hover:bg-surface-container text-on-surface-variant rounded-full font-label-sm text-label-sm flex items-center gap-1.5 transition-colors">
+<span class="w-1.5 h-1.5 rounded-full bg-on-secondary-fixed-variant"></span>
+<span>Necrosis</span>
+<span class="text-secondary font-label-sm">640</span>
+</button>
+<button class="px-space-sm py-1 bg-surface-container-low hover:bg-surface-container text-on-surface-variant rounded-full font-label-sm text-label-sm flex items-center gap-1.5 transition-colors">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span>Normal</span>
+<span class="text-secondary font-label-sm">420</span>
+</button>
+<button class="px-space-sm py-1 bg-error-container text-on-error-container rounded-full font-label-sm text-label-sm flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[13px]">flag</span>
+<span>Flagged QA</span>
+<span class="font-label-sm">142</span>
+</button>
+<button class="px-space-sm py-1 bg-surface-container-low hover:bg-surface-container text-on-surface-variant rounded-full font-label-sm text-label-sm flex items-center gap-1.5 transition-colors">
+<span class="material-symbols-outlined text-[13px] text-primary">verified</span>
+<span>Reviewed</span>
+<span class="text-secondary font-label-sm">5,200</span>
+</button>
+</div>
+<div class="flex items-center gap-space-sm ml-auto">
+<div class="flex items-center gap-space-xs text-on-surface-variant">
+<span class="font-label-sm text-label-sm">Sort by:</span>
+<div class="relative">
+<select class="bg-surface-container text-on-surface font-label-sm text-label-sm rounded-lg px-space-sm py-1 pr-6 appearance-none focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer">
+<option>Tissue % (High to Low)</option>
+<option>Coordinate Order (X, Y)</option>
+<option>Annotation Status</option>
+<option>Uncertainty Score (Active Learning)</option>
+</select>
+<span class="material-symbols-outlined absolute right-1.5 top-1.5 pointer-events-none text-[14px] text-secondary">expand_more</span>
+</div>
+</div>
+<button class="p-1 rounded-lg bg-surface-container text-on-surface-variant hover:text-on-surface" title="Toggle Filters">
+<span class="material-symbols-outlined text-[18px]">tune</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Analytical Sub-bar & Realtime Telemetry -->
+<div class="px-space-xl py-space-sm bg-surface-container-low flex flex-wrap items-center justify-between gap-space-md text-on-surface-variant">
+<div class="flex items-center gap-space-lg">
+<div class="flex items-center gap-space-xs font-label-sm text-label-sm">
+<span class="text-secondary">Level-0 Virtual Footprint:</span>
+<span class="text-on-surface font-label-md">512 × 512 px @ 20× (0.50 µm/px)</span>
+</div>
+<div class="hidden lg:flex items-center gap-space-xs font-label-sm text-label-sm">
+<span class="text-secondary">Tissue Coverage Threshold:</span>
+<span class="text-on-surface font-label-md">&gt; 50%</span>
+</div>
+<div class="hidden xl:flex items-center gap-space-xs font-label-sm text-label-sm">
+<span class="text-secondary">Rendering Engine:</span>
+<span class="text-primary font-label-md">V-Pipeline WebAssembly (8.4ms / patch)</span>
+</div>
+</div>
+<div class="flex items-center gap-space-md">
+<div class="flex items-center gap-1 font-label-sm text-label-sm">
+<span class="w-2 h-2 rounded bg-error"></span>
+<span>Tumor Area</span>
+<span class="text-on-surface font-label-md ml-1">42.8%</span>
+</div>
+<div class="flex items-center gap-1 font-label-sm text-label-sm">
+<span class="w-2 h-2 rounded bg-tertiary"></span>
+<span>Stroma Area</span>
+<span class="text-on-surface font-label-md ml-1">38.1%</span>
+</div>
+<div class="flex items-center gap-1 font-label-sm text-label-sm">
+<span class="w-2 h-2 rounded bg-surface-dim"></span>
+<span>Background/Other</span>
+<span class="text-on-surface font-label-md ml-1">19.1%</span>
+</div>
+</div>
+</div>
+<!-- Main Virtual Patch Mosaic Canvas -->
+<div class="p-space-xl">
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-space-md" id="patch-grid">
+<!-- Patch #00244 -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+<div class="flex items-center justify-between px-space-sm py-1.5 bg-surface-container-high/60">
+<span class="font-label-md text-label-md text-on-surface">#00244</span>
+<span class="font-label-sm text-label-sm text-secondary">X: 19,968 Y: 14,336</span>
+</div>
+<div class="relative aspect-square w-full bg-surface-dim overflow-hidden cursor-pointer">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="Microscopic whole slide image patch of high-grade breast invasive ductal carcinoma, heavy cellular density with hyperchromatic polymorphic atypical nuclei, hematoxylin and eosin staining showing deep violet nucleoli and eosinophilic pink stroma." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCREAXK_qcGSiVT-uEEzF2VkwT2P7VHHPmZg-QkvZqAmQcL69ICLdAtrXqgdq-MW_nJ4UdSCK0qyhNz4q5E_79VyVbvNe2czI-gtDScSpcowPyAYHyVosrXLzCtErzxIUHD36cUlX4DZMUn05KtK-o2obf992rSoHh2iY9NcIHBEIyXqe331Eh6vfgTzcXLrY7R_8PHlS7itbbcLKrY5ezlOGPmq3ZtUfsjqy_19ICryd_pGVbCss0D"/>
+<!-- Annotation Contour Vectors (Tumor: Red) -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none" viewbox="0 0 100 100">
+<polygon class="text-error/15" fill="currentColor" points="12,18 45,15 88,28 92,75 75,90 32,85 10,60" stroke="currentColor" stroke-width="2"></polygon>
+</svg>
+<!-- Status badge float -->
+<div class="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-error flex items-center gap-1 shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+            Tumor
+          </div>
+<div class="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-primary flex items-center gap-1 shadow-sm">
+<span class="material-symbols-outlined text-[12px]">check</span>
+            Reviewed
+          </div>
+<!-- Quick action overlay -->
+<div class="absolute inset-0 bg-on-background/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+<button class="px-space-sm py-1 bg-surface-container-lowest text-primary font-headline-sm text-headline-sm rounded-lg shadow-md flex items-center gap-1 hover:bg-primary hover:text-on-primary transition-colors">
+<span>Inspect</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</div>
+</div>
+<div class="p-space-sm flex flex-col gap-1">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span>Tissue: 92%</span>
+<span>1 polygon</span>
+</div>
+<div class="w-full bg-surface-container h-1 rounded-full overflow-hidden">
+<div class="bg-error h-full rounded-full" style="width: 92%"></div>
+</div>
+<div class="flex items-center justify-between pt-0.5 text-secondary font-label-sm text-label-sm">
+<span>Conf: 0.98</span>
+<span class="text-tertiary">Dr. Chen</span>
+</div>
+</div>
+</div>
+<!-- Patch #00245 (Target Card from Spec) -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+<div class="flex items-center justify-between px-space-sm py-1.5 bg-surface-container-high/60">
+<span class="font-label-md text-label-md text-on-surface">#00245</span>
+<span class="font-label-sm text-label-sm text-secondary">X: 20,480 Y: 14,336</span>
+</div>
+<div class="relative aspect-square w-full bg-surface-dim overflow-hidden cursor-pointer">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="Histopathology micro-tile crop showing breast cancer tissue core with dense nests of invasive pleomorphic epithelial tumor cells surrounded by fibrous desmoplastic collagen stroma, calibrated H&amp;E stain." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA0ESZh-c9tmTPUt---lF9IRV4P-1EhO-yzwTDxZKcVQ7m2xCpU7zTV8Au1iV_BjqNLJ91tTg-2KE9FbUxqcuEepQgMC-WCPmCKMV-wkUBqjox8nZKP6Nn4A4HYLsPeKvAuT5VMEOSSP2ZZlLU3MOX5qZheuuLz_6HaGu2uDCisebnC2H_BdvFLVwBZtGxPG1klcVTzLw3GnnbMNUvCVVXYPyhcCyPQ42AYh6ROqSsO23jGxws1bzVL"/>
+<!-- Mixed Annotations (Red Tumor + Cyan/Teal Stroma) -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none" viewbox="0 0 100 100">
+<polygon class="text-error/20" fill="currentColor" points="15,20 55,18 70,55 45,72 15,50" stroke="currentColor" stroke-width="2"></polygon>
+<polygon class="text-tertiary/20" fill="currentColor" points="58,62 90,52 92,90 62,88" stroke="currentColor" stroke-width="2"></polygon>
+</svg>
+<div class="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-tertiary-container flex items-center gap-1 shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+            Mixed (Tumor/Stroma)
+          </div>
+<div class="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-secondary flex items-center gap-1 shadow-sm">
+            Annotated
+          </div>
+<div class="absolute inset-0 bg-on-background/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+<button class="px-space-sm py-1 bg-surface-container-lowest text-primary font-headline-sm text-headline-sm rounded-lg shadow-md flex items-center gap-1 hover:bg-primary hover:text-on-primary transition-colors">
+<span>Inspect</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</div>
+</div>
+<div class="p-space-sm flex flex-col gap-1">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span>Tissue: 84%</span>
+<span>3 polygons</span>
+</div>
+<div class="w-full bg-surface-container h-1 rounded-full overflow-hidden flex">
+<div class="bg-error h-full" style="width: 55%"></div>
+<div class="bg-tertiary h-full" style="width: 29%"></div>
+</div>
+<div class="flex items-center justify-between pt-0.5 text-secondary font-label-sm text-label-sm">
+<span>Conf: 0.94</span>
+<span class="text-on-surface">Auto-WSI-v2</span>
+</div>
+</div>
+</div>
+<!-- Patch #00246 -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+<div class="flex items-center justify-between px-space-sm py-1.5 bg-surface-container-high/60">
+<span class="font-label-md text-label-md text-on-surface">#00246</span>
+<span class="font-label-sm text-label-sm text-secondary">X: 20,992 Y: 14,336</span>
+</div>
+<div class="relative aspect-square w-full bg-surface-dim overflow-hidden cursor-pointer">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="Dense fibrous collagen stroma patch in breast pathology biopsy slide, elongated spindle fibroblast cells between thick eosinophilic pink bundles of connective tissue with scattered inflammatory lymphocytes." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA6mbiIMmk1aGCN2pA2uPcV9VQuRlKybRhpJYBHDZIQWXPrb-jG7_XiYtrrRK5DwI1BC1yrbLPKeZO778fabP16BIVZcUdIFLbWYgZkW0stvGOwG6JM3PXYbEp5mF2b_Pc4vjJwCgE7xPAUsxU1p29GYKqeXwGP0bpE3uLddCH0mekf0rG_aUFno-3SJDPt1yCUvuy22cVQKqsChNQm_zPELRJ7Nm1pINWloeWtBxlD1-QMh8EtS-NS"/>
+<svg class="absolute inset-0 w-full h-full pointer-events-none" viewbox="0 0 100 100">
+<polygon class="text-tertiary/20" fill="currentColor" points="5,5 95,10 90,92 8,88" stroke="currentColor" stroke-width="2"></polygon>
+</svg>
+<div class="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-tertiary flex items-center gap-1 shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+            Stroma
+          </div>
+<div class="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-secondary flex items-center gap-1 shadow-sm">
+            Annotated
+          </div>
+<div class="absolute inset-0 bg-on-background/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+<button class="px-space-sm py-1 bg-surface-container-lowest text-primary font-headline-sm text-headline-sm rounded-lg shadow-md flex items-center gap-1 hover:bg-primary hover:text-on-primary transition-colors">
+<span>Inspect</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</div>
+</div>
+<div class="p-space-sm flex flex-col gap-1">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span>Tissue: 71%</span>
+<span>1 polygon</span>
+</div>
+<div class="w-full bg-surface-container h-1 rounded-full overflow-hidden">
+<div class="bg-tertiary h-full rounded-full" style="width: 71%"></div>
+</div>
+<div class="flex items-center justify-between pt-0.5 text-secondary font-label-sm text-label-sm">
+<span>Conf: 0.91</span>
+<span class="text-tertiary">Dr. Chen</span>
+</div>
+</div>
+</div>
+<!-- Patch #00247 (Necrosis - Flagged) -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+<div class="flex items-center justify-between px-space-sm py-1.5 bg-surface-container-high/60">
+<span class="font-label-md text-label-md text-on-surface">#00247</span>
+<span class="font-label-sm text-label-sm text-secondary">X: 21,504 Y: 14,336</span>
+</div>
+<div class="relative aspect-square w-full bg-surface-dim overflow-hidden cursor-pointer">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="Microscopic view of ischemic comedo tumor necrosis in breast ductal carcinoma, cellular ghost debris, pyknotic fragmented chromatin dust and eosinophilic granular amorphous material without viable nuclei." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7lDvONMiMC2S1sJVVtSVHb2dClbzLawNPPMJ4cmrEeGPCnC3hK9_vrU04PMkGN_y0QreRFzpIoiKSSTFaAew4UkFnKlWUF26MVlrf1ET0XILeSOw706A-Uh3gemGIBmky2SbkwwGpFuqyqBkoNjg9WsWjpISABMvIz0__j-fnr_ci6a-awZkjH0TqoPQ7YuOfcpAB_J66ndd9Gh5lgPUnYpv8JUOxysxAgPXtD9GadSJ0lIsDbADR"/>
+<svg class="absolute inset-0 w-full h-full pointer-events-none" viewbox="0 0 100 100">
+<polygon class="text-secondary/20" fill="currentColor" points="25,25 75,20 85,78 20,82" stroke="currentColor" stroke-dasharray="3 2" stroke-width="2"></polygon>
+</svg>
+<div class="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-on-surface flex items-center gap-1 shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+            Necrosis
+          </div>
+<div class="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-error-container text-on-error-container font-label-sm text-label-sm flex items-center gap-1 shadow-sm">
+<span class="material-symbols-outlined text-[12px]">flag</span>
+            Flagged QA
+          </div>
+<div class="absolute inset-0 bg-on-background/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+<button class="px-space-sm py-1 bg-surface-container-lowest text-primary font-headline-sm text-headline-sm rounded-lg shadow-md flex items-center gap-1 hover:bg-primary hover:text-on-primary transition-colors">
+<span>Inspect</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</div>
+</div>
+<div class="p-space-sm flex flex-col gap-1">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span>Tissue: 65%</span>
+<span class="text-error font-medium">Uncertain 0.62</span>
+</div>
+<div class="w-full bg-surface-container h-1 rounded-full overflow-hidden">
+<div class="bg-secondary h-full rounded-full" style="width: 65%"></div>
+</div>
+<div class="flex items-center justify-between pt-0.5 text-secondary font-label-sm text-label-sm">
+<span>Needs Review</span>
+<span class="text-error">Secondary Check</span>
+</div>
+</div>
+</div>
+<!-- Patch #00248 (Unannotated) -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+<div class="flex items-center justify-between px-space-sm py-1.5 bg-surface-container-high/60">
+<span class="font-label-md text-label-md text-on-surface">#00248</span>
+<span class="font-label-sm text-label-sm text-secondary">X: 22,016 Y: 14,336</span>
+</div>
+<div class="relative aspect-square w-full bg-surface-dim overflow-hidden cursor-pointer">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="Histological section of breast tissue with active cell proliferation, hyperchromatic cancer epithelial cells transitioning into fatty adipose background, sharp optical pathology focus." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBOuVAwFpcdm8TN8SHIQ3bqd_9HdFpaHKTgI5NN95hkogoIbFTuvXLSGUsLx7wE2IqykUYbzDJCC1KWD0aeZK6tCYTKn70BO5SfEeQoKjxNb9CB47PLX27lfm2odzlgDiY_vVP1NRhkqD5WlCiSJxBeKLEton56PJ-g96-gA_vTItq_hGLYMln38rJKyMEm6Xb0M4JAZMXIaT03bXkyMk5c0aPBchbbRaXVQP_Mf2KK3ePCDyf-EUnU"/>
+<div class="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-secondary flex items-center gap-1 shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-outline-variant"></span>
+            Unannotated
+          </div>
+<div class="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-surface-container-high font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1 shadow-sm">
+            Ready
+          </div>
+<div class="absolute inset-0 bg-on-background/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+<button class="px-space-sm py-1 bg-primary text-on-primary font-headline-sm text-headline-sm rounded-lg shadow-md flex items-center gap-1 hover:bg-primary-container transition-colors">
+<span class="material-symbols-outlined text-[14px]">edit</span>
+<span>Annotate</span>
+</button>
+</div>
+</div>
+<div class="p-space-sm flex flex-col gap-1">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span>Tissue: 88%</span>
+<span class="text-secondary">0 polygons</span>
+</div>
+<div class="w-full bg-surface-container h-1 rounded-full overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 88%"></div>
+</div>
+<div class="flex items-center justify-between pt-0.5 text-secondary font-label-sm text-label-sm">
+<span>Priority: High</span>
+<span class="text-primary font-medium">Batch 04</span>
+</div>
+</div>
+</div>
+<!-- Patch #00249 (Normal Glandular) -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+<div class="flex items-center justify-between px-space-sm py-1.5 bg-surface-container-high/60">
+<span class="font-label-md text-label-md text-on-surface">#00249</span>
+<span class="font-label-sm text-label-sm text-secondary">X: 22,528 Y: 14,336</span>
+</div>
+<div class="relative aspect-square w-full bg-surface-dim overflow-hidden cursor-pointer">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="Normal terminal duct lobular unit in breast histology, uniform double layer of cuboidal epithelial and myoepithelial cells with surrounding loose specialized intralobular stroma." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC0Goi70zA3B7iA35tsI21NLbqBo-2Deh-2ae3z9QwxxfSNzP08NfJOQrBjVBj-89m_C1w18M6oETvRT-8t-TpFKhJSPA8Wdm-I22BEoY7nlND-gULqaGHRrn9ZEKrpdajaAS3AP-BUUqURnljx6OydKiYQZ55WnDDBmaAJVqwqzyAD4kNOLCSmTkFnbz-3c3WZzYZe8B8RbN8IZDtZF1lEGB6vMeH-k5Q5x8yLd3DSTqM4h9ijgR1q"/>
+<svg class="absolute inset-0 w-full h-full pointer-events-none" viewbox="0 0 100 100">
+<circle class="text-secondary/15" cx="50" cy="50" fill="currentColor" r="35" stroke="currentColor" stroke-width="2"></circle>
+</svg>
+<div class="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-secondary flex items-center gap-1 shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+            Normal Glandular
+          </div>
+<div class="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-primary flex items-center gap-1 shadow-sm">
+<span class="material-symbols-outlined text-[12px]">check</span>
+            Reviewed
+          </div>
+<div class="absolute inset-0 bg-on-background/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+<button class="px-space-sm py-1 bg-surface-container-lowest text-primary font-headline-sm text-headline-sm rounded-lg shadow-md flex items-center gap-1 hover:bg-primary hover:text-on-primary transition-colors">
+<span>Inspect</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</div>
+</div>
+<div class="p-space-sm flex flex-col gap-1">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span>Tissue: 62%</span>
+<span>1 polygon</span>
+</div>
+<div class="w-full bg-surface-container h-1 rounded-full overflow-hidden">
+<div class="bg-secondary h-full rounded-full" style="width: 62%"></div>
+</div>
+<div class="flex items-center justify-between pt-0.5 text-secondary font-label-sm text-label-sm">
+<span>Conf: 0.99</span>
+<span class="text-tertiary">Dr. Chen</span>
+</div>
+</div>
+</div>
+<!-- Patch #00250 (Tumor Infiltrating Margin) -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+<div class="flex items-center justify-between px-space-sm py-1.5 bg-surface-container-high/60">
+<span class="font-label-md text-label-md text-on-surface">#00250</span>
+<span class="font-label-sm text-label-sm text-secondary">X: 19,968 Y: 14,848</span>
+</div>
+<div class="relative aspect-square w-full bg-surface-dim overflow-hidden cursor-pointer">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="Microscopic invasive front of breast carcinoma infiltrative cord pattern squeezing through dense collagen tissue, showing intense nuclear pleomorphism with H&amp;E light microscopy." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAAdSvpbwV42244bNtvPExmdfpCCLjQqJo6jln_5pMSNg91s-S-2N6NzF31bSDzf84dHNYWet8t9W8yW90eejDByQMRCHfZCuWA8fEp-pEzvws8ZLxaGUvWPAHBoXRozHJGSxgNRzgQiY2rF72ZoSVDP6ZmU9MVtU0Tiw_jxdytICK3pGe8vSrVY1x_XTSUroBP4MmYhYNzeSzGQ2cG7q-gjNpsv0m-tz5PLEzggcNuaTeektbqXODD"/>
+<svg class="absolute inset-0 w-full h-full pointer-events-none" viewbox="0 0 100 100">
+<polygon class="text-error/20" fill="currentColor" points="10,30 60,15 90,65 35,90" stroke="currentColor" stroke-width="2"></polygon>
+</svg>
+<div class="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-error flex items-center gap-1 shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+            Tumor
+          </div>
+<div class="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-secondary flex items-center gap-1 shadow-sm">
+            Annotated
+          </div>
+<div class="absolute inset-0 bg-on-background/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+<button class="px-space-sm py-1 bg-surface-container-lowest text-primary font-headline-sm text-headline-sm rounded-lg shadow-md flex items-center gap-1 hover:bg-primary hover:text-on-primary transition-colors">
+<span>Inspect</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</div>
+</div>
+<div class="p-space-sm flex flex-col gap-1">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span>Tissue: 79%</span>
+<span>2 polygons</span>
+</div>
+<div class="w-full bg-surface-container h-1 rounded-full overflow-hidden">
+<div class="bg-error h-full rounded-full" style="width: 79%"></div>
+</div>
+<div class="flex items-center justify-between pt-0.5 text-secondary font-label-sm text-label-sm">
+<span>Conf: 0.93</span>
+<span class="text-on-surface">Auto-WSI-v2</span>
+</div>
+</div>
+</div>
+<!-- Patch #00251 (Adipose tissue with micro-calcification) -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+<div class="flex items-center justify-between px-space-sm py-1.5 bg-surface-container-high/60">
+<span class="font-label-md text-label-md text-on-surface">#00251</span>
+<span class="font-label-sm text-label-sm text-secondary">X: 20,480 Y: 14,848</span>
+</div>
+<div class="relative aspect-square w-full bg-surface-dim overflow-hidden cursor-pointer">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="Adipose breast tissue with lipid empty vacuoles, clear thin cell membranes, and isolated dark blue hematoxylin microcalcifications with neighboring stroma." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC_zmDXvjZPuvQRkk48GbbwIe9HqvuZr0gFVZh9Of0xr9LgrxaY47osjJoyrT_WVMBaWeHmNinC65Z8WwoBCGYIv2u2P8yH6GeDa87Buslu3Dru4wTBqx1uXhTVFcWNivJ0lnKiqacRtsGmi00MFElglnYE6TrIr9B9wCwzpgO4UCkdUjCO2oQWAEQCR5xtayMPsoFkkMPfSIaufGs8BQ4E04CBSL3eUQu3jjAXTMDiSmO-wnW_OoGJ"/>
+<div class="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-secondary flex items-center gap-1 shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+            Normal Fat / Calc
+          </div>
+<div class="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-primary flex items-center gap-1 shadow-sm">
+<span class="material-symbols-outlined text-[12px]">check</span>
+            Reviewed
+          </div>
+<div class="absolute inset-0 bg-on-background/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+<button class="px-space-sm py-1 bg-surface-container-lowest text-primary font-headline-sm text-headline-sm rounded-lg shadow-md flex items-center gap-1 hover:bg-primary hover:text-on-primary transition-colors">
+<span>Inspect</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</div>
+</div>
+<div class="p-space-sm flex flex-col gap-1">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span>Tissue: 54%</span>
+<span>0 polygons</span>
+</div>
+<div class="w-full bg-surface-container h-1 rounded-full overflow-hidden">
+<div class="bg-secondary h-full rounded-full" style="width: 54%"></div>
+</div>
+<div class="flex items-center justify-between pt-0.5 text-secondary font-label-sm text-label-sm">
+<span>Conf: 0.97</span>
+<span class="text-tertiary">Dr. Chen</span>
+</div>
+</div>
+</div>
+<!-- Patch #00252 (High Grade Solid Carcinoma) -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+<div class="flex items-center justify-between px-space-sm py-1.5 bg-surface-container-high/60">
+<span class="font-label-md text-label-md text-on-surface">#00252</span>
+<span class="font-label-sm text-label-sm text-secondary">X: 20,992 Y: 14,848</span>
+</div>
+<div class="relative aspect-square w-full bg-surface-dim overflow-hidden cursor-pointer">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="Solid syncytial growth sheets of poorly differentiated mammary carcinoma, prominent mitosis figures, intense basophilic chromatic texture under high magnification 20x." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBfopyNWWe0nRefZv5qNWKHXUlrxEmfjqWtw6gPZ36S5hiQg84Bnh_a6GHY8eK6Rh1fGJ05OKmOImp3LkbSTgLA9oM9bMTAhZnWR8UGoNMHpHF28pZrn-xRvlRpxaCcEHRNgrzp4uWZtA_pxBo70CWeDAwdBzgbUhJBme9eE5JzAIY6q9-1DYKWpjHgwk3X1NkFoy2Cq7awj0H34e0O-gOCu7pN6MPC3dfQHNKGkw3Psuds8LMLyWTJ"/>
+<svg class="absolute inset-0 w-full h-full pointer-events-none" viewbox="0 0 100 100">
+<polygon class="text-error/20" fill="currentColor" points="5,10 95,5 98,90 8,95" stroke="currentColor" stroke-width="2"></polygon>
+</svg>
+<div class="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-error flex items-center gap-1 shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+            Tumor Solid
+          </div>
+<div class="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-secondary flex items-center gap-1 shadow-sm">
+            Annotated
+          </div>
+<div class="absolute inset-0 bg-on-background/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+<button class="px-space-sm py-1 bg-surface-container-lowest text-primary font-headline-sm text-headline-sm rounded-lg shadow-md flex items-center gap-1 hover:bg-primary hover:text-on-primary transition-colors">
+<span>Inspect</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</div>
+</div>
+<div class="p-space-sm flex flex-col gap-1">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span>Tissue: 96%</span>
+<span>1 polygon</span>
+</div>
+<div class="w-full bg-surface-container h-1 rounded-full overflow-hidden">
+<div class="bg-error h-full rounded-full" style="width: 96%"></div>
+</div>
+<div class="flex items-center justify-between pt-0.5 text-secondary font-label-sm text-label-sm">
+<span>Conf: 0.99</span>
+<span class="text-tertiary">Dr. Chen</span>
+</div>
+</div>
+</div>
+<!-- Patch #00253 (Mixed Lymphoid aggregate) -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+<div class="flex items-center justify-between px-space-sm py-1.5 bg-surface-container-high/60">
+<span class="font-label-md text-label-md text-on-surface">#00253</span>
+<span class="font-label-sm text-label-sm text-secondary">X: 21,504 Y: 14,848</span>
+</div>
+<div class="relative aspect-square w-full bg-surface-dim overflow-hidden cursor-pointer">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="Dense stromal tumor-infiltrating lymphocytes TILs surrounding invasive ductal carcinoma nests, small round dark blue nuclei packed in stroma of breast specimen." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCVXcjVY_KlhcQhFNzRnKXderi9Qpzlie2LrNzJu0y6mWJxyzJU4tlRtyoPX9lZKKn88DdX4JxCPdjOP86S6znnBc_9ysUiZRPBgPY5rOCTncUVJ05hp95TOlBBET7EHTWyZYLeGPzJGIgx2j5-krOQfc7Br66QMClE-MlC41BIjl-oNNQckFKfVpd3F2vm3sH5hyxczWbSxrqU-juyjvLCVdzkhZ7WtSbZm5glp7-h7jKZwPxw6x0R"/>
+<svg class="absolute inset-0 w-full h-full pointer-events-none" viewbox="0 0 100 100">
+<polygon class="text-error/20" fill="currentColor" points="20,15 80,20 85,60 25,50" stroke="currentColor" stroke-width="2"></polygon>
+<polygon class="text-tertiary/20" fill="currentColor" points="10,65 90,62 85,95 15,92" stroke="currentColor" stroke-width="2"></polygon>
+</svg>
+<div class="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-tertiary-container flex items-center gap-1 shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+            TILs / Stroma
+          </div>
+<div class="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-secondary flex items-center gap-1 shadow-sm">
+            Annotated
+          </div>
+<div class="absolute inset-0 bg-on-background/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+<button class="px-space-sm py-1 bg-surface-container-lowest text-primary font-headline-sm text-headline-sm rounded-lg shadow-md flex items-center gap-1 hover:bg-primary hover:text-on-primary transition-colors">
+<span>Inspect</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</div>
+</div>
+<div class="p-space-sm flex flex-col gap-1">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span>Tissue: 89%</span>
+<span>2 polygons</span>
+</div>
+<div class="w-full bg-surface-container h-1 rounded-full overflow-hidden flex">
+<div class="bg-error h-full" style="width: 42%"></div>
+<div class="bg-tertiary h-full" style="width: 47%"></div>
+</div>
+<div class="flex items-center justify-between pt-0.5 text-secondary font-label-sm text-label-sm">
+<span>Conf: 0.92</span>
+<span class="text-on-surface">Auto-WSI-v2</span>
+</div>
+</div>
+</div>
+<!-- Patch #00254 (Unannotated Edge) -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+<div class="flex items-center justify-between px-space-sm py-1.5 bg-surface-container-high/60">
+<span class="font-label-md text-label-md text-on-surface">#00254</span>
+<span class="font-label-sm text-label-sm text-secondary">X: 22,016 Y: 14,848</span>
+</div>
+<div class="relative aspect-square w-full bg-surface-dim overflow-hidden cursor-pointer">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="Microscopic histology tissue edge of surgical excision specimen showing breast gland architecture with glass slide blank background on the top corner." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDG45z8gdvS22RFkgBh10jsz8FOMz5SlDxpiqqIncz0fS1WD7lZNRUik4F1QrwStwRYvRbOPkFWr1iXx50htrclxt_ECDyqY8vyNVXys4hqxsUXA0V7SB8YtyRJ5f5Gwx5aNeSs1B0MZKgHB9SgNlSHgbQymJEey16iTkMN3zfWfYox5Rzt_3WnvCa5-sardDHtHQNGTGdkDszJgfaym3yx7ezPOzx-AxhIBd_F76Yv5uaDqlY_ktfV"/>
+<div class="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-secondary flex items-center gap-1 shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-outline-variant"></span>
+            Unannotated
+          </div>
+<div class="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-surface-container-high font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1 shadow-sm">
+            Ready
+          </div>
+<div class="absolute inset-0 bg-on-background/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+<button class="px-space-sm py-1 bg-primary text-on-primary font-headline-sm text-headline-sm rounded-lg shadow-md flex items-center gap-1 hover:bg-primary-container transition-colors">
+<span class="material-symbols-outlined text-[14px]">edit</span>
+<span>Annotate</span>
+</button>
+</div>
+</div>
+<div class="p-space-sm flex flex-col gap-1">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span>Tissue: 68%</span>
+<span class="text-secondary">0 polygons</span>
+</div>
+<div class="w-full bg-surface-container h-1 rounded-full overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 68%"></div>
+</div>
+<div class="flex items-center justify-between pt-0.5 text-secondary font-label-sm text-label-sm">
+<span>Priority: Normal</span>
+<span class="text-primary font-medium">Batch 04</span>
+</div>
+</div>
+</div>
+<!-- Patch #00255 (Ductal Carcinoma in Situ) -->
+<div class="group relative flex flex-col bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+<div class="flex items-center justify-between px-space-sm py-1.5 bg-surface-container-high/60">
+<span class="font-label-md text-label-md text-on-surface">#00255</span>
+<span class="font-label-sm text-label-sm text-secondary">X: 22,528 Y: 14,848</span>
+</div>
+<div class="relative aspect-square w-full bg-surface-dim overflow-hidden cursor-pointer">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" data-alt="Cribriform architecture of ductal carcinoma in situ DCIS inside an expanded mammary duct with round punched-out secondary lumens and intact basement membrane." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAOVb8wheC736E4GSXZzwMWNmABMGvKwHGIvRUwTGUXUPHGoIprM0AZPyatwDLYDrwOW5EextQe1DH3vDzY6McKR6Cyj4XpTdRDHfY7QJ99ODSVVBPQes9PtuKgvTDNEqrtBwsyaPEBthOE5C_xm9J9PZ4bg2MG2YvqdoNGm1kbFYx7FsK7Zu6Sc59pHNW9Cc9RNYG09pVVyh8J80FjS_nG2aRxs70TmajrWpcUtCd3zmcE3hzBoxm0"/>
+<svg class="absolute inset-0 w-full h-full pointer-events-none" viewbox="0 0 100 100">
+<ellipse class="text-error/20" cx="50" cy="50" fill="currentColor" rx="42" ry="38" stroke="currentColor" stroke-width="2"></ellipse>
+</svg>
+<div class="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-error flex items-center gap-1 shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+            DCIS (In Situ)
+          </div>
+<div class="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/90 backdrop-blur font-label-sm text-label-sm text-primary flex items-center gap-1 shadow-sm">
+<span class="material-symbols-outlined text-[12px]">check</span>
+            Reviewed
+          </div>
+<div class="absolute inset-0 bg-on-background/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+<button class="px-space-sm py-1 bg-surface-container-lowest text-primary font-headline-sm text-headline-sm rounded-lg shadow-md flex items-center gap-1 hover:bg-primary hover:text-on-primary transition-colors">
+<span>Inspect</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</div>
+</div>
+<div class="p-space-sm flex flex-col gap-1">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span>Tissue: 94%</span>
+<span>1 polygon</span>
+</div>
+<div class="w-full bg-surface-container h-1 rounded-full overflow-hidden">
+<div class="bg-error h-full rounded-full" style="width: 94%"></div>
+</div>
+<div class="flex items-center justify-between pt-0.5 text-secondary font-label-sm text-label-sm">
+<span>Conf: 0.96</span>
+<span class="text-tertiary">Dr. Chen</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Global Pagination & Workspace Navigation Dock -->
+<div class="sticky bottom-0 z-30 bg-surface-container-lowest/95 backdrop-blur-md px-space-xl py-space-sm shadow-md flex flex-wrap items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-md text-on-surface-variant font-label-sm text-label-sm">
+<span class="font-body-sm text-body-sm text-on-surface">Showing <span class="font-semibold text-primary">1–24</span> of <span class="font-semibold">12,432</span> virtual patches</span>
+<span class="text-outline-variant">|</span>
+<span class="hidden sm:inline">Coordinate Range: [X: 19,968–22,528 | Y: 14,336–16,896]</span>
+</div>
+<!-- Pagination Controls -->
+<div class="flex items-center gap-space-xs">
+<button class="p-1 rounded-lg bg-surface-container text-on-surface-variant hover:bg-surface-variant transition-colors disabled:opacity-40" disabled="">
+<span class="material-symbols-outlined text-[18px]">chevron_left</span>
+</button>
+<button class="w-7 h-7 rounded-lg bg-primary text-on-primary font-label-sm text-label-sm font-semibold flex items-center justify-center">1</button>
+<button class="w-7 h-7 rounded-lg hover:bg-surface-container text-on-surface-variant font-label-sm text-label-sm flex items-center justify-center transition-colors">2</button>
+<button class="w-7 h-7 rounded-lg hover:bg-surface-container text-on-surface-variant font-label-sm text-label-sm flex items-center justify-center transition-colors">3</button>
+<span class="text-secondary font-label-sm px-1">...</span>
+<button class="w-7 h-7 rounded-lg hover:bg-surface-container text-on-surface-variant font-label-sm text-label-sm flex items-center justify-center transition-colors">518</button>
+<button class="p-1 rounded-lg bg-surface-container text-on-surface-variant hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</div>
+<!-- Call to action button -->
+<div class="flex items-center gap-space-sm">
+<a class="px-space-md py-1.5 bg-primary hover:bg-primary-container text-on-primary font-headline-sm text-headline-sm rounded-lg shadow-sm flex items-center gap-space-xs transition-colors" data-path="workspace-annotator" href="#">
+<span class="material-symbols-outlined text-[18px]">open_in_new</span>
+<span>Open Selected Patch in Full Workspace</span>
+</a>
+</div>
+</div>
+</div>
+<script>
+  // Simple responsive layout density switcher
+  const grid = document.getElementById('patch-grid');
+  const btnCompact = document.getElementById('btn-zoom-compact');
+  const btnStandard = document.getElementById('btn-zoom-standard');
+  const btnExpanded = document.getElementById('btn-zoom-expanded');
+
+  function resetDensityBtns() {
+    [btnCompact, btnStandard, btnExpanded].forEach(btn => {
+      btn.className = 'px-space-sm py-1 text-on-surface-variant hover:text-on-surface text-label-sm font-label-sm rounded transition-colors flex items-center gap-1';
+    });
+  }
+
+  function setActiveBtn(activeBtn) {
+    resetDensityBtns();
+    activeBtn.className = 'px-space-sm py-1 bg-surface-container-lowest text-primary shadow-sm text-label-sm font-label-sm rounded transition-all flex items-center gap-1';
+  }
+
+  btnCompact?.addEventListener('click', () => {
+    grid.className = 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-space-sm';
+    setActiveBtn(btnCompact);
+  });
+
+  btnStandard?.addEventListener('click', () => {
+    grid.className = 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-space-md';
+    setActiveBtn(btnStandard);
+  });
+
+  btnExpanded?.addEventListener('click', () => {
+    grid.className = 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-space-lg';
+    setActiveBtn(btnExpanded);
+  });
+</script></main></div></body></html>

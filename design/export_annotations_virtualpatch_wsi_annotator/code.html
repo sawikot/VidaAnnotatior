@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{"colors":{"surface-container":"#e5eeff","on-secondary-container":"#5c647a","primary-fixed":"#cce5ff","on-surface-variant":"#3f4850","surface-tint":"#006398","tertiary-container":"#008096","on-primary-fixed-variant":"#004b73","on-secondary":"#ffffff","tertiary-fixed-dim":"#4cd7f6","on-primary":"#ffffff","background":"#f8f9ff","surface-container-lowest":"#ffffff","error":"#ba1a1a","surface-container-low":"#eff4ff","primary-fixed-dim":"#93ccff","on-tertiary":"#ffffff","surface-variant":"#d3e4fe","surface-dim":"#cbdbf5","primary-container":"#007bb9","secondary-container":"#dae2fd","surface-container-highest":"#d3e4fe","tertiary-fixed":"#acedff","inverse-on-surface":"#eaf1ff","on-background":"#0b1c30","secondary-fixed":"#dae2fd","on-error":"#ffffff","inverse-primary":"#93ccff","on-primary-fixed":"#001d31","on-secondary-fixed-variant":"#3f465c","secondary":"#565e74","on-tertiary-container":"#f9fdff","outline":"#707881","secondary-fixed-dim":"#bec6e0","on-error-container":"#93000a","on-surface":"#0b1c30","surface-bright":"#f8f9ff","primary":"#006194","surface-container-high":"#dce9ff","error-container":"#ffdad6","outline-variant":"#bfc7d2","on-tertiary-fixed-variant":"#004e5c","on-tertiary-fixed":"#001f26","surface":"#f8f9ff","on-primary-container":"#fdfcff","tertiary":"#006577","inverse-surface":"#213145","on-secondary-fixed":"#131b2e"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"gutter":"0.75rem","space-lg":"1rem","space-md":"0.75rem","space-xs":"0.25rem","space-sm":"0.375rem","margin":"1rem","space-xl":"1.5rem"},"fontFamily":{"body-sm":["Inter"],"headline-md":["Inter"],"headline-lg":["Inter"],"label-lg":["JetBrains Mono"],"body-lg":["Inter"],"body-md":["Inter"],"label-sm":["JetBrains Mono"],"label-md":["JetBrains Mono"],"headline-sm":["Inter"]},"fontSize":{"body-sm":["11px",{"lineHeight":"14px","fontWeight":"400"}],"headline-md":["16px",{"lineHeight":"24px","letterSpacing":"-0.01em","fontWeight":"600"}],"headline-lg":["20px",{"lineHeight":"28px","letterSpacing":"-0.015em","fontWeight":"600"}],"label-lg":["12px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}],"body-lg":["14px",{"lineHeight":"20px","fontWeight":"400"}],"body-md":["12px",{"lineHeight":"16px","fontWeight":"400"}],"label-sm":["10px",{"lineHeight":"12px","letterSpacing":"0.03em","fontWeight":"400"}],"label-md":["11px",{"lineHeight":"14px","letterSpacing":"0.01em","fontWeight":"500"}],"headline-sm":["13px",{"lineHeight":"18px","letterSpacing":"-0.005em","fontWeight":"600"}]}}}}</script></head><body class="bg-surface font-body-md text-on-surface"><aside class="fixed left-0 top-0 h-full w-14 bg-[#0f172a] z-50 flex flex-col justify-between items-center py-space-sm border-r border-[#1e293b]"><div class="flex flex-col items-center w-full gap-space-sm"><div class="h-10 w-full flex items-center justify-center"><div class="h-8 w-8 rounded-lg bg-[#1e293b] flex items-center justify-center text-primary-fixed-dim"><span class="material-symbols-outlined text-[18px]">biotech</span></div></div><div class="w-8 h-[1px] bg-[#1e293b] my-space-xs"></div><nav class="flex flex-col items-center w-full gap-space-xs" data-active-classes="bg-[#007bb9] text-[#fdfcff] shadow-sm"><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="projects" href="#" title="Project Home"><span class="material-symbols-outlined text-[20px]">folder</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="dashboard" href="#" title="Dashboard"><span class="material-symbols-outlined text-[20px]">grid_view</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="slide-processing" href="#" title="Slide Processing"><span class="material-symbols-outlined text-[20px]">filter_center_focus</span></a><a class="relative w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="workspace-annotator" href="#" title="Workspace Annotator"><span class="material-symbols-outlined text-[20px]">adjust</span><span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#0f172a]"></span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="patch-gallery" href="#" title="Patch Gallery"><span class="material-symbols-outlined text-[20px]">grid_on</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="full-wsi-overview" href="#" title="Full WSI Viewer"><span class="material-symbols-outlined text-[20px]">aspect_ratio</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="versioning" href="#" title="Config Versions"><span class="material-symbols-outlined text-[20px]">account_tree</span></a><a aria-current="page" class="w-10 h-10 flex items-center justify-center rounded-lg transition-colors bg-[#007bb9] text-[#fdfcff] shadow-sm" data-path="export" href="#" title="Export Data"><span class="material-symbols-outlined text-[20px]">file_download</span></a></nav></div><div class="flex flex-col items-center w-full gap-space-xs"><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="documentation" href="#" title="Documentation"><span class="material-symbols-outlined text-[20px]">menu_book</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="settings" href="#" title="System Settings"><span class="material-symbols-outlined text-[20px]">settings</span></a></div></aside><div class="pl-14"><header class="fixed top-0 left-14 right-0 h-14 bg-[#0f172a] text-slate-100 z-40 flex items-center justify-between px-space-md border-b border-[#1e293b] shadow-sm"><div class="flex items-center gap-space-md"><div class="flex items-center gap-space-sm"><img alt="VirtualPatch WSI Annotator Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1X4twrp5Tqi8NJBq5NgAb_1ecczseo_PmJLV4TbR5juzv1LzlAxErGDirf4ficIungXHVmFf01bK-kYyxQ3gawoNYtS9ldrhPUUl85E_7RT3G7n40PHMiIbrBrOnjD-6EQ0tEIuTLBY5P85InorvRxK6f7oyYf0BDB0wbRWZZrP4MVJVVbnUZuWxxdfJR0JiGrIz9FM0oKR05nSJYU7XD0ffS6gP1QHq87qLV6U5CD4kInE8ZPx6J8w"/><div class="flex flex-col"><span class="font-headline-sm text-headline-sm text-white tracking-tight leading-none">VirtualPatch WSI Annotator</span><span class="font-label-sm text-label-sm text-slate-400 leading-tight mt-0.5">Digital Pathology Research Suite (Level-0 Coordinate Engine)</span></div></div><div class="h-6 w-[1px] bg-[#1e293b] mx-space-xs"></div><div class="inline-flex items-center gap-space-xs px-space-sm py-0.5 rounded-lg bg-[#1e293b] border border-slate-700"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span><span class="font-label-sm text-label-sm text-cyan-200">BCA_2026: Breast Cancer Annotation [v1.0 - 512px @ 20x]</span></div><div class="h-6 w-[1px] bg-[#1e293b] mx-space-xs hidden xl:block"></div><nav class="hidden xl:flex items-center gap-1" data-active-classes="bg-[#1e293b] text-white font-headline-sm rounded-lg"><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="projects" href="#">Projects</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="dashboard" href="#">Dashboard</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="slide-processing" href="#">Slide Processing</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="workspace-annotator" href="#">Workspace</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="patch-gallery" href="#">Patch Gallery</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="full-wsi-overview" href="#">Overview</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="versioning" href="#">Versioning</a><a aria-current="page" class="px-space-sm py-1 transition-colors bg-[#1e293b] text-white font-headline-sm rounded-lg" data-path="export" href="#">Export</a></nav></div><div class="flex items-center gap-space-md"><div class="hidden lg:flex items-center gap-space-xs px-space-sm py-1 rounded-lg bg-[#1e293b]/70 border border-slate-700/80"><span class="material-symbols-outlined text-emerald-400 text-[14px]">check_circle</span><span class="font-label-sm text-label-sm text-slate-300">Dynamic Coordinate Engine: Active</span><span class="text-slate-500 font-label-sm text-label-sm">|</span><span class="font-label-sm text-label-sm text-slate-400">0 Patches</span></div><div class="relative hidden md:block w-52"><span class="material-symbols-outlined absolute left-2 top-2 text-slate-400 text-[16px]">search</span><input class="w-full h-8 pl-7 pr-space-sm bg-[#1e293b] border border-slate-700 rounded-lg text-slate-200 placeholder-slate-400 font-body-sm text-body-sm focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container" placeholder="Search slides &amp; coords..." type="text"/></div><div class="flex items-center gap-space-xs"><button class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" title="Platform Documentation"><span class="material-symbols-outlined text-[18px]">help_outline</span></button><button class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" title="Settings"><span class="material-symbols-outlined text-[18px]">tune</span></button></div><div class="h-6 w-[1px] bg-[#1e293b]"></div><div class="flex items-center gap-space-sm pl-space-xs"><div class="flex flex-col text-right hidden sm:flex"><span class="font-headline-sm text-headline-sm text-white leading-tight">Dr. Eliza Chen, MD, PhD</span><span class="font-label-sm text-label-sm text-slate-400 leading-none">Senior Computational Pathologist</span></div><img alt="Profile" class="w-8 h-8 rounded-full object-cover ring-1 ring-slate-600" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD06VCVZeM-utr85SFdhAMY1jx1M21lwohLut1hC_n6n5toao5HojmkIak5QbUKh-txUBQQOPjgHNy2S17pkmRqwIaTzVtFqipSwDP4IgIhvJIGRzflDGX0sp-di-3ae0JgxEx9oLFme52ZBDpsKTg8L3DkTvxsGepIcnHFy8CqtLcEELD7Mz6Qm9xgnAgTacptEmtOapgbq9rZBCL79gQ7bt5eihKJIdo5O1SdvMdlH1on7_b1VlNm"/></div></div></header><main class="w-full pt-14 bg-surface min-h-screen"><div class="flex flex-col w-full">
+<div class="w-full bg-surface-container-low px-space-xl py-space-lg">
+<div class="max-w-7xl mx-auto flex flex-col gap-space-lg">
+<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-space-md">
+<div class="flex flex-col">
+<div class="flex items-center gap-space-xs mb-space-xs">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-primary font-semibold">Pipelines &amp; Artifacts</span>
+<span class="text-outline-variant font-label-sm text-label-sm">/</span>
+<span class="font-label-sm text-label-sm text-secondary">Export Engine</span>
+</div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface tracking-tight">Export Annotations &amp; Coordinate Datasets</h1>
+<div class="flex items-center gap-space-sm mt-space-xs flex-wrap">
+<span class="inline-flex items-center gap-space-xs px-space-sm py-0.5 rounded bg-surface-container font-label-md text-label-md text-primary font-medium">
+<span class="material-symbols-outlined text-[14px]">biotech</span>
+              Cohort: BCA_2026 (Breast Cancer Study)
+            </span>
+<span class="inline-flex items-center gap-space-xs px-space-sm py-0.5 rounded bg-surface-container font-label-md text-label-md text-secondary">
+<span class="material-symbols-outlined text-[14px]">layers</span>
+              85 Slides
+            </span>
+<span class="inline-flex items-center gap-space-xs px-space-sm py-0.5 rounded bg-surface-container font-label-md text-label-md text-secondary">
+<span class="material-symbols-outlined text-[14px]">grain</span>
+              312,421 Patches Annotated
+            </span>
+</div>
+</div>
+<div class="flex items-center gap-space-sm self-start lg:self-auto">
+<button class="h-8 px-space-md rounded bg-surface-container hover:bg-surface-container-high text-on-surface font-body-sm text-body-sm font-medium transition-colors flex items-center gap-space-xs shadow-sm" id="validate-schema-btn">
+<span class="material-symbols-outlined text-[16px] text-primary">verified_user</span>
+<span>Schema Integrity Check</span>
+</button>
+<a class="h-8 px-space-md rounded bg-surface-container hover:bg-surface-container-high text-on-surface font-body-sm text-body-sm font-medium transition-colors flex items-center gap-space-xs shadow-sm" data-path="documentation" href="#">
+<span class="material-symbols-outlined text-[16px] text-secondary">terminal</span>
+<span>API Docs</span>
+</a>
+</div>
+</div>
+<div class="p-space-md rounded-xl bg-primary-container text-on-primary-container shadow-md flex flex-col md:flex-row md:items-center justify-between gap-space-md relative overflow-hidden">
+<div class="flex items-start gap-space-md z-10">
+<div class="w-10 h-10 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-white text-[24px]">verified</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-space-xs">
+<span class="font-headline-sm text-headline-sm text-white tracking-tight">Level-0 Coordinate Guarantee Active</span>
+<span class="px-space-xs py-0.5 rounded bg-white/20 font-label-sm text-label-sm text-white font-mono">STRICT_AFFINE_V1</span>
+</div>
+<p class="font-body-md text-body-md text-primary-fixed leading-relaxed max-w-4xl mt-0.5">
+              All exported annotations are mathematically anchored to native WSI Level-0 pixel vectors, regardless of the virtual patch size or magnification used during labeling. Sub-pixel spatial fidelity is preserved for full downstream reconstruction.
+            </p>
+</div>
+</div>
+<div class="flex items-center gap-space-md z-10 shrink-0 font-label-sm text-label-sm text-white/90 bg-black/20 px-space-md py-space-sm rounded-lg backdrop-blur-sm">
+<div class="flex flex-col">
+<span class="text-white/60">Pixel Scale (MPP)</span>
+<span class="font-mono text-white font-semibold">0.2502 µm/px</span>
+</div>
+<div class="w-[1px] h-6 bg-white/20"></div>
+<div class="flex flex-col">
+<span class="text-white/60">Affine Drift</span>
+<span class="font-mono text-emerald-300 font-semibold">0.0000 Δ</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="w-full px-space-xl py-space-lg">
+<div class="max-w-7xl mx-auto flex flex-col gap-space-lg">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-start">
+<div class="lg:col-span-5 flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<span class="font-headline-sm text-headline-sm text-on-surface font-semibold">1. Select Target Specification</span>
+<span class="font-label-sm text-label-sm text-secondary">5 Available Schemas</span>
+</div>
+<div class="flex flex-col gap-space-sm" id="format-card-group">
+<div class="format-card p-space-md rounded-xl bg-surface-container-lowest shadow-md cursor-pointer transition-all hover:bg-surface-container-low relative" data-format="full-json">
+<div class="absolute -inset-0.5 rounded-xl bg-primary opacity-100 pointer-events-none -z-10 format-indicator"></div>
+<div class="flex items-start justify-between gap-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded bg-primary text-on-primary flex items-center justify-center font-label-md text-label-md font-mono">
+                    {}
+                  </div>
+<div>
+<div class="flex items-center gap-space-xs">
+<h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold">Full WSI JSON</h3>
+<span class="px-space-xs py-0.5 rounded bg-primary text-on-primary font-label-sm text-label-sm font-semibold tracking-wider uppercase">Recommended</span>
+</div>
+<span class="font-label-sm text-label-sm text-secondary">Native Hierarchical Matrix</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-primary text-[20px] check-icon">radio_button_checked</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-space-sm leading-relaxed">
+                Complete slide hierarchy with Level-0 transformed polygon vertices, boundary vectors, and source patch provenance metadata.
+              </p>
+<div class="flex items-center gap-space-xs flex-wrap mt-space-sm font-label-sm text-label-sm text-secondary">
+<span class="px-space-xs py-0.5 rounded bg-surface-container font-mono">.json</span>
+<span class="px-space-xs py-0.5 rounded bg-surface-container">Level: 0 Native</span>
+<span class="px-space-xs py-0.5 rounded bg-surface-container">PyTorch, TensorFlow, QuPath, cuCIM</span>
+</div>
+</div>
+<div class="format-card p-space-md rounded-xl bg-surface-container-lowest shadow-sm cursor-pointer transition-all hover:bg-surface-container-low relative" data-format="coco">
+<div class="absolute -inset-0.5 rounded-xl bg-primary opacity-0 pointer-events-none -z-10 format-indicator"></div>
+<div class="flex items-start justify-between gap-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded bg-surface-container text-secondary flex items-center justify-center font-label-md text-label-md font-mono">
+                    CO
+                  </div>
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold">COCO Pathology Format</h3>
+<span class="font-label-sm text-label-sm text-secondary">Instance Segmentation Standard</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant text-[20px] check-icon">radio_button_unchecked</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-space-sm leading-relaxed">
+                Standard object detection and instance segmentation JSON formatting with segmentation arrays and bounding boxes scaled to Level-0 dimensions.
+              </p>
+<div class="flex items-center gap-space-xs flex-wrap mt-space-sm font-label-sm text-label-sm text-secondary">
+<span class="px-space-xs py-0.5 rounded bg-surface-container font-mono">.json</span>
+<span class="px-space-xs py-0.5 rounded bg-surface-container">Level: 0 Native</span>
+<span class="px-space-xs py-0.5 rounded bg-surface-container">Detectron2, MMDetection, YOLOv8</span>
+</div>
+</div>
+<div class="format-card p-space-md rounded-xl bg-surface-container-lowest shadow-sm cursor-pointer transition-all hover:bg-surface-container-low relative" data-format="geojson">
+<div class="absolute -inset-0.5 rounded-xl bg-primary opacity-0 pointer-events-none -z-10 format-indicator"></div>
+<div class="flex items-start justify-between gap-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded bg-surface-container text-secondary flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">polyline</span>
+</div>
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold">GeoJSON / Spatial Vectors</h3>
+<span class="font-label-sm text-label-sm text-secondary">Multi-Polygon Feature Collections</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant text-[20px] check-icon">radio_button_unchecked</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-space-sm leading-relaxed">
+                GIS and spatial pathology standard for complex multi-polygon geometries. Direct drag-and-drop interchange for QuPath and ASAP viewers.
+              </p>
+<div class="flex items-center gap-space-xs flex-wrap mt-space-sm font-label-sm text-label-sm text-secondary">
+<span class="px-space-xs py-0.5 rounded bg-surface-container font-mono">.geojson</span>
+<span class="px-space-xs py-0.5 rounded bg-surface-container">Cartesian Level-0</span>
+<span class="px-space-xs py-0.5 rounded bg-surface-container">QuPath v0.5+, ASAP, QGIS</span>
+</div>
+</div>
+<div class="format-card p-space-md rounded-xl bg-surface-container-lowest shadow-sm cursor-pointer transition-all hover:bg-surface-container-low relative" data-format="patch-csv">
+<div class="absolute -inset-0.5 rounded-xl bg-primary opacity-0 pointer-events-none -z-10 format-indicator"></div>
+<div class="flex items-start justify-between gap-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded bg-surface-container text-secondary flex items-center justify-center font-label-md text-label-md font-mono">
+                    CSV
+                  </div>
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold">Patch-Coordinate CSV</h3>
+<span class="font-label-sm text-label-sm text-secondary">Tabular Spatial Registry</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant text-[20px] check-icon">radio_button_unchecked</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-space-sm leading-relaxed">
+                Optimized relational table: Patch_ID, X, Y, Width, Height, Class, Confidence score, and annotator ID for fast pandas / polars dataframes.
+              </p>
+<div class="flex items-center gap-space-xs flex-wrap mt-space-sm font-label-sm text-label-sm text-secondary">
+<span class="px-space-xs py-0.5 rounded bg-surface-container font-mono">.csv</span>
+<span class="px-space-xs py-0.5 rounded bg-surface-container">312,421 Rows</span>
+<span class="px-space-xs py-0.5 rounded bg-surface-container">Pandas, Polars, R, Excel</span>
+</div>
+</div>
+<div class="format-card p-space-md rounded-xl bg-surface-container-lowest shadow-sm cursor-pointer transition-all hover:bg-surface-container-low relative" data-format="stats-csv">
+<div class="absolute -inset-0.5 rounded-xl bg-primary opacity-0 pointer-events-none -z-10 format-indicator"></div>
+<div class="flex items-start justify-between gap-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded bg-surface-container text-secondary flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">query_stats</span>
+</div>
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface font-semibold">Annotation Statistics &amp; Area CSV</h3>
+<span class="font-label-sm text-label-sm text-secondary">Quantitative Histopathology Summary</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant text-[20px] check-icon">radio_button_unchecked</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-space-sm leading-relaxed">
+                Per-slide aggregated tissue surface area metrics (mm²), cellular density metrics, tumor-stroma ratios, and clinical QA validation history.
+              </p>
+<div class="flex items-center gap-space-xs flex-wrap mt-space-sm font-label-sm text-label-sm text-secondary">
+<span class="px-space-xs py-0.5 rounded bg-surface-container font-mono">.csv</span>
+<span class="px-space-xs py-0.5 rounded bg-surface-container">Summary Cohort Level</span>
+<span class="px-space-xs py-0.5 rounded bg-surface-container">Prism, SPSS, Python</span>
+</div>
+</div>
+</div>
+</div>
+<div class="lg:col-span-7 flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<span class="font-headline-sm text-headline-sm text-on-surface font-semibold">2. Live Manifest Preview &amp; Schema Validation</span>
+<span class="px-space-xs py-0.5 rounded bg-surface-container-high font-label-sm text-label-sm text-primary font-mono font-medium" id="preview-schema-badge">SCHEMA: FULL_WSI_V1</span>
+</div>
+<div class="flex items-center gap-space-xs">
+<button class="h-7 px-space-sm rounded bg-surface-container hover:bg-surface-container-high text-on-surface font-label-sm text-label-sm flex items-center gap-space-xs transition-colors shadow-sm" id="copy-json-btn">
+<span class="material-symbols-outlined text-[14px]">content_copy</span>
+<span id="copy-btn-text">Copy JSON</span>
+</button>
+<button class="h-7 px-space-sm rounded bg-surface-container hover:bg-surface-container-high text-on-surface font-label-sm text-label-sm flex items-center gap-space-xs transition-colors shadow-sm" id="download-sample-btn">
+<span class="material-symbols-outlined text-[14px]">download</span>
+<span>Sample File</span>
+</button>
+</div>
+</div>
+<div class="w-full rounded-xl bg-[#0f172a] text-slate-200 shadow-xl flex flex-col overflow-hidden">
+<div class="px-space-md py-space-sm bg-[#1e293b] flex items-center justify-between text-slate-400 font-label-sm text-label-sm">
+<div class="flex items-center gap-space-sm">
+<span class="inline-block w-2.5 h-2.5 rounded-full bg-rose-500/80"></span>
+<span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-500/80"></span>
+<span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500/80"></span>
+<span class="font-mono text-slate-300 ml-space-xs" id="preview-filename">BCA_2026_Patient_001_level0.json</span>
+</div>
+<div class="flex items-center gap-space-md">
+<span>UTF-8</span>
+<span class="font-mono text-cyan-300">Level-0 Verified</span>
+</div>
+</div>
+<pre class="p-space-md overflow-x-auto text-[11px] leading-[18px] font-mono text-slate-300 max-h-[380px] select-all"><code id="code-content"><span class="text-slate-500">{</span>
+  <span class="text-sky-300">"slide_id"</span>: <span class="text-amber-200">"Patient_001"</span>,
+  <span class="text-sky-300">"wsi_metadata"</span>: <span class="text-slate-500">{</span>
+    <span class="text-sky-300">"dimensions"</span>: [<span class="text-emerald-400">98304</span>, <span class="text-emerald-400">65536</span>],
+    <span class="text-sky-300">"level_0_mpp"</span>: <span class="text-emerald-400">0.5002</span>,
+    <span class="text-sky-300">"vendor"</span>: <span class="text-amber-200">"Aperio SVS"</span>,
+    <span class="text-sky-300">"magnification"</span>: <span class="text-amber-200">"20x"</span>
+  <span class="text-slate-500">}</span>,
+  <span class="text-sky-300">"coordinate_level"</span>: <span class="text-emerald-400">0</span>,
+  <span class="text-sky-300">"virtual_patch_config"</span>: <span class="text-slate-500">{</span>
+    <span class="text-sky-300">"width"</span>: <span class="text-emerald-400">512</span>,
+    <span class="text-sky-300">"height"</span>: <span class="text-emerald-400">512</span>,
+    <span class="text-sky-300">"stride"</span>: <span class="text-emerald-400">512</span>,
+    <span class="text-sky-300">"version"</span>: <span class="text-amber-200">"1.0"</span>
+  <span class="text-slate-500">}</span>,
+  <span class="text-sky-300">"annotations"</span>: [
+    <span class="text-slate-500">{</span>
+      <span class="text-sky-300">"annotation_id"</span>: <span class="text-amber-200">"ann_00001"</span>,
+      <span class="text-sky-300">"label"</span>: <span class="text-amber-200">"tumor_invasive"</span>,
+      <span class="text-sky-300">"confidence"</span>: <span class="text-emerald-400">1.0</span>,
+      <span class="text-sky-300">"annotator"</span>: <span class="text-amber-200">"Dr. Eliza Chen, MD"</span>,
+      <span class="text-sky-300">"source_patch"</span>: <span class="text-slate-500">{</span>
+        <span class="text-sky-300">"patch_id"</span>: <span class="text-emerald-400">245</span>,
+        <span class="text-sky-300">"x"</span>: <span class="text-emerald-400">20000</span>,
+        <span class="text-sky-300">"y"</span>: <span class="text-emerald-400">15000</span>,
+        <span class="text-sky-300">"width"</span>: <span class="text-emerald-400">512</span>,
+        <span class="text-sky-300">"height"</span>: <span class="text-emerald-400">512</span>
+      <span class="text-slate-500">}</span>,
+      <span class="text-sky-300">"coordinates"</span>: [
+        [<span class="text-emerald-400">20100</span>, <span class="text-emerald-400">15080</span>],
+        [<span class="text-emerald-400">20300</span>, <span class="text-emerald-400">15090</span>],
+        [<span class="text-emerald-400">20350</span>, <span class="text-emerald-400">15250</span>],
+        [<span class="text-emerald-400">20150</span>, <span class="text-emerald-400">15300</span>]
+      ]
+    <span class="text-slate-500">}</span>
+  ]
+<span class="text-slate-500">}</span></code></pre>
+<div class="px-space-md py-space-xs bg-[#1e293b]/70 flex items-center justify-between font-label-sm text-label-sm text-slate-400">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-emerald-400 text-[14px]">done_all</span>
+<span>Coordinates strictly validated against aperio level-0 affine transform</span>
+</div>
+<span class="font-mono text-slate-500">85 Manifests | Est. Size: 14.2 MB</span>
+</div>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-space-sm">
+<div class="p-space-sm rounded-lg bg-surface-container-low flex flex-col">
+<span class="font-label-sm text-label-sm text-secondary">Exported Footprint</span>
+<span class="font-headline-sm text-headline-sm text-on-surface font-semibold mt-0.5">14.2 MB</span>
+<span class="font-body-sm text-body-sm text-secondary">vs ~2.1 TB image tiles</span>
+</div>
+<div class="p-space-sm rounded-lg bg-surface-container-low flex flex-col">
+<span class="font-label-sm text-label-sm text-secondary">Native Polygons</span>
+<span class="font-headline-sm text-headline-sm text-on-surface font-semibold mt-0.5">312,421</span>
+<span class="font-body-sm text-body-sm text-secondary">100% Level-0 vectors</span>
+</div>
+<div class="p-space-sm rounded-lg bg-surface-container-low flex flex-col">
+<span class="font-label-sm text-label-sm text-secondary">Export Latency</span>
+<span class="font-headline-sm text-headline-sm text-primary font-semibold mt-0.5">&lt; 4.2 seconds</span>
+<span class="font-body-sm text-body-sm text-secondary">Instant compressed archive</span>
+</div>
+</div>
+<div class="p-space-md rounded-xl bg-surface-container-lowest shadow-sm flex flex-col gap-space-md">
+<span class="font-headline-sm text-headline-sm text-on-surface font-semibold">3. Coordinate Scope &amp; Target Destination</span>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-space-lg">
+<div class="flex flex-col gap-space-xs">
+<label class="font-label-md text-label-md text-on-surface font-semibold">Cohort Slide Scope</label>
+<div class="flex flex-col gap-space-xs mt-space-xs">
+<label class="flex items-center gap-space-sm cursor-pointer text-on-surface font-body-sm text-body-sm">
+<input checked="" class="text-primary focus:ring-0" name="export-scope" type="radio" value="all"/>
+<span><strong>All 85 Slides</strong> (Complete BCA cohort - 312k patches)</span>
+</label>
+<label class="flex items-center gap-space-sm cursor-pointer text-on-surface font-body-sm text-body-sm">
+<input class="text-primary focus:ring-0" name="export-scope" type="radio" value="reviewed"/>
+<span><strong>Reviewed Slides Only</strong> (29 slides - Senior QA Approved)</span>
+</label>
+<label class="flex items-center gap-space-sm cursor-pointer text-on-surface font-body-sm text-body-sm">
+<input class="text-primary focus:ring-0" name="export-scope" type="radio" value="custom"/>
+<span><strong>Custom Filter Selection</strong> (Active query subset)</span>
+</label>
+</div>
+<div class="mt-space-md">
+<label class="font-label-md text-label-md text-on-surface font-semibold block mb-space-xs">Histological Classes</label>
+<div class="grid grid-cols-2 gap-space-xs">
+<label class="flex items-center gap-space-xs cursor-pointer p-space-xs rounded bg-surface-container font-body-sm text-body-sm">
+<input checked="" class="text-primary focus:ring-0" type="checkbox"/>
+<span class="w-2 h-2 rounded-full bg-rose-500"></span>
+<span>Tumor (Invasive)</span>
+</label>
+<label class="flex items-center gap-space-xs cursor-pointer p-space-xs rounded bg-surface-container font-body-sm text-body-sm">
+<input checked="" class="text-primary focus:ring-0" type="checkbox"/>
+<span class="w-2 h-2 rounded-full bg-sky-500"></span>
+<span>Stroma (Reactive)</span>
+</label>
+<label class="flex items-center gap-space-xs cursor-pointer p-space-xs rounded bg-surface-container font-body-sm text-body-sm">
+<input checked="" class="text-primary focus:ring-0" type="checkbox"/>
+<span class="w-2 h-2 rounded-full bg-amber-500"></span>
+<span>Necrosis</span>
+</label>
+<label class="flex items-center gap-space-xs cursor-pointer p-space-xs rounded bg-surface-container font-body-sm text-body-sm">
+<input checked="" class="text-primary focus:ring-0" type="checkbox"/>
+<span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+<span>Normal Epithelium</span>
+</label>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-space-xs">
+<label class="font-label-md text-label-md text-on-surface font-semibold">Transform &amp; Coordinate Options</label>
+<div class="flex flex-col gap-space-xs mt-space-xs">
+<label class="flex items-start gap-space-sm cursor-pointer text-on-surface font-body-sm text-body-sm">
+<input checked="" class="text-primary focus:ring-0 mt-0.5" type="checkbox"/>
+<span>Include Patch-Local relative offsets alongside Level-0 globals</span>
+</label>
+<label class="flex items-start gap-space-sm cursor-pointer text-on-surface font-body-sm text-body-sm">
+<input checked="" class="text-primary focus:ring-0 mt-0.5" type="checkbox"/>
+<span>Embed WSI hardware metadata (scanner vendor, MPP, optical magnification)</span>
+</label>
+<label class="flex items-start gap-space-sm cursor-pointer text-on-surface font-body-sm text-body-sm">
+<input class="text-primary focus:ring-0 mt-0.5" type="checkbox"/>
+<span>Normalize polygon vertices to [0.0 - 1.0] unit coordinates</span>
+</label>
+</div>
+<div class="mt-space-md">
+<label class="font-label-md text-label-md text-on-surface font-semibold block mb-space-xs">Target Destination</label>
+<div class="grid grid-cols-2 gap-space-sm">
+<label class="flex items-center justify-between p-space-sm rounded bg-surface-container cursor-pointer">
+<div class="flex items-center gap-space-xs">
+<input checked="" class="text-primary" name="dest-target" type="radio" value="zip"/>
+<span class="font-body-sm text-body-sm font-medium">Local .ZIP Archive</span>
+</div>
+<span class="material-symbols-outlined text-[16px] text-secondary">archive</span>
+</label>
+<label class="flex items-center justify-between p-space-sm rounded bg-surface-container cursor-pointer opacity-70 hover:opacity-100 transition-opacity">
+<div class="flex items-center gap-space-xs">
+<input class="text-primary" name="dest-target" type="radio" value="cloud"/>
+<span class="font-body-sm text-body-sm font-medium">Cloud Bucket (S3/GCS)</span>
+</div>
+<span class="material-symbols-outlined text-[16px] text-secondary">cloud_upload</span>
+</label>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="p-space-lg rounded-2xl bg-surface-container-highest shadow-lg flex flex-col md:flex-row items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-md">
+<div class="w-12 h-12 rounded-xl bg-primary text-on-primary flex items-center justify-center shrink-0 shadow-md">
+<span class="material-symbols-outlined text-[28px]">file_download</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-space-xs">
+<span class="font-headline-sm text-headline-sm text-on-surface font-bold">Package Ready: 85 Slides Manifest Set</span>
+<span class="px-space-xs py-0.5 rounded bg-surface-container font-label-sm text-label-sm text-primary font-mono">BCA_2026_coords_v1.zip</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+              85 JSON manifests (~14.2 MB raw text data vs 2.1 TB image tiles). Mathematically anchored to native Level-0.
+            </p>
+</div>
+</div>
+<div class="flex items-center gap-space-sm w-full md:w-auto">
+<button class="w-full md:w-auto h-11 px-space-xl rounded-xl bg-primary hover:bg-primary-container text-on-primary font-headline-sm text-headline-sm font-semibold transition-all shadow-md flex items-center justify-center gap-space-sm active:scale-[0.99]" id="cta-export-btn">
+<span class="material-symbols-outlined text-[20px]">download</span>
+<span id="cta-button-label">Generate &amp; Download Full WSI JSON Package</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<div class="fixed bottom-6 right-6 px-space-md py-space-sm rounded-xl bg-[#0f172a] text-white shadow-2xl flex items-center gap-space-sm transform translate-y-24 opacity-0 transition-all duration-300 pointer-events-none z-50" id="export-toast">
+<span class="material-symbols-outlined text-emerald-400 text-[20px]">check_circle</span>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-white" id="toast-title">Package Generated</span>
+<span class="font-body-sm text-body-sm text-slate-400" id="toast-msg">Level-0 coordinates verified. Download started.</span>
+</div>
+</div>
+<script>
+    (function() {
+      const formatSchemas = {
+        'full-json': {
+          badge: 'SCHEMA: FULL_WSI_V1',
+          filename: 'BCA_2026_Patient_001_level0.json',
+          cta: 'Generate & Download Full WSI JSON Package',
+          code: `<span class="text-slate-500">{</span>
+  <span class="text-sky-300">"slide_id"</span>: <span class="text-amber-200">"Patient_001"</span>,
+  <span class="text-sky-300">"wsi_metadata"</span>: <span class="text-slate-500">{</span>
+    <span class="text-sky-300">"dimensions"</span>: [<span class="text-emerald-400">98304</span>, <span class="text-emerald-400">65536</span>],
+    <span class="text-sky-300">"level_0_mpp"</span>: <span class="text-emerald-400">0.5002</span>,
+    <span class="text-sky-300">"vendor"</span>: <span class="text-amber-200">"Aperio SVS"</span>,
+    <span class="text-sky-300">"magnification"</span>: <span class="text-amber-200">"20x"</span>
+  <span class="text-slate-500">}</span>,
+  <span class="text-sky-300">"coordinate_level"</span>: <span class="text-emerald-400">0</span>,
+  <span class="text-sky-300">"virtual_patch_config"</span>: <span class="text-slate-500">{</span>
+    <span class="text-sky-300">"width"</span>: <span class="text-emerald-400">512</span>,
+    <span class="text-sky-300">"height"</span>: <span class="text-emerald-400">512</span>,
+    <span class="text-sky-300">"stride"</span>: <span class="text-emerald-400">512</span>,
+    <span class="text-sky-300">"version"</span>: <span class="text-amber-200">"1.0"</span>
+  <span class="text-slate-500">}</span>,
+  <span class="text-sky-300">"annotations"</span>: [
+    <span class="text-slate-500">{</span>
+      <span class="text-sky-300">"annotation_id"</span>: <span class="text-amber-200">"ann_00001"</span>,
+      <span class="text-sky-300">"label"</span>: <span class="text-amber-200">"tumor_invasive"</span>,
+      <span class="text-sky-300">"confidence"</span>: <span class="text-emerald-400">1.0</span>,
+      <span class="text-sky-300">"annotator"</span>: <span class="text-amber-200">"Dr. Eliza Chen, MD"</span>,
+      <span class="text-sky-300">"source_patch"</span>: <span class="text-slate-500">{</span>
+        <span class="text-sky-300">"patch_id"</span>: <span class="text-emerald-400">245</span>,
+        <span class="text-sky-300">"x"</span>: <span class="text-emerald-400">20000</span>,
+        <span class="text-sky-300">"y"</span>: <span class="text-emerald-400">15000</span>,
+        <span class="text-sky-300">"width"</span>: <span class="text-emerald-400">512</span>,
+        <span class="text-sky-300">"height"</span>: <span class="text-emerald-400">512</span>
+      <span class="text-slate-500">}</span>,
+      <span class="text-sky-300">"coordinates"</span>: [
+        [<span class="text-emerald-400">20100</span>, <span class="text-emerald-400">15080</span>],
+        [<span class="text-emerald-400">20300</span>, <span class="text-emerald-400">15090</span>],
+        [<span class="text-emerald-400">20350</span>, <span class="text-emerald-400">15250</span>],
+        [<span class="text-emerald-400">20150</span>, <span class="text-emerald-400">15300</span>]
+      ]
+    <span class="text-slate-500">}</span>
+  ]
+<span class="text-slate-500">}</span>`
+        },
+        'coco': {
+          badge: 'SCHEMA: COCO_INST_2020',
+          filename: 'BCA_2026_coco_instances.json',
+          cta: 'Generate & Download COCO Format Package',
+          code: `<span class="text-slate-500">{</span>
+  <span class="text-sky-300">"info"</span>: <span class="text-slate-500">{</span>
+    <span class="text-sky-300">"description"</span>: <span class="text-amber-200">"BCA_2026 Breast Cancer Dataset"</span>,
+    <span class="text-sky-300">"coordinate_space"</span>: <span class="text-amber-200">"Level-0 Native Pixels"</span>
+  <span class="text-slate-500">}</span>,
+  <span class="text-sky-300">"images"</span>: [
+    <span class="text-slate-500">{</span>
+      <span class="text-sky-300">"id"</span>: <span class="text-emerald-400">1</span>,
+      <span class="text-sky-300">"file_name"</span>: <span class="text-amber-200">"Patient_001.svs"</span>,
+      <span class="text-sky-300">"width"</span>: <span class="text-emerald-400">98304</span>,
+      <span class="text-sky-300">"height"</span>: <span class="text-emerald-400">65536</span>
+    <span class="text-slate-500">}</span>
+  ],
+  <span class="text-sky-300">"annotations"</span>: [
+    <span class="text-slate-500">{</span>
+      <span class="text-sky-300">"id"</span>: <span class="text-emerald-400">1001</span>,
+      <span class="text-sky-300">"image_id"</span>: <span class="text-emerald-400">1</span>,
+      <span class="text-sky-300">"category_id"</span>: <span class="text-emerald-400">1</span>,
+      <span class="text-sky-300">"segmentation"</span>: [[<span class="text-emerald-400">20100</span>, <span class="text-emerald-400">15080</span>, <span class="text-emerald-400">20300</span>, <span class="text-emerald-400">15090</span>, <span class="text-emerald-400">20350</span>, <span class="text-emerald-400">15250</span>, <span class="text-emerald-400">20150</span>, <span class="text-emerald-400">15300</span>]],
+      <span class="text-sky-300">"area"</span>: <span class="text-emerald-400">42350.0</span>,
+      <span class="text-sky-300">"bbox"</span>: [<span class="text-emerald-400">20100</span>, <span class="text-emerald-400">15080</span>, <span class="text-emerald-400">250</span>, <span class="text-emerald-400">220</span>],
+      <span class="text-sky-300">"iscrowd"</span>: <span class="text-emerald-400">0</span>
+    <span class="text-slate-500">}</span>
+  ],
+  <span class="text-sky-300">"categories"</span>: [
+    <span class="text-slate-500">{</span> <span class="text-sky-300">"id"</span>: <span class="text-emerald-400">1</span>, <span class="text-sky-300">"name"</span>: <span class="text-amber-200">"tumor_invasive"</span> <span class="text-slate-500">}</span>,
+    <span class="text-slate-500">{</span> <span class="text-sky-300">"id"</span>: <span class="text-emerald-400">2</span>, <span class="text-sky-300">"name"</span>: <span class="text-amber-200">"stroma"</span> <span class="text-slate-500">}</span>
+  ]
+<span class="text-slate-500">}</span>`
+        },
+        'geojson': {
+          badge: 'SCHEMA: GEOJSON_RFC7946',
+          filename: 'BCA_2026_features_level0.geojson',
+          cta: 'Generate & Download GeoJSON FeatureCollection',
+          code: `<span class="text-slate-500">{</span>
+  <span class="text-sky-300">"type"</span>: <span class="text-amber-200">"FeatureCollection"</span>,
+  <span class="text-sky-300">"properties"</span>: <span class="text-slate-500">{</span>
+    <span class="text-sky-300">"slide_id"</span>: <span class="text-amber-200">"Patient_001"</span>,
+    <span class="text-sky-300">"coordinate_units"</span>: <span class="text-amber-200">"level0_pixels"</span>
+  <span class="text-slate-500">}</span>,
+  <span class="text-sky-300">"features"</span>: [
+    <span class="text-slate-500">{</span>
+      <span class="text-sky-300">"type"</span>: <span class="text-amber-200">"Feature"</span>,
+      <span class="text-sky-300">"properties"</span>: <span class="text-slate-500">{</span>
+        <span class="text-sky-300">"classification"</span>: <span class="text-amber-200">"Tumor_Invasive"</span>,
+        <span class="text-sky-300">"color"</span>: <span class="text-amber-200">"#ef4444"</span>,
+        <span class="text-sky-300">"annotator"</span>: <span class="text-amber-200">"Dr. Eliza Chen"</span>
+      <span class="text-slate-500">}</span>,
+      <span class="text-sky-300">"geometry"</span>: <span class="text-slate-500">{</span>
+        <span class="text-sky-300">"type"</span>: <span class="text-amber-200">"Polygon"</span>,
+        <span class="text-sky-300">"coordinates"</span>: [
+          [
+            [<span class="text-emerald-400">20100</span>, <span class="text-emerald-400">15080</span>],
+            [<span class="text-emerald-400">20300</span>, <span class="text-emerald-400">15090</span>],
+            [<span class="text-emerald-400">20350</span>, <span class="text-emerald-400">15250</span>],
+            [<span class="text-emerald-400">20150</span>, <span class="text-emerald-400">15300</span>],
+            [<span class="text-emerald-400">20100</span>, <span class="text-emerald-400">15080</span>]
+          ]
+        ]
+      <span class="text-slate-500">}</span>
+    <span class="text-slate-500">}</span>
+  ]
+<span class="text-slate-500">}</span>`
+        },
+        'patch-csv': {
+          badge: 'SCHEMA: TABULAR_PATCH_V1',
+          filename: 'BCA_2026_patch_coordinates.csv',
+          cta: 'Generate & Download Patch-Coordinate CSV',
+          code: `<span class="text-slate-400">slide_id,patch_id,level0_x,level0_y,width,height,class,confidence,annotator</span>
+<span class="text-emerald-300">Patient_001,P_000245,20000,15000,512,512,tumor_invasive,1.000,Dr. Eliza Chen</span>
+<span class="text-emerald-300">Patient_001,P_000246,20512,15000,512,512,tumor_invasive,0.982,Dr. Eliza Chen</span>
+<span class="text-emerald-300">Patient_001,P_000247,21024,15000,512,512,stroma_reactive,0.954,Dr. Eliza Chen</span>
+<span class="text-emerald-300">Patient_001,P_000248,21536,15000,512,512,stroma_reactive,0.910,Dr. Eliza Chen</span>
+<span class="text-emerald-300">Patient_001,P_000249,22048,15000,512,512,normal_duct,1.000,Dr. Eliza Chen</span>
+<span class="text-emerald-300">Patient_002,P_000001,10240,8192,512,512,necrosis,0.890,Automated_Segmenter</span>
+<span class="text-emerald-300">Patient_002,P_000002,10752,8192,512,512,tumor_invasive,0.994,Dr. Eliza Chen</span>
+<span class="text-slate-500">... [312,414 more rows]</span>`
+        },
+        'stats-csv': {
+          badge: 'SCHEMA: HISTO_METRICS_V1',
+          filename: 'BCA_2026_annotation_metrics.csv',
+          cta: 'Generate & Download Summary Statistics CSV',
+          code: `<span class="text-slate-400">slide_id,total_patches,tumor_area_mm2,stroma_area_mm2,ts_ratio,qc_status,annotator_hours</span>
+<span class="text-emerald-300">Patient_001,4120,38.45,42.10,0.913,VERIFIED_SENIOR,14.5</span>
+<span class="text-emerald-300">Patient_002,3890,29.12,50.80,0.573,VERIFIED_SENIOR,12.2</span>
+<span class="text-emerald-300">Patient_003,5100,64.20,22.15,2.898,VERIFIED_SENIOR,18.0</span>
+<span class="text-emerald-300">Patient_004,2950,15.80,31.40,0.503,PENDING_REVIEW,8.4</span>
+<span class="text-emerald-300">Patient_005,4410,48.90,39.00,1.253,VERIFIED_SENIOR,15.1</span>
+<span class="text-slate-500">... [80 more slide summaries]</span>`
+        }
+      };
+
+      const cardGroup = document.getElementById('format-card-group');
+      const cards = cardGroup.querySelectorAll('.format-card');
+      const previewBadge = document.getElementById('preview-schema-badge');
+      const previewFilename = document.getElementById('preview-filename');
+      const codeContent = document.getElementById('code-content');
+      const ctaBtnLabel = document.getElementById('cta-button-label');
+      const copyBtn = document.getElementById('copy-json-btn');
+      const copyBtnText = document.getElementById('copy-btn-text');
+      const toast = document.getElementById('export-toast');
+      const toastTitle = document.getElementById('toast-title');
+      const toastMsg = document.getElementById('toast-msg');
+
+      function showToast(title, msg) {
+        toastTitle.textContent = title;
+        toastMsg.textContent = msg;
+        toast.classList.remove('translate-y-24', 'opacity-0');
+        toast.classList.add('translate-y-0', 'opacity-100');
+        setTimeout(() => {
+          toast.classList.add('translate-y-24', 'opacity-0');
+          toast.classList.remove('translate-y-0', 'opacity-100');
+        }, 3200);
+      }
+
+      cards.forEach(card => {
+        card.addEventListener('click', () => {
+          cards.forEach(c => {
+            c.classList.remove('shadow-md');
+            c.classList.add('shadow-sm');
+            c.querySelector('.format-indicator').classList.remove('opacity-100');
+            c.querySelector('.format-indicator').classList.add('opacity-0');
+            const icon = c.querySelector('.check-icon');
+            icon.textContent = 'radio_button_unchecked';
+            icon.classList.remove('text-primary');
+            icon.classList.add('text-outline-variant');
+          });
+
+          card.classList.add('shadow-md');
+          card.classList.remove('shadow-sm');
+          card.querySelector('.format-indicator').classList.add('opacity-100');
+          card.querySelector('.format-indicator').classList.remove('opacity-0');
+          const activeIcon = card.querySelector('.check-icon');
+          activeIcon.textContent = 'radio_button_checked';
+          activeIcon.classList.add('text-primary');
+          activeIcon.classList.remove('text-outline-variant');
+
+          const key = card.dataset.format;
+          const conf = formatSchemas[key];
+          if (conf) {
+            previewBadge.textContent = conf.badge;
+            previewFilename.textContent = conf.filename;
+            ctaBtnLabel.textContent = conf.cta;
+            codeContent.innerHTML = conf.code;
+          }
+        });
+      });
+
+      copyBtn.addEventListener('click', () => {
+        const text = codeContent.innerText;
+        navigator.clipboard.writeText(text).then(() => {
+          copyBtnText.textContent = 'Copied!';
+          setTimeout(() => {
+            copyBtnText.textContent = 'Copy JSON';
+          }, 2000);
+          showToast('Copied to Clipboard', 'Schema snippet ready for inspection.');
+        });
+      });
+
+      document.getElementById('download-sample-btn').addEventListener('click', () => {
+        showToast('Sample Download Initiated', previewFilename.textContent + ' downloaded successfully.');
+      });
+
+      document.getElementById('validate-schema-btn').addEventListener('click', () => {
+        showToast('All 85 Slides Verified', 'Level-0 affine matrices match zero coordinate drift.');
+      });
+
+      document.getElementById('cta-export-btn').addEventListener('click', () => {
+        showToast('Building Export Package', 'Streaming 312,421 Level-0 coordinates into ZIP archive...');
+      });
+    })();
+  </script>
+</div></main></div></body></html>

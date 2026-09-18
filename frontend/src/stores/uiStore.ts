@@ -1,0 +1,34 @@
+import { create } from "zustand";
+
+export interface Toast {
+  id: number;
+  message: string;
+  tone: "info" | "success" | "error";
+}
+
+interface UiState {
+  annotatorName: string;
+  setAnnotatorName: (name: string) => void;
+  toasts: Toast[];
+  pushToast: (message: string, tone?: Toast["tone"]) => void;
+  dismissToast: (id: number) => void;
+}
+
+let toastId = 0;
+
+export const useUiStore = create<UiState>((set) => ({
+  annotatorName: localStorage.getItem("annotatorName") || "Dr. Eliza Chen",
+  setAnnotatorName: (name) => {
+    localStorage.setItem("annotatorName", name);
+    set({ annotatorName: name });
+  },
+  toasts: [],
+  pushToast: (message, tone = "info") => {
+    const id = ++toastId;
+    set((s) => ({ toasts: [...s.toasts, { id, message, tone }] }));
+    setTimeout(() => {
+      set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
+    }, 3200);
+  },
+  dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+}));

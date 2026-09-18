@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.material-symbols-outlined {
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 20;
+  font-size: 20px;
+  line-height: 1;
+  user-select: none;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-mono-tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+@layer components {
+  .input {
+    @apply bg-surface-container-low rounded px-space-sm py-1.5 text-body-md text-on-surface focus:outline-none focus:ring-1 focus:ring-primary w-full;
+  }
+}

@@ -1,0 +1,28 @@
+# Environment
+.env
+backend/.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# Managed application data (WSI files, tissue mask cache, SQLite DB)
+data/uploads/
+data/watch/
+data/database/*.db
+data/database/*.db-*
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

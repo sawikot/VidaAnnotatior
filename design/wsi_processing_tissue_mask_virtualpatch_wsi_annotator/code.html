@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{"colors":{"surface-container":"#e5eeff","on-secondary-container":"#5c647a","primary-fixed":"#cce5ff","on-surface-variant":"#3f4850","surface-tint":"#006398","tertiary-container":"#008096","on-primary-fixed-variant":"#004b73","on-secondary":"#ffffff","tertiary-fixed-dim":"#4cd7f6","on-primary":"#ffffff","background":"#f8f9ff","surface-container-lowest":"#ffffff","error":"#ba1a1a","surface-container-low":"#eff4ff","primary-fixed-dim":"#93ccff","on-tertiary":"#ffffff","surface-variant":"#d3e4fe","surface-dim":"#cbdbf5","primary-container":"#007bb9","secondary-container":"#dae2fd","surface-container-highest":"#d3e4fe","tertiary-fixed":"#acedff","inverse-on-surface":"#eaf1ff","on-background":"#0b1c30","secondary-fixed":"#dae2fd","on-error":"#ffffff","inverse-primary":"#93ccff","on-primary-fixed":"#001d31","on-secondary-fixed-variant":"#3f465c","secondary":"#565e74","on-tertiary-container":"#f9fdff","outline":"#707881","secondary-fixed-dim":"#bec6e0","on-error-container":"#93000a","on-surface":"#0b1c30","surface-bright":"#f8f9ff","primary":"#006194","surface-container-high":"#dce9ff","error-container":"#ffdad6","outline-variant":"#bfc7d2","on-tertiary-fixed-variant":"#004e5c","on-tertiary-fixed":"#001f26","surface":"#f8f9ff","on-primary-container":"#fdfcff","tertiary":"#006577","inverse-surface":"#213145","on-secondary-fixed":"#131b2e"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"gutter":"0.75rem","space-lg":"1rem","space-md":"0.75rem","space-xs":"0.25rem","space-sm":"0.375rem","margin":"1rem","space-xl":"1.5rem"},"fontFamily":{"body-sm":["Inter"],"headline-md":["Inter"],"headline-lg":["Inter"],"label-lg":["JetBrains Mono"],"body-lg":["Inter"],"body-md":["Inter"],"label-sm":["JetBrains Mono"],"label-md":["JetBrains Mono"],"headline-sm":["Inter"]},"fontSize":{"body-sm":["11px",{"lineHeight":"14px","fontWeight":"400"}],"headline-md":["16px",{"lineHeight":"24px","letterSpacing":"-0.01em","fontWeight":"600"}],"headline-lg":["20px",{"lineHeight":"28px","letterSpacing":"-0.015em","fontWeight":"600"}],"label-lg":["12px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}],"body-lg":["14px",{"lineHeight":"20px","fontWeight":"400"}],"body-md":["12px",{"lineHeight":"16px","fontWeight":"400"}],"label-sm":["10px",{"lineHeight":"12px","letterSpacing":"0.03em","fontWeight":"400"}],"label-md":["11px",{"lineHeight":"14px","letterSpacing":"0.01em","fontWeight":"500"}],"headline-sm":["13px",{"lineHeight":"18px","letterSpacing":"-0.005em","fontWeight":"600"}]}}}}</script></head><body class="bg-surface font-body-md text-on-surface"><aside class="fixed left-0 top-0 h-full w-14 bg-[#0f172a] z-50 flex flex-col justify-between items-center py-space-sm border-r border-[#1e293b]"><div class="flex flex-col items-center w-full gap-space-sm"><div class="h-10 w-full flex items-center justify-center"><div class="h-8 w-8 rounded-lg bg-[#1e293b] flex items-center justify-center text-primary-fixed-dim"><span class="material-symbols-outlined text-[18px]">biotech</span></div></div><div class="w-8 h-[1px] bg-[#1e293b] my-space-xs"></div><nav class="flex flex-col items-center w-full gap-space-xs" data-active-classes="bg-[#007bb9] text-[#fdfcff] shadow-sm"><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="projects" href="#" title="Project Home"><span class="material-symbols-outlined text-[20px]">folder</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="dashboard" href="#" title="Dashboard"><span class="material-symbols-outlined text-[20px]">grid_view</span></a><a aria-current="page" class="w-10 h-10 flex items-center justify-center rounded-lg transition-colors bg-[#007bb9] text-[#fdfcff] shadow-sm" data-path="slide-processing" href="#" title="Slide Processing"><span class="material-symbols-outlined text-[20px]">filter_center_focus</span></a><a class="relative w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="workspace-annotator" href="#" title="Workspace Annotator"><span class="material-symbols-outlined text-[20px]">adjust</span><span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#0f172a]"></span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="patch-gallery" href="#" title="Patch Gallery"><span class="material-symbols-outlined text-[20px]">grid_on</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="full-wsi-overview" href="#" title="Full WSI Viewer"><span class="material-symbols-outlined text-[20px]">aspect_ratio</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="versioning" href="#" title="Config Versions"><span class="material-symbols-outlined text-[20px]">account_tree</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="export" href="#" title="Export Data"><span class="material-symbols-outlined text-[20px]">file_download</span></a></nav></div><div class="flex flex-col items-center w-full gap-space-xs"><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="documentation" href="#" title="Documentation"><span class="material-symbols-outlined text-[20px]">menu_book</span></a><a class="w-10 h-10 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" data-path="settings" href="#" title="System Settings"><span class="material-symbols-outlined text-[20px]">settings</span></a></div></aside><div class="pl-14"><header class="fixed top-0 left-14 right-0 h-14 bg-[#0f172a] text-slate-100 z-40 flex items-center justify-between px-space-md border-b border-[#1e293b] shadow-sm"><div class="flex items-center gap-space-md"><div class="flex items-center gap-space-sm"><img alt="VirtualPatch WSI Annotator Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1X4twrp5Tqi8NJBq5NgAb_1ecczseo_PmJLV4TbR5juzv1LzlAxErGDirf4ficIungXHVmFf01bK-kYyxQ3gawoNYtS9ldrhPUUl85E_7RT3G7n40PHMiIbrBrOnjD-6EQ0tEIuTLBY5P85InorvRxK6f7oyYf0BDB0wbRWZZrP4MVJVVbnUZuWxxdfJR0JiGrIz9FM0oKR05nSJYU7XD0ffS6gP1QHq87qLV6U5CD4kInE8ZPx6J8w"/><div class="flex flex-col"><span class="font-headline-sm text-headline-sm text-white tracking-tight leading-none">VirtualPatch WSI Annotator</span><span class="font-label-sm text-label-sm text-slate-400 leading-tight mt-0.5">Digital Pathology Research Suite (Level-0 Coordinate Engine)</span></div></div><div class="h-6 w-[1px] bg-[#1e293b] mx-space-xs"></div><div class="inline-flex items-center gap-space-xs px-space-sm py-0.5 rounded-lg bg-[#1e293b] border border-slate-700"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span><span class="font-label-sm text-label-sm text-cyan-200">BCA_2026: Breast Cancer Annotation [v1.0 - 512px @ 20x]</span></div><div class="h-6 w-[1px] bg-[#1e293b] mx-space-xs hidden xl:block"></div><nav class="hidden xl:flex items-center gap-1" data-active-classes="bg-[#1e293b] text-white font-headline-sm rounded-lg"><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="projects" href="#">Projects</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="dashboard" href="#">Dashboard</a><a aria-current="page" class="px-space-sm py-1 transition-colors bg-[#1e293b] text-white font-headline-sm rounded-lg" data-path="slide-processing" href="#">Slide Processing</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="workspace-annotator" href="#">Workspace</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="patch-gallery" href="#">Patch Gallery</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="full-wsi-overview" href="#">Overview</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="versioning" href="#">Versioning</a><a class="px-space-sm py-1 font-body-sm text-body-sm text-slate-300 hover:text-white hover:bg-[#1e293b] rounded-lg transition-colors" data-path="export" href="#">Export</a></nav></div><div class="flex items-center gap-space-md"><div class="hidden lg:flex items-center gap-space-xs px-space-sm py-1 rounded-lg bg-[#1e293b]/70 border border-slate-700/80"><span class="material-symbols-outlined text-emerald-400 text-[14px]">check_circle</span><span class="font-label-sm text-label-sm text-slate-300">Dynamic Coordinate Engine: Active</span><span class="text-slate-500 font-label-sm text-label-sm">|</span><span class="font-label-sm text-label-sm text-slate-400">0 Patches</span></div><div class="relative hidden md:block w-52"><span class="material-symbols-outlined absolute left-2 top-2 text-slate-400 text-[16px]">search</span><input class="w-full h-8 pl-7 pr-space-sm bg-[#1e293b] border border-slate-700 rounded-lg text-slate-200 placeholder-slate-400 font-body-sm text-body-sm focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container" placeholder="Search slides &amp; coords..." type="text"/></div><div class="flex items-center gap-space-xs"><button class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" title="Platform Documentation"><span class="material-symbols-outlined text-[18px]">help_outline</span></button><button class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white transition-colors" title="Settings"><span class="material-symbols-outlined text-[18px]">tune</span></button></div><div class="h-6 w-[1px] bg-[#1e293b]"></div><div class="flex items-center gap-space-sm pl-space-xs"><div class="flex flex-col text-right hidden sm:flex"><span class="font-headline-sm text-headline-sm text-white leading-tight">Dr. Eliza Chen, MD, PhD</span><span class="font-label-sm text-label-sm text-slate-400 leading-none">Senior Computational Pathologist</span></div><img alt="Profile" class="w-8 h-8 rounded-full object-cover ring-1 ring-slate-600" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD06VCVZeM-utr85SFdhAMY1jx1M21lwohLut1hC_n6n5toao5HojmkIak5QbUKh-txUBQQOPjgHNy2S17pkmRqwIaTzVtFqipSwDP4IgIhvJIGRzflDGX0sp-di-3ae0JgxEx9oLFme52ZBDpsKTg8L3DkTvxsGepIcnHFy8CqtLcEELD7Mz6Qm9xgnAgTacptEmtOapgbq9rZBCL79gQ7bt5eihKJIdo5O1SdvMdlH1on7_b1VlNm"/></div></div></header><main class="w-full pt-14 bg-surface min-h-screen"><div class="flex flex-col w-full">
+<!-- Sub-Header / Slide Processing Command Bar -->
+<header class="w-full bg-[#0b1329] text-slate-200 px-space-md py-space-sm flex flex-wrap items-center justify-between gap-space-md shadow-md z-20">
+<div class="flex items-center gap-space-md flex-wrap">
+<!-- Breadcrumb Hierarchy -->
+<nav aria-label="Slide breadcrumb" class="flex items-center gap-1.5 font-label-md text-label-md">
+<a class="text-slate-400 hover:text-cyan-300 transition-colors" data-path="projects" href="#">Projects</a>
+<span class="text-slate-600">/</span>
+<a class="text-slate-400 hover:text-cyan-300 transition-colors" data-path="dashboard" href="#">BCA_2026</a>
+<span class="text-slate-600">/</span>
+<span class="text-slate-400">Slides</span>
+<span class="text-slate-600">/</span>
+<div class="inline-flex items-center gap-1 bg-[#16223d] text-cyan-200 px-space-sm py-0.5 rounded font-label-md text-label-md">
+<span class="material-symbols-outlined text-[14px] text-cyan-400">description</span>
+<span class="font-semibold text-white tracking-tight">Patient_001.svs</span>
+<span class="text-[10px] text-slate-400 font-label-sm">(Breast Carcinoma)</span>
+</div>
+</nav>
+<div class="hidden md:flex items-center gap-1.5 bg-emerald-950/80 text-emerald-300 px-space-sm py-1 rounded">
+<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+<span class="font-label-sm text-label-sm uppercase tracking-wide">Tissue Segmented • 12,432 Virtual Coordinates Ready</span>
+</div>
+</div>
+<!-- Center Mode Switcher Tabs -->
+<div class="flex items-center bg-[#070d1e] p-1 rounded gap-1 shadow-inner">
+<button class="px-space-md py-1 rounded text-slate-400 hover:text-white font-body-sm text-body-sm transition-all flex items-center gap-1" id="viewModeWsi">
+<span class="material-symbols-outlined text-[15px]">crop_original</span>
+        Original WSI
+      </button>
+<button class="px-space-md py-1 rounded bg-[#007bb9] text-white font-body-sm text-body-sm font-semibold shadow-sm flex items-center gap-1" id="viewModeMask">
+<span class="material-symbols-outlined text-[15px]">contrast</span>
+        Tissue Mask (Active)
+      </button>
+<button class="px-space-md py-1 rounded text-slate-400 hover:text-white font-body-sm text-body-sm transition-all flex items-center gap-1" id="viewModeGrid">
+<span class="material-symbols-outlined text-[15px]">grid_4x4</span>
+        Virtual Patch Grid
+      </button>
+</div>
+<!-- Workflow Execution Trigger Actions -->
+<div class="flex items-center gap-space-xs flex-wrap">
+<button class="h-8 px-space-md rounded bg-[#16223d] hover:bg-[#202f52] text-slate-200 font-body-sm text-body-sm flex items-center gap-1.5 transition-colors" id="rerunTissueBtn" title="Re-run Otsu segmentation">
+<span class="material-symbols-outlined text-[16px] text-cyan-400">autorenew</span>
+<span class="hidden sm:inline">Re-run Detection</span>
+</button>
+<button class="h-8 px-space-md rounded bg-[#16223d] hover:bg-[#202f52] text-slate-200 font-body-sm text-body-sm flex items-center gap-1.5 transition-colors" id="generateCoordBtn" title="Rebuild coordinate affine matrix">
+<span class="material-symbols-outlined text-[16px] text-cyan-400">tune</span>
+<span class="hidden sm:inline">Generate Coords</span>
+</button>
+<button class="h-8 px-space-sm rounded bg-[#16223d] hover:bg-[#202f52] text-slate-200 font-body-sm text-body-sm flex items-center justify-center transition-colors" title="Persist segmentation hyperparameters">
+<span class="material-symbols-outlined text-[16px]">save</span>
+</button>
+<a class="h-8 px-space-md rounded bg-[#007bb9] hover:bg-[#006194] text-white font-body-sm text-body-sm font-semibold flex items-center gap-1.5 shadow-md transition-colors" data-path="workspace-annotator" href="#">
+<span>Open Annotation Workspace</span>
+<span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</a>
+</div>
+</header>
+<!-- Main Multi-Resolution Processing Workspace -->
+<div class="flex flex-col lg:flex-row flex-1 w-full bg-[#0a0f1d] min-h-[calc(100vh-8rem)]">
+<!-- Left Overview & Macro Thumb Rail (Slim Dock) -->
+<section class="w-full lg:w-56 bg-[#0c1427] text-slate-300 p-space-sm flex flex-col gap-space-md shadow-lg shrink-0">
+<div class="flex items-center justify-between pb-space-xs">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-cyan-400 text-[18px]">crop_free</span>
+<h2 class="font-headline-sm text-headline-sm text-white uppercase tracking-wider">Glass Slide Macro</h2>
+</div>
+<span class="font-label-sm text-label-sm text-cyan-300 bg-[#162544] px-1.5 py-0.5 rounded">1.2x</span>
+</div>
+<!-- Macro Thumbnail with Boundary Detection Box -->
+<div class="relative w-full aspect-[4/3] bg-[#050914] rounded overflow-hidden shadow-inner flex items-center justify-center group">
+<img alt="Patient_001.svs Whole Slide Macro View" class="w-full h-full object-cover opacity-75 group-hover:opacity-90 transition-opacity" src="https://lh3.googleusercontent.com/aida-public/AB6AXuADHVzMxh6ao4zGpWWbgfImGUu0_MxX4FsAJ3jjlqwarBJlfULnW3asX6Nyqbz9XSGebZgb0eLZ_dL1lqYw06lE_8368nr1FOwai4ovoazzj9TFcMuyyWwXolyAu6H_3F154ncJd2jQLVXXs8DW6lots3pgijwdNyS4I036iHntoQk0pQm0ylLo4fZBce_UGML7YRO-EBNxlRjTbGB11v410I2ssV1aCp2k17RcsTEXqwOpYRQSXk6l"/>
+<!-- Segmented Glass Stage Bounding Polygon -->
+<div class="absolute inset-2 bg-cyan-400/5 rounded pointer-events-none flex flex-col justify-between p-1">
+<span class="font-label-sm text-[9px] text-cyan-300 bg-[#070e1e]/90 px-1 py-0.5 rounded self-start">Glass Region: 25.4 × 76.2 mm</span>
+<span class="font-label-sm text-[9px] text-emerald-300 bg-[#070e1e]/90 px-1 py-0.5 rounded self-end">Tissue BBox Detected</span>
+</div>
+<!-- Active Viewport Mini Rect Indicator -->
+<div class="absolute top-1/4 left-1/4 w-1/2 h-1/2 bg-amber-400/10 pointer-events-none"></div>
+</div>
+<!-- Slide Physical Caliper / Dimensions -->
+<div class="bg-[#121c33] p-space-sm rounded flex flex-col gap-1 text-slate-400 font-label-sm text-label-sm">
+<div class="flex justify-between items-center text-slate-300">
+<span>Physical Scale</span>
+<span class="text-white font-label-md text-label-md">10.0 mm</span>
+</div>
+<div class="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden mt-1">
+<div class="h-full bg-cyan-400 w-3/4"></div>
+</div>
+<div class="flex justify-between items-center text-[9px] text-slate-500 pt-0.5">
+<span>0.5002 µm/px</span>
+<span>Nominal 20x Scan</span>
+</div>
+</div>
+<!-- Rapid Slide Filters Status -->
+<div class="flex flex-col gap-space-xs pt-space-xs">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-slate-400">Pre-Processing Filters</span>
+<div class="flex items-center justify-between text-slate-300 font-body-sm text-body-sm bg-[#10192e] px-space-sm py-1.5 rounded">
+<span class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[14px] text-emerald-400">check_circle</span>
+            Pen Mark Exclusion
+          </span>
+<span class="font-label-sm text-label-sm text-emerald-300">Enabled</span>
+</div>
+<div class="flex items-center justify-between text-slate-300 font-body-sm text-body-sm bg-[#10192e] px-space-sm py-1.5 rounded">
+<span class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[14px] text-emerald-400">check_circle</span>
+            Dust / Glass Vignette
+          </span>
+<span class="font-label-sm text-label-sm text-emerald-300">Cleaned</span>
+</div>
+<div class="flex items-center justify-between text-slate-300 font-body-sm text-body-sm bg-[#10192e] px-space-sm py-1.5 rounded">
+<span class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[14px] text-cyan-400">grid_guides</span>
+            Level-0 Affine Sync
+          </span>
+<span class="font-label-sm text-label-sm text-cyan-300">Lock-in</span>
+</div>
+</div>
+<!-- Quick Coordinate Inspector Preview -->
+<div class="mt-auto bg-[#070d1d] p-space-sm rounded flex flex-col gap-1 font-label-sm text-label-sm">
+<span class="text-slate-400">Active Patch Level-0 Cursor</span>
+<span class="text-cyan-300 font-mono text-[11px] font-semibold" id="liveCursorCoord">X: 042,496 • Y: 028,672</span>
+<span class="text-slate-400 text-[9px]">Tile ID: #00245 (Tile 512×512)</span>
+</div>
+</section>
+<!-- Center High-Resolution WSI Interactive Viewport -->
+<main class="flex-1 relative bg-[#040812] flex items-center justify-center overflow-hidden min-h-[500px]">
+<!-- Histology Canvas Layer -->
+<div class="relative w-full h-full flex items-center justify-center p-4">
+<!-- Main Slide Render Stage -->
+<div class="relative max-w-5xl w-full aspect-[4/3] rounded-lg overflow-hidden shadow-2xl bg-black select-none">
+<!-- Histology Tissue Biopsy Image -->
+<img alt="High resolution breast carcinoma tissue biopsy histology WSI Level 0 viewport" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuADHVzMxh6ao4zGpWWbgfImGUu0_MxX4FsAJ3jjlqwarBJlfULnW3asX6Nyqbz9XSGebZgb0eLZ_dL1lqYw06lE_8368nr1FOwai4ovoazzj9TFcMuyyWwXolyAu6H_3F154ncJd2jQLVXXs8DW6lots3pgijwdNyS4I036iHntoQk0pQm0ylLo4fZBce_UGML7YRO-EBNxlRjTbGB11v410I2ssV1aCp2k17RcsTEXqwOpYRQSXk6l"/>
+<!-- Layer 1: Transparent Tissue Mask (Cyan / Emerald Binary Island Mask) -->
+<div class="absolute inset-0 bg-gradient-to-tr from-cyan-500/25 via-emerald-400/20 to-cyan-400/30 mix-blend-screen pointer-events-none transition-opacity duration-300" id="tissueMaskOverlay">
+<!-- Synthetic Segmented Island Contours -->
+<svg class="absolute inset-0 w-full h-full" fill="none" preserveaspectratio="none" viewbox="0 0 1000 750">
+<!-- Primary Carcinoma Tissue Core (Accepted) -->
+<path d="M 120 180 Q 250 80 480 120 T 820 220 Q 920 380 840 560 T 490 680 Q 210 650 140 510 Z" fill="#00d4aa" fill-opacity="0.18" stroke="#00f5c4" stroke-dasharray="4 2" stroke-width="2"></path>
+<!-- Secondary Infiltrating Stroma Island (Accepted) -->
+<path d="M 520 220 Q 640 180 750 260 T 700 480 Q 560 520 480 430 Z" fill="#00b4d8" fill-opacity="0.22" stroke="#48cae4" stroke-width="2"></path>
+<!-- Invasive Tumor Lobule Island -->
+<path d="M 220 310 Q 320 260 410 330 T 360 490 Q 260 510 200 440 Z" fill="#00b4d8" fill-opacity="0.25" stroke="#48cae4" stroke-width="2"></path>
+<!-- Exclusion Area 1: Pathologist Pen Mark (Red Diagonal Exclusion Hatching) -->
+<path d="M 70 80 Q 150 40 220 90 T 160 210 Z" fill="url(#exclusionHatch)" stroke="#ef4444" stroke-width="2"></path>
+<!-- Exclusion Area 2: Glass Cover Slip Edge / Dust Speck (Excluded) -->
+<circle cx="890" cy="110" fill="url(#exclusionHatch)" r="38" stroke="#ef4444" stroke-width="1.5"></circle>
+<rect fill="url(#exclusionHatch)" height="60" rx="4" stroke="#ef4444" stroke-width="1.5" width="70" x="850" y="620"></rect>
+<defs>
+<pattern height="12" id="exclusionHatch" patterntransform="rotate(45 0 0)" patternunits="userSpaceOnUse" width="12">
+<line stroke="#f87171" stroke-opacity="0.8" stroke-width="2.5" x1="0" x2="0" y1="0" y2="12"></line>
+</pattern>
+</defs>
+</svg>
+</div>
+<!-- Layer 2: Virtual Patch Grid Overlay (Dashed Blue Coordinates 512x512) -->
+<div class="absolute inset-0 pointer-events-none transition-opacity duration-300" id="patchGridOverlay">
+<!-- Simulated Grid Matrix -->
+<div class="w-full h-full grid grid-cols-6 grid-rows-5 opacity-85">
+<!-- Cell Item 1 (Excluded Background) -->
+<div class="relative bg-slate-900/40 p-1 flex items-start justify-between">
+<span class="font-label-sm text-[8px] text-slate-500 font-mono">#00240 [Void]</span>
+<span class="text-[8px] text-rose-400 font-mono">0.02%</span>
+</div>
+<!-- Cell Item 2 (Excluded Pen Edge) -->
+<div class="relative bg-rose-950/20 p-1 flex items-start justify-between">
+<span class="font-label-sm text-[8px] text-rose-400 font-mono">#00241 [Pen]</span>
+<span class="material-symbols-outlined text-[10px] text-rose-400">block</span>
+</div>
+<!-- Active Cell Item 3 (Valid Patch) -->
+<div class="relative bg-cyan-950/20 p-1 flex flex-col justify-between">
+<div class="flex justify-between items-center w-full">
+<span class="font-label-sm text-[9px] text-cyan-300 font-mono font-bold bg-[#08172c]/80 px-1 rounded">#00242</span>
+<span class="font-label-sm text-[8px] text-emerald-300 bg-emerald-950/80 px-1 rounded">88% Tis</span>
+</div>
+<div class="font-label-sm text-[8px] text-slate-300 font-mono">X:24576 Y:14336</div>
+</div>
+<!-- Active Cell Item 4 (Valid Patch) -->
+<div class="relative bg-cyan-950/20 p-1 flex flex-col justify-between">
+<div class="flex justify-between items-center w-full">
+<span class="font-label-sm text-[9px] text-cyan-300 font-mono font-bold bg-[#08172c]/80 px-1 rounded">#00243</span>
+<span class="font-label-sm text-[8px] text-emerald-300 bg-emerald-950/80 px-1 rounded">94% Tis</span>
+</div>
+<div class="font-label-sm text-[8px] text-slate-300 font-mono">X:25088 Y:14336</div>
+</div>
+<!-- Active Cell Item 5 (Valid Patch) -->
+<div class="relative bg-cyan-950/20 p-1 flex flex-col justify-between">
+<div class="flex justify-between items-center w-full">
+<span class="font-label-sm text-[9px] text-cyan-300 font-mono font-bold bg-[#08172c]/80 px-1 rounded">#00244</span>
+<span class="font-label-sm text-[8px] text-emerald-300 bg-emerald-950/80 px-1 rounded">81% Tis</span>
+</div>
+<div class="font-label-sm text-[8px] text-slate-300 font-mono">X:25600 Y:14336</div>
+</div>
+<!-- Cell Item 6 (Excluded) -->
+<div class="relative bg-slate-900/40 p-1 flex items-start justify-between">
+<span class="font-label-sm text-[8px] text-slate-500 font-mono">#00245 [Void]</span>
+<span class="text-[8px] text-slate-500 font-mono">5.2%</span>
+</div>
+<!-- Row 2 -->
+<div class="relative bg-slate-900/40 p-1 flex items-start justify-between">
+<span class="font-label-sm text-[8px] text-slate-500 font-mono">#00246</span>
+<span class="text-[8px] text-slate-500 font-mono">0.0%</span>
+</div>
+<div class="relative bg-cyan-950/20 p-1 flex flex-col justify-between">
+<div class="flex justify-between items-center w-full">
+<span class="font-label-sm text-[9px] text-cyan-300 font-mono font-bold bg-[#08172c]/80 px-1 rounded">#00247</span>
+<span class="font-label-sm text-[8px] text-emerald-300 bg-emerald-950/80 px-1 rounded">76% Tis</span>
+</div>
+<div class="font-label-sm text-[8px] text-slate-300 font-mono">X:24064 Y:14848</div>
+</div>
+<!-- Focused Active Target Tile -->
+<div class="relative bg-cyan-500/20 p-1 flex flex-col justify-between shadow-[0_0_15px_rgba(6,182,212,0.5)]">
+<div class="flex justify-between items-center w-full">
+<span class="font-label-sm text-[9px] text-white font-mono font-bold bg-[#007bb9] px-1.5 py-0.5 rounded shadow">#00248 FOCUS</span>
+<span class="font-label-sm text-[8px] text-emerald-200 bg-emerald-900 px-1 rounded">98% Tis</span>
+</div>
+<div class="font-label-sm text-[8px] text-cyan-100 font-mono bg-[#09152b]/90 px-1 py-0.5 rounded self-start">X: 24,576 | Y: 14,848</div>
+</div>
+<div class="relative bg-cyan-950/20 p-1 flex flex-col justify-between">
+<div class="flex justify-between items-center w-full">
+<span class="font-label-sm text-[9px] text-cyan-300 font-mono font-bold bg-[#08172c]/80 px-1 rounded">#00249</span>
+<span class="font-label-sm text-[8px] text-emerald-300 bg-emerald-950/80 px-1 rounded">99% Tis</span>
+</div>
+<div class="font-label-sm text-[8px] text-slate-300 font-mono">X:25088 Y:14848</div>
+</div>
+<div class="relative bg-cyan-950/20 p-1 flex flex-col justify-between">
+<div class="flex justify-between items-center w-full">
+<span class="font-label-sm text-[9px] text-cyan-300 font-mono font-bold bg-[#08172c]/80 px-1 rounded">#00250</span>
+<span class="font-label-sm text-[8px] text-emerald-300 bg-emerald-950/80 px-1 rounded">91% Tis</span>
+</div>
+<div class="font-label-sm text-[8px] text-slate-300 font-mono">X:25600 Y:14848</div>
+</div>
+<div class="relative bg-slate-900/40 p-1 flex items-start justify-between">
+<span class="font-label-sm text-[8px] text-slate-500 font-mono">#00251</span>
+<span class="text-[8px] text-slate-500 font-mono">1.1%</span>
+</div>
+<!-- Row 3 -->
+<div class="relative bg-slate-900/40 p-1">
+<span class="font-label-sm text-[8px] text-slate-500 font-mono">#00252</span>
+</div>
+<div class="relative bg-cyan-950/20 p-1 flex flex-col justify-between">
+<div class="flex justify-between items-center w-full">
+<span class="font-label-sm text-[9px] text-cyan-300 font-mono font-bold bg-[#08172c]/80 px-1 rounded">#00253</span>
+<span class="font-label-sm text-[8px] text-emerald-300 bg-emerald-950/80 px-1 rounded">84% Tis</span>
+</div>
+<span class="font-label-sm text-[8px] text-slate-300 font-mono">X:24064 Y:15360</span>
+</div>
+<div class="relative bg-cyan-950/20 p-1 flex flex-col justify-between">
+<div class="flex justify-between items-center w-full">
+<span class="font-label-sm text-[9px] text-cyan-300 font-mono font-bold bg-[#08172c]/80 px-1 rounded">#00254</span>
+<span class="font-label-sm text-[8px] text-emerald-300 bg-emerald-950/80 px-1 rounded">96% Tis</span>
+</div>
+<span class="font-label-sm text-[8px] text-slate-300 font-mono">X:24576 Y:15360</span>
+</div>
+<div class="relative bg-cyan-950/20 p-1 flex flex-col justify-between">
+<div class="flex justify-between items-center w-full">
+<span class="font-label-sm text-[9px] text-cyan-300 font-mono font-bold bg-[#08172c]/80 px-1 rounded">#00255</span>
+<span class="font-label-sm text-[8px] text-emerald-300 bg-emerald-950/80 px-1 rounded">92% Tis</span>
+</div>
+<span class="font-label-sm text-[8px] text-slate-300 font-mono">X:25088 Y:15360</span>
+</div>
+<div class="relative bg-cyan-950/20 p-1 flex flex-col justify-between">
+<div class="flex justify-between items-center w-full">
+<span class="font-label-sm text-[9px] text-cyan-300 font-mono font-bold bg-[#08172c]/80 px-1 rounded">#00256</span>
+<span class="font-label-sm text-[8px] text-emerald-300 bg-emerald-950/80 px-1 rounded">68% Tis</span>
+</div>
+<span class="font-label-sm text-[8px] text-slate-300 font-mono">X:25600 Y:15360</span>
+</div>
+<div class="relative bg-slate-900/40 p-1">
+<span class="font-label-sm text-[8px] text-slate-500 font-mono">#00257</span>
+</div>
+<!-- Row 4 -->
+<div class="relative bg-slate-900/40 p-1"><span class="font-label-sm text-[8px] text-slate-500 font-mono">#00258</span></div>
+<div class="relative bg-cyan-950/20 p-1 flex flex-col justify-between">
+<span class="font-label-sm text-[9px] text-cyan-300 font-mono font-bold bg-[#08172c]/80 px-1 rounded">#00259</span>
+<span class="font-label-sm text-[8px] text-slate-300 font-mono">X:24064 Y:15872</span>
+</div>
+<div class="relative bg-cyan-950/20 p-1 flex flex-col justify-between">
+<span class="font-label-sm text-[9px] text-cyan-300 font-mono font-bold bg-[#08172c]/80 px-1 rounded">#00260</span>
+<span class="font-label-sm text-[8px] text-slate-300 font-mono">X:24576 Y:15872</span>
+</div>
+<div class="relative bg-cyan-950/20 p-1 flex flex-col justify-between">
+<span class="font-label-sm text-[9px] text-cyan-300 font-mono font-bold bg-[#08172c]/80 px-1 rounded">#00261</span>
+<span class="font-label-sm text-[8px] text-slate-300 font-mono">X:25088 Y:15872</span>
+</div>
+<div class="relative bg-slate-900/40 p-1"><span class="font-label-sm text-[8px] text-slate-500 font-mono">#00262 [Void]</span></div>
+<div class="relative bg-slate-900/40 p-1"><span class="font-label-sm text-[8px] text-slate-500 font-mono">#00263</span></div>
+<!-- Row 5 -->
+<div class="relative bg-slate-900/40 p-1"><span class="font-label-sm text-[8px] text-slate-500 font-mono">#00264</span></div>
+<div class="relative bg-slate-900/40 p-1"><span class="font-label-sm text-[8px] text-slate-500 font-mono">#00265</span></div>
+<div class="relative bg-cyan-950/20 p-1 flex flex-col justify-between">
+<span class="font-label-sm text-[9px] text-cyan-300 font-mono font-bold bg-[#08172c]/80 px-1 rounded">#00266</span>
+<span class="font-label-sm text-[8px] text-slate-300 font-mono">X:24576 Y:16384</span>
+</div>
+<div class="relative bg-rose-950/20 p-1"><span class="font-label-sm text-[8px] text-rose-400 font-mono">#00267 [Glass Dust]</span></div>
+<div class="relative bg-slate-900/40 p-1"><span class="font-label-sm text-[8px] text-slate-500 font-mono">#00268</span></div>
+<div class="relative bg-slate-900/40 p-1"><span class="font-label-sm text-[8px] text-slate-500 font-mono">#00269</span></div>
+</div>
+</div>
+<!-- Bottom Viewport Floating HUD - Zero Disk Tile Generation Value Prop -->
+<div class="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+<div class="bg-[#0b162c]/95 text-slate-200 px-space-md py-space-xs rounded-md shadow-xl flex items-center gap-space-sm pointer-events-auto backdrop-blur-sm max-w-xl">
+<span class="material-symbols-outlined text-cyan-400 text-[20px] shrink-0">memory</span>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-cyan-200 leading-tight">Virtual Patch Grid Architecture</span>
+<p class="font-body-sm text-[11px] text-slate-300 leading-snug">
+<strong class="text-white">0 Image Files Created.</strong> All patches are computed on-demand via Level-0 affine offsets directly from <span class="font-mono text-cyan-300">Patient_001.svs</span>, eliminating redundant crop exports.
+                </p>
+</div>
+</div>
+<!-- Canvas Viewport Controls Overlay -->
+<div class="bg-[#0b162c]/95 text-slate-300 p-1 rounded-md shadow-xl flex items-center gap-1 pointer-events-auto backdrop-blur-sm">
+<button class="w-7 h-7 flex items-center justify-center hover:bg-[#1b2b4f] hover:text-white rounded transition-colors" title="Zoom in">
+<span class="material-symbols-outlined text-[16px]">add</span>
+</button>
+<button class="w-7 h-7 flex items-center justify-center hover:bg-[#1b2b4f] hover:text-white rounded transition-colors" title="Zoom out">
+<span class="material-symbols-outlined text-[16px]">remove</span>
+</button>
+<button class="w-7 h-7 flex items-center justify-center hover:bg-[#1b2b4f] hover:text-white rounded transition-colors" title="Fit to screen">
+<span class="material-symbols-outlined text-[16px]">fit_screen</span>
+</button>
+<div class="w-[1px] h-4 bg-slate-700 mx-0.5"></div>
+<span class="font-label-sm text-label-sm px-1.5 font-mono text-cyan-300">20.0x</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Right-Side Parameter & Inspection Sidebar -->
+<aside class="w-full lg:w-96 bg-[#0f172a] text-slate-100 p-space-md flex flex-col gap-space-md shadow-2xl shrink-0 overflow-y-auto">
+<!-- Section Title -->
+<div class="flex items-center justify-between pb-space-xs">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-cyan-400 text-[20px]">tune</span>
+<h2 class="font-headline-md text-headline-md text-white font-semibold">Segmentation Pipeline</h2>
+</div>
+<span class="bg-cyan-950 text-cyan-300 font-label-sm text-label-sm px-2 py-0.5 rounded font-mono">Engine v2.4</span>
+</div>
+<!-- Segmentation Hyperparameters Form -->
+<div class="bg-[#18233c] p-space-md rounded-lg flex flex-col gap-space-md shadow-sm">
+<div class="flex flex-col gap-1">
+<label class="font-headline-sm text-headline-sm text-white">Detection Algorithm</label>
+<div class="relative">
+<select class="w-full bg-[#0b1326] text-slate-200 font-body-sm text-body-sm px-space-md py-2 rounded focus:outline-none focus:ring-1 focus:ring-cyan-400 appearance-none">
+<option selected="">HSV + Otsu Thresholding (Dual Band)</option>
+<option>Adaptive LAB Color Space Slicing</option>
+<option>Deep Learning U-Net Tissue Mask (v2)</option>
+<option>Morphological Luminance Gradient</option>
+</select>
+<span class="material-symbols-outlined absolute right-2.5 top-2 text-slate-400 pointer-events-none text-[16px]">expand_more</span>
+</div>
+</div>
+<!-- Slider 1: Tissue Threshold Slider -->
+<div class="flex flex-col gap-1.5">
+<div class="flex justify-between items-center font-body-sm text-body-sm">
+<span class="text-slate-300">Tissue Threshold (Otsu Sens.)</span>
+<span class="font-label-md text-label-md text-cyan-300 font-bold font-mono" id="thresholdValue">0.65</span>
+</div>
+<input class="w-full h-1.5 bg-[#0b1326] rounded-lg appearance-none cursor-pointer accent-cyan-400" id="thresholdSlider" max="0.95" min="0.10" step="0.01" type="range" value="0.65"/>
+<div class="flex justify-between text-[9px] text-slate-400 font-mono">
+<span>0.10 (Conservative)</span>
+<span>0.95 (Permissive)</span>
+</div>
+</div>
+<!-- Slider 2: Min Tissue Fraction -->
+<div class="flex flex-col gap-1.5">
+<div class="flex justify-between items-center font-body-sm text-body-sm">
+<span class="text-slate-300">Min. Patch Tissue Fraction</span>
+<span class="font-label-md text-label-md text-emerald-400 font-bold font-mono" id="tissueFracValue">60%</span>
+</div>
+<input class="w-full h-1.5 bg-[#0b1326] rounded-lg appearance-none cursor-pointer accent-emerald-400" id="tissueFracSlider" max="90" min="10" step="5" type="range" value="60"/>
+<p class="font-body-sm text-[10px] text-slate-400">Tiles below this cellular threshold are classified as empty background.</p>
+</div>
+<!-- Patch Spatial Matrix Config -->
+<div class="flex flex-col gap-space-xs pt-space-xs">
+<span class="font-headline-sm text-headline-sm text-white">Patch Matrix Parameters</span>
+<div class="grid grid-cols-3 gap-2">
+<div class="bg-[#0b1326] p-2 rounded flex flex-col">
+<span class="text-slate-400 text-[10px]">Width</span>
+<span class="font-mono text-cyan-300 font-bold text-[13px]">512 px</span>
+</div>
+<div class="bg-[#0b1326] p-2 rounded flex flex-col">
+<span class="text-slate-400 text-[10px]">Height</span>
+<span class="font-mono text-cyan-300 font-bold text-[13px]">512 px</span>
+</div>
+<div class="bg-[#0b1326] p-2 rounded flex flex-col">
+<span class="text-slate-400 text-[10px]">Stride (Overlap)</span>
+<span class="font-mono text-slate-300 font-bold text-[13px]">512 px (0%)</span>
+</div>
+</div>
+</div>
+<!-- Checkboxes for Edge & Artifact Filtering -->
+<div class="flex flex-col gap-2 pt-1">
+<label class="flex items-center gap-2 cursor-pointer select-none">
+<input checked="" class="w-4 h-4 rounded bg-[#0b1326] text-cyan-500 focus:ring-0 focus:ring-offset-0 accent-cyan-400" type="checkbox"/>
+<span class="font-body-sm text-body-sm text-slate-200">Pad Edge Boundaries to Standard Matrix</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer select-none">
+<input checked="" class="w-4 h-4 rounded bg-[#0b1326] text-cyan-500 focus:ring-0 focus:ring-offset-0 accent-cyan-400" type="checkbox"/>
+<span class="font-body-sm text-body-sm text-slate-200">Auto-Filter Pathologist Pen Markings</span>
+</label>
+</div>
+</div>
+<!-- Real-Time Slide Pixel Luminance / Saturation Distribution Histogram -->
+<div class="bg-[#18233c] p-space-md rounded-lg flex flex-col gap-2 shadow-sm">
+<div class="flex items-center justify-between">
+<span class="font-headline-sm text-headline-sm text-white flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-cyan-400">bar_chart</span>
+            HSV Pixel Distribution
+          </span>
+<span class="font-label-sm text-[10px] text-slate-400 font-mono">Bimodal Cutoff: 0.65</span>
+</div>
+<!-- Inline SVG Histogram Chart -->
+<div class="w-full h-24 bg-[#0b1326] rounded p-2 flex flex-col justify-end relative overflow-hidden">
+<!-- Threshold Vertical Guideline -->
+<div class="absolute top-0 bottom-0 left-[65%] w-0.5 bg-cyan-400 z-10 flex flex-col items-center">
+<span class="font-label-sm text-[8px] bg-cyan-500 text-slate-950 font-bold px-1 rounded -translate-y-1">Otsu τ</span>
+</div>
+<svg class="w-full h-16 text-cyan-500" preserveaspectratio="none" viewbox="0 0 200 60">
+<!-- Glass Background Peak (Left) -->
+<path d="M 0 60 Q 20 5 40 45 T 70 50 Q 100 55 120 30 T 150 10 Q 170 30 185 45 T 200 60 Z" fill="currentColor" fill-opacity="0.25"></path>
+<!-- Tissue Hematoxylin/Eosin Curve (Right Peak) -->
+<path d="M 0 60 Q 20 5 40 45 T 70 50 Q 100 55 120 30 T 150 10 Q 170 30 185 45 T 200 60" fill="none" stroke="#22d3ee" stroke-width="1.75"></path>
+</svg>
+<div class="flex justify-between font-label-sm text-[9px] text-slate-500 pt-1">
+<span>Glass (Luminance)</span>
+<span class="text-cyan-400 font-semibold">Tissue Boundary</span>
+<span>Nuclei Dense (H&amp;E)</span>
+</div>
+</div>
+</div>
+<!-- Quantitative WSI Slide Level-0 Analytics & Storage Economics -->
+<div class="bg-[#18233c] p-space-md rounded-lg flex flex-col gap-space-sm shadow-sm">
+<div class="flex items-center justify-between pb-1">
+<span class="font-headline-sm text-headline-sm text-white flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-emerald-400">analytics</span>
+            Calculated Slide Metrics
+          </span>
+<span class="font-label-sm text-emerald-300 font-mono">Level-0 Verified</span>
+</div>
+<div class="flex flex-col divide-y divide-slate-700/60 font-body-sm text-body-sm">
+<div class="flex justify-between py-1.5">
+<span class="text-slate-400">Native Level-0 Dimensions</span>
+<span class="font-mono text-white font-semibold">98,304 × 65,536 px</span>
+</div>
+<div class="flex justify-between py-1.5">
+<span class="text-slate-400">Scan Resolution &amp; Scale</span>
+<span class="font-mono text-white">20x (0.5002 µm/px)</span>
+</div>
+<div class="flex justify-between py-1.5">
+<span class="text-slate-400">Physical Slide Area</span>
+<span class="font-mono text-white">4.82 cm² Total</span>
+</div>
+<div class="flex justify-between py-1.5">
+<span class="text-slate-400">Segmented Tissue Area</span>
+<span class="font-mono text-emerald-300 font-bold">3.58 cm² (74.2%)</span>
+</div>
+<div class="flex justify-between py-1.5">
+<span class="text-slate-400">Total Virtual Patches</span>
+<div class="flex items-center gap-1">
+<span class="font-mono text-cyan-300 font-bold">12,432 Valid</span>
+<span class="text-[10px] text-slate-500">(4,812 Void)</span>
+</div>
+</div>
+</div>
+<!-- Breakthrough Metric Card: Storage Saved Callout -->
+<div class="mt-2 bg-gradient-to-r from-emerald-950/80 to-cyan-950/80 p-space-sm rounded flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded-full bg-emerald-900/60 flex items-center justify-center shrink-0 text-emerald-300">
+<span class="material-symbols-outlined text-[20px]">save_alt</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1">
+<span class="font-headline-sm text-headline-sm text-emerald-300 font-bold">2.45 GB</span>
+<span class="font-label-sm text-[10px] text-emerald-400 uppercase font-semibold">Storage Spared</span>
+</div>
+<span class="font-body-sm text-[11px] text-slate-300 leading-tight">Virtual coordinates index Level-0 without writing physical uncompressed TIFF crops to disk.</span>
+</div>
+</div>
+</div>
+</aside>
+</div>
+<!-- Micro-interactions Script -->
+<script>
+    (function() {
+      // Sliders Live Update
+      const thresholdSlider = document.getElementById('thresholdSlider');
+      const thresholdValue = document.getElementById('thresholdValue');
+      if (thresholdSlider && thresholdValue) {
+        thresholdSlider.addEventListener('input', function(e) {
+          thresholdValue.textContent = parseFloat(e.target.value).toFixed(2);
+        });
+      }
+
+      const tissueFracSlider = document.getElementById('tissueFracSlider');
+      const tissueFracValue = document.getElementById('tissueFracValue');
+      if (tissueFracSlider && tissueFracValue) {
+        tissueFracSlider.addEventListener('input', function(e) {
+          tissueFracValue.textContent = e.target.value + '%';
+        });
+      }
+
+      // Viewport Layer Toggles
+      const viewModeWsi = document.getElementById('viewModeWsi');
+      const viewModeMask = document.getElementById('viewModeMask');
+      const viewModeGrid = document.getElementById('viewModeGrid');
+
+      const tissueMaskOverlay = document.getElementById('tissueMaskOverlay');
+      const patchGridOverlay = document.getElementById('patchGridOverlay');
+
+      function setActiveButton(btn) {
+        [viewModeWsi, viewModeMask, viewModeGrid].forEach(b => {
+          if (!b) return;
+          b.className = "px-space-md py-1 rounded text-slate-400 hover:text-white font-body-sm text-body-sm transition-all flex items-center gap-1";
+        });
+        btn.className = "px-space-md py-1 rounded bg-[#007bb9] text-white font-body-sm text-body-sm font-semibold shadow-sm flex items-center gap-1";
+      }
+
+      if (viewModeWsi) {
+        viewModeWsi.addEventListener('click', function() {
+          setActiveButton(viewModeWsi);
+          if (tissueMaskOverlay) tissueMaskOverlay.style.opacity = '0';
+          if (patchGridOverlay) patchGridOverlay.style.opacity = '0';
+        });
+      }
+
+      if (viewModeMask) {
+        viewModeMask.addEventListener('click', function() {
+          setActiveButton(viewModeMask);
+          if (tissueMaskOverlay) tissueMaskOverlay.style.opacity = '1';
+          if (patchGridOverlay) patchGridOverlay.style.opacity = '1';
+        });
+      }
+
+      if (viewModeGrid) {
+        viewModeGrid.addEventListener('click', function() {
+          setActiveButton(viewModeGrid);
+          if (tissueMaskOverlay) tissueMaskOverlay.style.opacity = '0.35';
+          if (patchGridOverlay) patchGridOverlay.style.opacity = '1';
+        });
+      }
+
+      // Live cursor readout mock jitter
+      const liveCursorCoord = document.getElementById('liveCursorCoord');
+      if (liveCursorCoord) {
+        window.addEventListener('mousemove', function(e) {
+          const deltaX = Math.floor((e.clientX * 23) % 98304);
+          const deltaY = Math.floor((e.clientY * 19) % 65536);
+          liveCursorCoord.textContent = `X: ${deltaX.toLocaleString().padStart(6, '0')} • Y: ${deltaY.toLocaleString().padStart(6, '0')}`;
+        });
+      }
+    })();
+  </script>
+</div></main></div></body></html>
