@@ -33,3 +33,19 @@ body {
     @apply bg-surface-container-low rounded px-space-sm py-1.5 text-body-md text-on-surface focus:outline-none focus:ring-1 focus:ring-primary w-full;
   }
 }
+
+@keyframes patch-pulse {
+  0%,
+  100% {
+    stroke-opacity: 1;
+    fill-opacity: 0.3;
+  }
+  50% {
+    stroke-opacity: 0.4;
+    fill-opacity: 0.08;
+  }
+}
+
+.patch-active-pulse {
+  animation: patch-pulse 1.6s ease-in-out infinite;
+}

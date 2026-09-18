@@ -32,6 +32,8 @@ export function PatchGridOverlay({ slideId, bbox, activePatchId, onPatchClick, r
       .catch(() => {});
   }, [slideId, bbox?.x0, bbox?.y0, bbox?.x1, bbox?.y1, refreshKey]);
 
+  const activePatch = patches.find((p) => p.id === activePatchId);
+
   return (
     <g>
       {patches.map((p) => {
@@ -53,6 +55,40 @@ export function PatchGridOverlay({ slideId, bbox, activePatchId, onPatchClick, r
           />
         );
       })}
+      {/* A crisp, constant-pixel-width marker for the active patch, drawn last (on
+          top) so it's never lost against the tissue image or overlapped by
+          neighboring patches -- the per-item stroke above scales with the viewBox
+          (40000+ units wide), so at small-viewport scales (the workspace minimap)
+          it shrinks to sub-pixel and becomes invisible. vector-effect keeps this
+          ring's stroke a fixed screen size regardless of zoom. */}
+      {activePatch && (
+        <g style={{ pointerEvents: "none" }}>
+          <rect
+            x={activePatch.x - activePatch.width_l0 * 0.2}
+            y={activePatch.y - activePatch.height_l0 * 0.2}
+            width={activePatch.width_l0 * 1.4}
+            height={activePatch.height_l0 * 1.4}
+            fill="none"
+            stroke="#38bdf8"
+            strokeWidth={1.5}
+            strokeDasharray="6 4"
+            vectorEffect="non-scaling-stroke"
+            opacity={0.7}
+          />
+          <rect
+            className="patch-active-pulse"
+            x={activePatch.x}
+            y={activePatch.y}
+            width={activePatch.width_l0}
+            height={activePatch.height_l0}
+            fill="#38bdf8"
+            fillOpacity={0.3}
+            stroke="#38bdf8"
+            strokeWidth={2.5}
+            vectorEffect="non-scaling-stroke"
+          />
+        </g>
+      )}
     </g>
   );
 }
