@@ -17,6 +17,7 @@ from app.services.wsi_reader import WSIReader
 TILE_SIZE = 254
 TILE_OVERLAP = 1
 TILE_FORMAT = "jpeg"
+_DOWNSAMPLE_TOLERANCE = 1.01
 
 
 class DeepZoomAdapter:
@@ -59,10 +60,15 @@ class DeepZoomAdapter:
 
     def _best_native_level(self, scale: int) -> tuple[int, float]:
         """The slide's own pyramid level closest to (but not coarser than) the
-        requested scale, so we read as little data as possible without upsampling."""
+        requested scale, so we read as little data as possible without upsampling.
+
+        Real slides report their downsamples as ratios of pixel counts, so a "16x" level
+        is typically 16.002 -- strictly comparing would skip it and read the next finer
+        level instead (about 16x more data to decode). The tolerance treats those as equal;
+        any residual size difference is absorbed by the resize in get_tile."""
         best, best_diff = 0, float("inf")
         for i, ds in enumerate(self.meta.level_downsamples):
-            if ds <= scale and scale - ds < best_diff:
+            if ds <= scale * _DOWNSAMPLE_TOLERANCE and abs(scale - ds) < best_diff:
                 best, best_diff = i, scale - ds
         return best, self.meta.level_downsamples[best]
 
@@ -137,6 +143,21 @@ def purge_slide_tiles(slide_id: int) -> None:
     database ids get reused, so a stale entry would otherwise be served as the
     tiles of whatever slide is next given the same id."""
     _tile_cache.purge(slide_id)
+
+
+def render_thumbnail_bytes(reader: WSIReader, slide_id: int, max_size: int) -> bytes:
+    """A slide's overview JPEG. Cut from the slide once, then served from memory: every
+    dashboard and gallery card asks for one, and each cut reads the file again (seconds
+    for a large slide that is not in the disk cache). Purged with the slide's tiles."""
+    cache_key = (slide_id, "thumbnail", max_size)
+    cached = _tile_cache.get(cache_key)
+    if cached is not None:
+        return cached
+    buf = io.BytesIO()
+    reader.get_thumbnail(max_size).save(buf, format="JPEG", quality=88)
+    data = buf.getvalue()
+    _tile_cache.put(cache_key, data)
+    return data
 
 
 def render_tile_bytes(adapter: DeepZoomAdapter, slide_id: int, dzi_level: int, col: int, row: int) -> bytes:

@@ -230,26 +230,35 @@ class DemoWSIReader(WSIReader):
         noise = rng.integers(-6, 6, size=(height, width, 1))
         img = np.clip(img.astype(np.int16) + noise, 0, 255).astype(np.uint8)
 
-        # Stamp tissue blobs that intersect this region.
+        # Stamp tissue blobs that intersect this region. Each blob only changes pixels within its
+        # radius, so it is worked out on just the window of the region it can reach -- a tile or
+        # thumbnail is far larger than any one blob, and doing every blob over the whole region
+        # made a full-slide thumbnail take minutes.
         x0_l0, y0_l0 = x, y
         x1_l0, y1_l0 = x + width * downsample, y + height * downsample
-        yy, xx = np.mgrid[0:height, 0:width]
-        global_xx = x0_l0 + xx * downsample
-        global_yy = y0_l0 + yy * downsample
 
         for b in self._blobs:
             if b.cx + b.r < x0_l0 or b.cx - b.r > x1_l0 or b.cy + b.r < y0_l0 or b.cy - b.r > y1_l0:
                 continue
-            dist = np.sqrt((global_xx - b.cx) ** 2 + (global_yy - b.cy) ** 2)
+            left = max(0, int((b.cx - b.r - x0_l0) // downsample) - 1)
+            right = min(width, int((b.cx + b.r - x0_l0) // downsample) + 2)
+            top = max(0, int((b.cy - b.r - y0_l0) // downsample) - 1)
+            bottom = min(height, int((b.cy + b.r - y0_l0) // downsample) + 2)
+            if left >= right or top >= bottom:
+                continue
+            global_xx = x0_l0 + np.arange(left, right) * downsample
+            global_yy = y0_l0 + np.arange(top, bottom) * downsample
+            dist = np.sqrt((global_xx[None, :] - b.cx) ** 2 + (global_yy[:, None] - b.cy) ** 2)
             mask = dist < b.r
             if not mask.any():
                 continue
             falloff = np.clip(1.0 - dist / b.r, 0, 1) ** 0.5
+            window = img[top:bottom, left:right]
             for c in range(3):
-                img[..., c] = np.where(
+                window[..., c] = np.where(
                     mask,
-                    (img[..., c] * (1 - falloff) + b.color[c] * falloff).astype(np.uint8),
-                    img[..., c],
+                    (window[..., c] * (1 - falloff) + b.color[c] * falloff).astype(np.uint8),
+                    window[..., c],
                 )
         return Image.fromarray(img, mode="RGB")
 

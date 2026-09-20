@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import uuid
@@ -10,7 +11,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
-from starlette.datastructures import UploadFile
 
 from app.api.deps import forbid_for_image_project, get_project_or_404, get_slide_or_404
 from app.core.config import get_settings
@@ -31,7 +31,8 @@ from app.schemas.slide import (
 )
 from app.services import reader_cache
 from app.services.image_import import IMAGE_EXTENSIONS, ImageDiscovery, ImageItem, discover_images
-from app.services.deepzoom_service import DeepZoomAdapter, purge_slide_tiles, render_tile_bytes
+from app.services.deepzoom_service import DeepZoomAdapter, purge_slide_tiles, render_thumbnail_bytes, render_tile_bytes
+from app.services.multipart_stream import ReceivedFile, receive_multipart
 from app.services.wsi_bundles import (
     ARCHIVE_EXTENSIONS,
     PRIMARY_EXTENSIONS,
@@ -243,30 +244,24 @@ def _import_images(
     )
 
 
-class _ByteBudget:
-    def __init__(self, limit: int):
-        self.remaining = limit
-
-
-def _save_upload(upload: UploadFile, target: Path, budget: _ByteBudget) -> None:
+def _place_upload(received: ReceivedFile, target: Path) -> None:
+    """Move a received file to its final spot. Both sit inside the same staging folder,
+    so this is a rename, not a second copy of what may be a multi-gigabyte slide."""
     target.parent.mkdir(parents=True, exist_ok=True)
-    with target.open("wb") as out:
-        while chunk := upload.file.read(1 << 20):
-            budget.remaining -= len(chunk)
-            if budget.remaining < 0:
-                raise HTTPException(status_code=413, detail="Upload is larger than the configured size limit")
-            out.write(chunk)
+    os.replace(received.path, target)
 
 
 def _ingest_uploads(
     db: Session,
     project: Project,
-    uploads: list[UploadFile],
+    uploads: list[ReceivedFile],
     names: list[str],
     config_version_id: int | None,
+    staging: Path,
 ) -> SlideBatchImportResult:
+    """Sort what was received into slides/images. ``staging`` holds the received files and is
+    the caller's to delete afterwards."""
     settings = get_settings()
-    staging = settings.wsi_storage_dir / "_staging" / uuid.uuid4().hex
     tree = staging / "tree"
     archives = staging / "archives"
     tree.mkdir(parents=True)
@@ -274,48 +269,44 @@ def _ingest_uploads(
 
     skipped: list[SkippedItemOut] = []
     warnings: list[str] = []
-    budget = _ByteBudget(settings.max_upload_bytes)
-    try:
-        seen: set[tuple[str, ...]] = set()
-        for index, (upload, raw_name) in enumerate(zip(uploads, names)):
+    seen: set[tuple[str, ...]] = set()
+    for index, (upload, raw_name) in enumerate(zip(uploads, names)):
+        try:
+            parts = safe_parts(raw_name)
+        except UnsafePathError as exc:
+            skipped.append(SkippedItemOut(name=raw_name, reason=f"unsafe file name ({exc})"))
+            continue
+        key = tuple(p.lower() for p in parts)
+        if key in seen:
+            skipped.append(SkippedItemOut(name=raw_name, reason="the same file was selected twice"))
+            continue
+        seen.add(key)
+
+        if Path(parts[-1]).suffix.lower() in ARCHIVE_EXTENSIONS:
+            archive_path = archives / f"{index}.zip"
+            _place_upload(upload, archive_path)
             try:
-                parts = safe_parts(raw_name)
-            except UnsafePathError as exc:
-                skipped.append(SkippedItemOut(name=raw_name, reason=f"unsafe file name ({exc})"))
-                continue
-            key = tuple(p.lower() for p in parts)
-            if key in seen:
-                skipped.append(SkippedItemOut(name=raw_name, reason="the same file was selected twice"))
-                continue
-            seen.add(key)
+                warnings += [
+                    f"{raw_name}: {w}"
+                    for w in extract_zip(
+                        archive_path,
+                        tree / f"zip-{index}",
+                        max_bytes=settings.max_upload_bytes,
+                        max_files=settings.max_upload_files,
+                    )
+                ]
+            except ArchiveError as exc:
+                skipped.append(SkippedItemOut(name=raw_name, reason=f"archive {exc}"))
+            finally:
+                archive_path.unlink(missing_ok=True)
+        else:
+            _place_upload(upload, tree.joinpath(*parts))
 
-            if Path(parts[-1]).suffix.lower() in ARCHIVE_EXTENSIONS:
-                archive_path = archives / f"{index}.zip"
-                _save_upload(upload, archive_path, budget)
-                try:
-                    warnings += [
-                        f"{raw_name}: {w}"
-                        for w in extract_zip(
-                            archive_path,
-                            tree / f"zip-{index}",
-                            max_bytes=settings.max_upload_bytes,
-                            max_files=settings.max_upload_files,
-                        )
-                    ]
-                except ArchiveError as exc:
-                    skipped.append(SkippedItemOut(name=raw_name, reason=f"archive {exc}"))
-                finally:
-                    archive_path.unlink(missing_ok=True)
-            else:
-                _save_upload(upload, tree.joinpath(*parts), budget)
-
-        if project.project_type == "image":
-            images = discover_images(tree, max_pixels=settings.max_image_pixels)
-            return _import_images(db, project, images, "upload", True, warnings, skipped)
-        discovery = discover_bundles(tree)
-        return _import_discovered(db, project, discovery, config_version_id, "upload", True, warnings, skipped)
-    finally:
-        shutil.rmtree(staging, ignore_errors=True)
+    if project.project_type == "image":
+        images = discover_images(tree, max_pixels=settings.max_image_pixels)
+        return _import_images(db, project, images, "upload", True, warnings, skipped)
+    discovery = discover_bundles(tree)
+    return _import_discovered(db, project, discovery, config_version_id, "upload", True, warnings, skipped)
 
 
 @router.post("/projects/{project_id}/slides/upload", response_model=SlideBatchImportResult)
@@ -335,23 +326,30 @@ async def upload_slides(
     next to the .mrxs file).
     """
     settings = get_settings()
-    form = await request.form(max_files=settings.max_upload_files, max_fields=20)
-    uploads = [f for f in form.getlist("files") if isinstance(f, UploadFile)]
-    if not uploads:
-        raise HTTPException(status_code=422, detail="No files were uploaded")
+    staging = settings.wsi_storage_dir / "_staging" / uuid.uuid4().hex
+    try:
+        # Streamed to disk as it arrives (see multipart_stream for why not request.form()).
+        form = await receive_multipart(
+            request, staging / "received", max_files=settings.max_upload_files, max_bytes=settings.max_upload_bytes
+        )
+        uploads = form.files
+        if not uploads:
+            raise HTTPException(status_code=422, detail="No files were uploaded")
 
-    names = [u.filename or f"file-{i}" for i, u in enumerate(uploads)]
-    manifest_raw = form.get("manifest")
-    if manifest_raw:
-        try:
-            manifest = json.loads(str(manifest_raw))
-        except json.JSONDecodeError:
-            raise HTTPException(status_code=422, detail="manifest must be a JSON list of paths") from None
-        if not (isinstance(manifest, list) and all(isinstance(m, str) for m in manifest)) or len(manifest) != len(uploads):
-            raise HTTPException(status_code=422, detail="manifest must list one path per uploaded file")
-        names = manifest
+        names = [u.filename or f"file-{i}" for i, u in enumerate(uploads)]
+        manifest_raw = form.fields.get("manifest")
+        if manifest_raw:
+            try:
+                manifest = json.loads(manifest_raw)
+            except json.JSONDecodeError:
+                raise HTTPException(status_code=422, detail="manifest must be a JSON list of paths") from None
+            if not (isinstance(manifest, list) and all(isinstance(m, str) for m in manifest)) or len(manifest) != len(uploads):
+                raise HTTPException(status_code=422, detail="manifest must list one path per uploaded file")
+            names = manifest
 
-    return await run_in_threadpool(_ingest_uploads, db, project, uploads, names, config_version_id)
+        return await run_in_threadpool(_ingest_uploads, db, project, uploads, names, config_version_id, staging)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
 
 
 def _import_images_from_path(db: Session, project: Project, src: Path) -> SlideBatchImportResult:
@@ -533,14 +531,10 @@ def get_thumbnail(
         raise HTTPException(status_code=422, detail=slide.error_message or "Slide failed to import")
     try:
         reader = reader_cache.get_reader_for_slide(slide)
-        thumb = reader.get_thumbnail(max_size)
+        data = render_thumbnail_bytes(reader, slide.id, max_size)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    import io
-
-    buf = io.BytesIO()
-    thumb.save(buf, format="JPEG", quality=88)
-    return Response(content=buf.getvalue(), media_type="image/jpeg")
+    return Response(content=data, media_type="image/jpeg")
 
 
 @router.get("/slides/{slide_id}/patch")

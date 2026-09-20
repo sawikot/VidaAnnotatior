@@ -9,7 +9,14 @@ import pytest
 from PIL import Image
 
 from app.services import deepzoom_service
-from app.services.deepzoom_service import TILE_OVERLAP, TILE_SIZE, DeepZoomAdapter, purge_slide_tiles, render_tile_bytes
+from app.services.deepzoom_service import (
+    TILE_OVERLAP,
+    TILE_SIZE,
+    DeepZoomAdapter,
+    purge_slide_tiles,
+    render_thumbnail_bytes,
+    render_tile_bytes,
+)
 from app.services.wsi_reader import WSIMetadata, WSIReader
 
 
@@ -76,6 +83,21 @@ def test_tiles_show_the_correct_part_of_the_slide_at_every_zoom(width, height, d
         assert abs(int(tile[0, -1, 0]) - min(255, last_x / width * 255)) <= tol, f"level {level}: right edge misplaced (wrong scale)"
 
 
+def test_a_level_a_hair_over_the_requested_scale_is_still_the_one_read():
+    # Real slides report "16x" as 16.002 (a ratio of pixel counts). Skipping such a level
+    # reads the next finer one instead -- ~16x more data to decode per tile, which made
+    # mid-zoom tiles several times slower than any other zoom.
+    adapter = DeepZoomAdapter(GradientReader(76160, 56510, (1.0, 4.000070786437318, 16.00198244123478, 32.008498583569406)))
+
+    assert adapter._best_native_level(1)[0] == 0
+    assert adapter._best_native_level(4)[0] == 1
+    assert adapter._best_native_level(16)[0] == 2
+    assert adapter._best_native_level(32)[0] == 3
+    assert adapter._best_native_level(8)[0] == 1  # between levels: the finer one, never upsampled
+    assert adapter._best_native_level(2)[0] == 0
+    assert adapter._best_native_level(1024)[0] == 3
+
+
 def test_full_resolution_tiles_are_true_size_and_edge_tiles_are_clipped():
     adapter = DeepZoomAdapter(GradientReader(1536, 1024))
     top = adapter.max_dzi_level
@@ -101,3 +123,23 @@ def test_tile_cache_is_purged_per_slide():
     keys = list(deepzoom_service._tile_cache._data)
     assert not any(k[0] == 901 for k in keys) and any(k[0] == 902 for k in keys)
     purge_slide_tiles(902)
+
+
+def test_thumbnails_are_cut_once_and_forgotten_with_their_slide():
+    class Counting(GradientReader):
+        cuts = 0
+
+        def get_thumbnail(self, max_size: int = 1024) -> Image.Image:
+            Counting.cuts += 1
+            return Image.new("RGB", (max_size, max_size // 2), (10, 20, 30))
+
+    reader = Counting(1536, 1024)
+    first = render_thumbnail_bytes(reader, 901, 256)
+    assert render_thumbnail_bytes(reader, 901, 256) == first and Counting.cuts == 1
+    render_thumbnail_bytes(reader, 901, 512)  # another size is another picture
+    assert Counting.cuts == 2
+
+    purge_slide_tiles(901)  # e.g. the slide was deleted and its id will be reused
+    render_thumbnail_bytes(reader, 901, 256)
+    assert Counting.cuts == 3
+    purge_slide_tiles(901)
