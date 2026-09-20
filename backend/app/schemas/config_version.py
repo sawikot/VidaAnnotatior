@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AnnotationClassIn(BaseModel):
@@ -17,21 +17,35 @@ class AnnotationClassOut(AnnotationClassIn):
     id: int
 
 
+class AnnotationClassSync(BaseModel):
+    """One row of the full class list sent when editing a config version.
+
+    `id` present -> update that existing class in place (renames/recolors keep
+    every annotation that points at it). `id` absent -> create. Any existing
+    class missing from the list is deleted, which is refused if annotations
+    still use it."""
+
+    id: int | None = None
+    name: str = Field(min_length=1, max_length=100)
+    color_hex: str = Field(default="#2563eb", pattern=r"^#[0-9a-fA-F]{6}$")
+    hotkey: str | None = Field(default=None, max_length=2)
+
+
 class ConfigVersionCreate(BaseModel):
     version_label: str = "v1.0"
     title: str | None = None
     created_by: str | None = None
 
     coordinate_system: str = "level0"
-    target_magnification: float = 20.0
+    target_magnification: float = Field(default=20.0, gt=0, le=200)
     target_level: int | None = None
     mpp_handling: str = "auto"
 
-    patch_width: int = 512
-    patch_height: int = 512
-    stride_x: int = 512
-    stride_y: int = 512
-    min_tissue_fraction: float = 0.6
+    patch_width: int = Field(default=512, ge=16, le=8192)
+    patch_height: int = Field(default=512, ge=16, le=8192)
+    stride_x: int = Field(default=512, ge=1, le=8192)
+    stride_y: int = Field(default=512, ge=1, le=8192)
+    min_tissue_fraction: float = Field(default=0.6, ge=0, le=1)
     allow_partial_patches: bool = False
     include_edge_patches: bool = True
 
@@ -53,14 +67,14 @@ class ConfigVersionUpdate(BaseModel):
 
     title: str | None = None
     status: str | None = None
-    target_magnification: float | None = None
+    target_magnification: float | None = Field(default=None, gt=0, le=200)
     target_level: int | None = None
     mpp_handling: str | None = None
-    patch_width: int | None = None
-    patch_height: int | None = None
-    stride_x: int | None = None
-    stride_y: int | None = None
-    min_tissue_fraction: float | None = None
+    patch_width: int | None = Field(default=None, ge=16, le=8192)
+    patch_height: int | None = Field(default=None, ge=16, le=8192)
+    stride_x: int | None = Field(default=None, ge=1, le=8192)
+    stride_y: int | None = Field(default=None, ge=1, le=8192)
+    min_tissue_fraction: float | None = Field(default=None, ge=0, le=1)
     allow_partial_patches: bool | None = None
     include_edge_patches: bool | None = None
     tissue_method: str | None = None
@@ -70,12 +84,23 @@ class ConfigVersionUpdate(BaseModel):
     allow_unsure: bool | None = None
     require_annotation: bool | None = None
     reviewer_mode: bool | None = None
+    # Full replacement list (see AnnotationClassSync). Applied in the same
+    # transaction as the field changes, so a rejected class edit never leaves
+    # the geometry fields half-updated.
+    annotation_classes: list[AnnotationClassSync] | None = None
 
 
 class ConfigVersionForkRequest(BaseModel):
-    new_version_label: str
+    new_version_label: str = Field(min_length=1, max_length=20)
     overrides: dict = {}
     created_by: str | None = None
+    annotation_classes: list[AnnotationClassSync] | None = None
+
+
+class ConfigUsageOut(BaseModel):
+    patch_count: int
+    annotation_count: int
+    slide_count: int
 
 
 class ConfigVersionOut(BaseModel):

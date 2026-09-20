@@ -1,3 +1,5 @@
+import shutil
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -21,6 +23,9 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
+    # Half-finished uploads (e.g. the server was stopped mid-upload) leave their
+    # temporary files here; nothing can be using them at startup.
+    shutil.rmtree(settings.wsi_storage_dir / "_staging", ignore_errors=True)
 
 
 @app.get(f"{settings.api_prefix}/health")

@@ -13,6 +13,15 @@ from app.schemas.patch import PatchListResponse, PatchOut, PatchUpdate
 router = APIRouter(tags=["patches"])
 
 
+def _slide_patches(db: Session, slide: Slide):
+    """A slide's patches for its *active* config version only -- older
+    versions' patches stay in the DB (with their annotations) but are not shown."""
+    q = db.query(Patch).filter(Patch.slide_id == slide.id)
+    if slide.active_config_version_id is not None:
+        q = q.filter(Patch.config_version_id == slide.active_config_version_id)
+    return q
+
+
 @router.get("/slides/{slide_id}/patches", response_model=PatchListResponse)
 def list_patches(
     slide: Slide = Depends(get_slide_or_404),
@@ -23,7 +32,7 @@ def list_patches(
     limit: int = Query(500, ge=1, le=5000),
     offset: int = Query(0, ge=0),
 ):
-    q = db.query(Patch).filter(Patch.slide_id == slide.id)
+    q = _slide_patches(db, slide)
 
     if bbox:
         try:
@@ -60,7 +69,7 @@ def next_patch(
     direction: str = Query("next", pattern="^(next|prev)$"),
     filter: str = Query("any", pattern="^(any|unannotated|flagged|skipped)$"),
 ):
-    q = db.query(Patch).filter(Patch.slide_id == slide.id)
+    q = _slide_patches(db, slide)
     if filter == "unannotated":
         q = q.filter(Patch.status == "unannotated")
     elif filter == "flagged":

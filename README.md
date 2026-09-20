@@ -32,7 +32,8 @@ Backend service modules (`backend/app/services/`):
 | `patch_generator.py` | Walks the Level-0 grid at the configured patch/stride size, keeps patches meeting the tissue threshold |
 | `coordinate_transform.py` | The **single** source of truth for Level-0 ⇄ patch-local math (mirrored in `frontend/src/utils/coordinates.ts`) |
 | `config_versioning.py` | Locks a config version's critical fields once patches exist; forks a new version instead of mutating |
-| `exporter.py` | Export format registry. `WSIJSONExporter` is fully implemented; others are stubs (see Scope below) |
+| `exporter/` | Export format registry (`get_exporter`). One small class per format — `wsi_json`, `geojson`, `coco`, `patch_csv`, `stats_csv` — all reading the same `ExportData` snapshot (see *Export formats* below) |
+| `geometry.py` | Shapely-backed polygon area/validity helpers shared by the exporters |
 
 ## Coordinate model (read this before touching geometry code)
 
@@ -102,8 +103,22 @@ Open `http://localhost:5173`.
    real WSI file). The wizard sets patch size, stride, target magnification, minimum tissue fraction,
    tissue-detection parameters, diagnostic classes (name/color/hotkey), and QC settings — all versioned
    as a `ProjectConfigVersion`.
-2. **Add a WSI**: on the project dashboard, *Add WSI Slides* → upload a `.svs/.tif/.tiff/.ndpi` file, or
-   register a path already under the server's `WSI_WATCH_DIR`, or add a synthetic demo slide.
+2. **Add WSIs**: on the project dashboard, *Add WSI Slides*.
+   - **Upload** any mix of slide files, a whole folder (*Choose folder*), and `.zip` archives, in one go.
+     A zip may hold many slides; every slide found is imported. Each slide is stored in its own directory.
+   - **Server path** imports without uploading: a slide file, a folder of slides, or a `.zip` inside
+     `WSI_WATCH_DIR`. Files are copied, the originals are never touched. Best for very large slides.
+   - **Demo** adds a synthetic slide with no real file.
+   - Supported: `.svs .tif .tiff .ndpi .scn .bif .svslide .vms .vmu .mrxs` (whatever OpenSlide reads; the
+     list is served by `GET /api/wsi-formats`). **Multi-file formats need their companions**: a `.mrxs` comes
+     with a same-named folder (`Slide.mrxs` + `Slide/`), and `.vms`/`.vmu` with their tile files. Choose the
+     folder that contains them or zip them together; a lone `.mrxs` is refused with that advice.
+   - Every candidate is checked by OpenSlide itself, so plain TIFFs, masks or corrupt files are *reported
+     with a reason*, not imported as broken slides. The import report lists what was imported, skipped and ignored.
+   - Uploads are unpacked defensively (zip-slip, symlinks, encrypted zips and decompression bombs are
+     refused). Limits: 20 GB and 20,000 files per request/zip (`max_upload_bytes`, `max_upload_files`).
+   - Not supported: DICOM WSI, and archive formats other than `.zip` (`.7z`, `.tar.gz`); nested zips are
+     reported, not unpacked.
 3. **Process**: open *Slide Processing* → *Re-run Detection* (HSV+Otsu tissue mask, tunable via sliders)
    → *Generate Coords* (walks the grid, keeps patches meeting the tissue threshold — coordinates only).
 4. **Annotate**: open the *Workspace* → draw Polygon/Rectangle/Point/Freehand shapes, assign a class,
@@ -113,8 +128,9 @@ Open `http://localhost:5173`.
 5. **Review**: *Patch Gallery* (filterable, viewport/pagination-driven — patches are always fetched
    on-demand, never pre-rendered in bulk) and *Full WSI Overview* (all annotations stitched onto the
    whole slide in Level-0 space).
-6. **Export**: *Export* screen → *Full WSI JSON* is fully implemented and downloadable; the schema
-   matches the spec exactly, including `source_patch` provenance and Level-0 `coordinates`.
+6. **Export**: *Export* screen → pick one of five formats, preview it, download it (details in
+   *Export formats* below). *Full WSI JSON* matches the spec schema exactly, including `source_patch`
+   provenance and Level-0 `coordinates`.
 7. **Import annotations** (the inverse of export): on *Slide Processing*, *Import Annotations* accepts a
    previously exported `wsi_json` file (or a bare `annotations` array) and re-creates those annotations
    against this slide. Requires tissue detection + *Generate Coords* to have already been run with a
@@ -125,6 +141,20 @@ Open `http://localhost:5173`.
 8. **Delete a project**: from the project card's `⋮` menu, *Delete Project* requires typing the project's
    exact slug to confirm (the same pattern GitHub uses for deleting a repo) before it becomes clickable.
    Deletion removes every DB row under the project *and* its files on disk (`data/uploads/<project_id>/`).
+
+9. **Change a project's configuration after creating it**: *Config Versions* → **Edit** on any version
+   (patch grid, tissue-detection defaults, diagnostic classes, tools, QC settings), or **Edit Details** on
+   the dashboard for the project's name/organ/team/description (the project ID is fixed).
+   - Classes, tools, QC settings and tissue defaults are always editable in place. Renaming or recoloring a
+     class keeps every annotation attached to it; removing a class that annotations still use is refused.
+   - Patch size, stride, magnification and minimum tissue define where every patch and annotation sits, so
+     they are editable in place **only** while a version has no generated patches and isn't locked. Otherwise
+     the editor tells you which fields you changed and saves everything as a **new version** instead; the
+     original version and its annotations are left exactly as they were.
+   - To run an existing slide on another version, choose it in **Config version** on *Slide Processing* and
+     press *Generate Coords*. Each slide shows only the patches/annotations of its active version, exports
+     contain only that version, and switching back restores the earlier set untouched. *Use for new slides*
+     sets which version newly added slides start on.
 
 ## Database
 
@@ -143,11 +173,32 @@ Backend tests cover coordinate transforms (including a downsampled-level case), 
 sampling, patch-grid generation/bounds, config-version lock/fork behavior, and JSON export shape —
 all against synthetic fixtures, no OpenSlide/file dependency, so they run anywhere.
 
+## Export formats
+
+`GET /api/slides/{id}/export/{format}` — every format covers the slide's **active config version** only
+and leaves out annotations on patches flagged *Exclude from training* (the patch CSV still lists those
+patches, marked `excluded = true`, so it stays a complete registry).
+
+| Format | File | Coordinate space | Notes |
+|---|---|---|---|
+| `wsi_json` | `.json` | Level-0 | The native schema; also what *Import Annotations* reads back. |
+| `geojson` | `.geojson` | Level-0 | RFC 7946 FeatureCollection in **image pixels** (y down), not lon/lat. Polygons and points; QuPath-style `objectType` / `classification` properties, so it opens in QuPath directly. Self-crossing polygons are exported as drawn and flagged `valid_geometry: false`; polygons with no area are skipped and counted in `virtualpatch.skipped_degenerate_geometry`. |
+| `coco` | `.json` | **Patch pixels** (+ Level-0) | Each annotated patch is a COCO `image` (`width`/`height` = the patch at its read level); `segmentation`, `bbox` and `area` are in that image's own pixels, which is what Detectron2/MMDetection-style code expects. `coco_url` is the API path that renders that exact patch from the original slide (patches are never stored). Each annotation also carries `vp_level0_segmentation`, and each image its `vp_origin_level0` / `vp_downsample`, so nothing about position on the slide is lost. COCO has no point type and requires a category, so points and unclassified shapes are omitted and counted in `info.vp_skipped`. |
+| `patch_csv` | `.csv` | Level-0 | One row per patch: `level0_x/y`, `width_level0/height_level0`, `read_level`, `width_px/height_px`, `tissue_fraction`, `status`, review flags, `n_annotations`, `dominant_class` (largest summed area on that patch). |
+| `stats_csv` | `.csv` | px² / mm² | Long ("tidy") layout, one row per class — including classes with zero annotations and an `(unclassified)` row — with counts, summed/mean area in px² and mm², share of annotated and of tissue area, plus slide-level patch counts. mm² columns are blank when the slide has no resolution (mpp) metadata. Areas are summed **per annotation**, so overlapping shapes count twice. |
+
+**All slides at once:** `GET /api/projects/{id}/export/{format}` returns one ZIP with a file per processed
+slide (same content as the single-slide download) plus a `manifest.json`. Slides with no patch grid yet, or
+whose export fails, don't block the download; they're listed under `skipped` with the reason. On the Export
+screen use the *Scope* switch (*This slide* / *All slides*).
+
+CSV cells that begin with `=`, `+`, `-`, `@` are prefixed with `'` so a note like `=HYPERLINK(...)`
+can't execute when the file is opened in Excel; numbers are never altered. Download names are reduced
+to `[A-Za-z0-9._-]`. Adding a format means one `Exporter` subclass registered in
+`backend/app/services/exporter/__init__.py`.
+
 ## Scope of this MVP (intentional, not accidental)
 
-- **Export formats**: only `wsi_json` is implemented. `geojson`, `coco`, `patch_csv`, `stats_csv` are
-  registered in the exporter registry (so the API/UI surface is stable) but return `501 Not Implemented`
-  — the Export screen shows this honestly rather than faking output.
 - **Annotation tools**: Select/Move, Polygon, Rectangle, Point, Freehand are fully functional. Brush
   mask, SAM-assisted, and Ruler/Caliper are visible in the toolbar per the design but disabled with a
   "planned" tooltip — the spec explicitly defers these past the core MVP phases.
@@ -159,6 +210,10 @@ all against synthetic fixtures, no OpenSlide/file dependency, so they run anywhe
 
 ## Troubleshooting
 
+- **Large uploads** pass through the web server's temporary folder (your system temp directory) before being
+  stored, so it needs free space of about the upload size. For multi-gigabyte slides prefer *Server path*.
+- **A `.mrxs` was skipped as "data folder not found"**: MIRAX keeps its pixels in a folder next to the
+  `.mrxs` file. Upload with *Choose folder*, or zip the `.mrxs` and its folder together.
 - **"Failed to read WSI metadata"** on import: confirm the file is a real OpenSlide-supported format;
   check the backend log for the underlying OpenSlide error.
 - **Tissue detection finds ~0% coverage**: lower the Otsu sensitivity slider, or check the slide isn't

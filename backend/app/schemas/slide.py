@@ -12,6 +12,10 @@ class SlideImportPathRequest(BaseModel):
     config_version_id: int | None = None
 
 
+class SlideActiveConfigRequest(BaseModel):
+    config_version_id: int
+
+
 class SlideCreateDemo(BaseModel):
     filename: str = "demo_slide.svs"
     config_version_id: int | None = None
@@ -44,6 +48,35 @@ class SlideOut(BaseModel):
 
     created_at: datetime
     updated_at: datetime
+
+
+class SkippedItemOut(BaseModel):
+    name: str
+    reason: str
+
+
+class SlideBatchImportResult(BaseModel):
+    """Outcome of importing one or more slides from uploads, zips or a folder.
+
+    Partial success is normal (e.g. a zip holding two slides and a mask), so
+    every file that wasn't imported is listed with the reason."""
+
+    slides: list[SlideOut]
+    skipped: list[SkippedItemOut]
+    ignored_file_count: int = 0  # companion/other files that aren't slides themselves
+    warnings: list[str] = []
+
+
+class WsiFormatOut(BaseModel):
+    extension: str
+    description: str
+
+
+class WsiFormatsOut(BaseModel):
+    formats: list[WsiFormatOut]
+    archives: list[str]
+    max_upload_bytes: int
+    max_upload_files: int
 
 
 class SlideStatsOut(BaseModel):

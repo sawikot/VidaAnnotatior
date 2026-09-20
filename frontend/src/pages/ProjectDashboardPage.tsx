@@ -1,14 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { MaterialIcon } from "../components/MaterialIcon";
-import { Button, Card, IconButton, Modal, StatusPill } from "../components/primitives";
-import {
-  createDemoSlide,
-  getProject,
-  importSlideByPath,
-  listSlides,
-  uploadSlide,
-} from "../services/api";
+import { Button, Card, IconButton, StatusPill } from "../components/primitives";
+import { ExportAllMenu } from "../features/export/ExportAllMenu";
+import { EditProjectModal } from "../features/projects/EditProjectModal";
+import { AddSlideModal } from "../features/slides/AddSlideModal";
+import { getProject, listSlides } from "../services/api";
 import type { ProjectDetail, Slide } from "../types/api";
 import { useContextStore } from "../stores/contextStore";
 import { useUiStore } from "../stores/uiStore";
@@ -22,25 +18,26 @@ export function ProjectDashboardPage() {
 
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [slides, setSlides] = useState<Slide[]>([]);
-  const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [filterTab, setFilterTab] = useState<"all" | "needs_annotation" | "needs_review" | "completed">("all");
 
   useEffect(() => {
+    setProject(null); // show "Loading..." only when opening a project, never on later refreshes
     refresh();
     return () => setActiveProject(null);
   }, [pid]);
 
+  // Updates in place. It must not swap the page for a loading state, or the
+  // add-slides dialog (and its import report) would be unmounted mid-use.
   function refresh() {
-    setLoading(true);
     Promise.all([getProject(pid), listSlides(pid)])
       .then(([p, s]) => {
         setProject(p);
         setSlides(s);
         setActiveProject(p);
       })
-      .catch(() => pushToast("Failed to load project", "error"))
-      .finally(() => setLoading(false));
+      .catch(() => pushToast("Failed to load project", "error"));
   }
 
   const filteredSlides = slides.filter((s) => {
@@ -51,7 +48,7 @@ export function ProjectDashboardPage() {
     return true;
   });
 
-  if (loading || !project) {
+  if (!project) {
     return <div className="p-space-xl text-center text-on-surface-variant">Loading...</div>;
   }
 
@@ -79,6 +76,18 @@ export function ProjectDashboardPage() {
           <div className="flex items-center gap-space-sm">
             <Button icon="add_photo_alternate" onClick={() => setAddOpen(true)}>
               Add WSI Slides
+            </Button>
+            <ExportAllMenu
+              projectId={pid}
+              slideCount={slides.length}
+              disabledReason={
+                slides.some((s) => ["patches_generated", "annotating", "reviewed"].includes(s.status))
+                  ? undefined
+                  : "Process at least one slide (generate patches) before exporting"
+              }
+            />
+            <Button icon="edit" onClick={() => setEditOpen(true)}>
+              Edit Details
             </Button>
             <Button icon="account_tree" onClick={() => navigate(`/projects/${pid}/versions`)}>
               Config
@@ -166,15 +175,23 @@ export function ProjectDashboardPage() {
         )}
       </Card>
 
+      <EditProjectModal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        project={project}
+        onSaved={(p) => {
+          setEditOpen(false);
+          setProject(p);
+          setActiveProject(p);
+        }}
+      />
+
       <AddSlideModal
         open={addOpen}
         onClose={() => setAddOpen(false)}
         projectId={pid}
         configVersionId={project.active_config_version_id}
-        onImported={() => {
-          setAddOpen(false);
-          refresh();
-        }}
+        onImported={refresh}
       />
     </div>
   );
@@ -243,131 +260,5 @@ function SlideRow({ slide, projectId }: { slide: Slide; projectId: number }) {
         </div>
       </td>
     </tr>
-  );
-}
-
-function AddSlideModal({
-  open,
-  onClose,
-  projectId,
-  configVersionId,
-  onImported,
-}: {
-  open: boolean;
-  onClose: () => void;
-  projectId: number;
-  configVersionId: number | null;
-  onImported: () => void;
-}) {
-  const pushToast = useUiStore((s) => s.pushToast);
-  const [mode, setMode] = useState<"upload" | "path" | "demo">("upload");
-  const [path, setPath] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function handleUpload(file: File) {
-    setBusy(true);
-    try {
-      await uploadSlide(projectId, file, configVersionId ?? undefined);
-      pushToast(`${file.name} imported`, "success");
-      onImported();
-    } catch (e) {
-      pushToast(e instanceof Error ? e.message : "Upload failed", "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handlePathImport() {
-    setBusy(true);
-    try {
-      await importSlideByPath(projectId, path, configVersionId ?? undefined);
-      pushToast("Slide registered", "success");
-      onImported();
-    } catch (e) {
-      pushToast(e instanceof Error ? e.message : "Import failed", "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleDemo() {
-    setBusy(true);
-    try {
-      await createDemoSlide(projectId, undefined, configVersionId ?? undefined);
-      pushToast("Demo slide added", "success");
-      onImported();
-    } catch (e) {
-      pushToast(e instanceof Error ? e.message : "Failed to add demo slide", "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Modal open={open} onClose={onClose}>
-      <div className="p-space-lg flex flex-col gap-space-md">
-        <div className="flex items-center justify-between">
-          <h2 className="font-headline-md text-headline-md">Add WSI Slide</h2>
-          <button onClick={onClose}>
-            <MaterialIcon name="close" />
-          </button>
-        </div>
-        <div className="flex bg-surface-container-low rounded p-0.5">
-          {(["upload", "path", "demo"] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={`flex-1 py-1.5 rounded text-label-md capitalize ${mode === m ? "bg-surface-container-lowest shadow-sm" : ""}`}
-            >
-              {m === "path" ? "Server Path" : m}
-            </button>
-          ))}
-        </div>
-
-        {mode === "upload" && (
-          <div>
-            <p className="text-body-md text-on-surface-variant mb-space-sm">
-              Upload a .svs, .tif, .tiff, or .ndpi file. Larger files may take a moment.
-            </p>
-            <input
-              type="file"
-              accept=".svs,.tif,.tiff,.ndpi"
-              disabled={busy}
-              onChange={(e) => e.target.files?.[0] && handleUpload(e.target.files[0])}
-              className="text-body-md"
-            />
-          </div>
-        )}
-
-        {mode === "path" && (
-          <div className="flex flex-col gap-space-sm">
-            <p className="text-body-md text-on-surface-variant">
-              Register a file already under the server's configured WSI watch directory (WSI_WATCH_DIR).
-            </p>
-            <input
-              className="input"
-              placeholder="C:/path/to/watch-dir/slide.svs"
-              value={path}
-              onChange={(e) => setPath(e.target.value)}
-            />
-            <Button variant="primary" disabled={busy || !path} onClick={handlePathImport}>
-              {busy ? "Importing..." : "Register Slide"}
-            </Button>
-          </div>
-        )}
-
-        {mode === "demo" && (
-          <div className="flex flex-col gap-space-sm">
-            <p className="text-body-md text-on-surface-variant">
-              Add a synthetic, procedurally generated slide -- no real WSI file needed. Useful for exercising the
-              full pipeline (tissue detection, patch generation, annotation, export) without patient data.
-            </p>
-            <Button variant="primary" disabled={busy} onClick={handleDemo}>
-              {busy ? "Generating..." : "Add Demo Slide"}
-            </Button>
-          </div>
-        )}
-      </div>
-    </Modal>
   );
 }

@@ -5,7 +5,8 @@ import { Button, Card } from "../components/primitives";
 import { WsiViewer, type ViewportBbox } from "../features/viewer/WsiViewer";
 import { PatchGridOverlay } from "../features/viewer/PatchGridOverlay";
 import { ImportAnnotationsModal } from "../features/annotations/ImportAnnotationsModal";
-import { detectTissue, generatePatches, getConfig, getSlide, tissueMaskUrl } from "../services/api";
+import { detectTissue, generatePatches, getConfig, getSlide, listConfigs, setSlideActiveConfig, tissueMaskUrl } from "../services/api";
+import { tissueParamsOf } from "../features/projects/configDraft";
 import type { ConfigVersion, Slide } from "../types/api";
 import { useContextStore } from "../stores/contextStore";
 import { useUiStore } from "../stores/uiStore";
@@ -22,6 +23,7 @@ export function SlideProcessingPage() {
 
   const [slide, setSlide] = useState<Slide | null>(null);
   const [config, setConfig] = useState<ConfigVersion | null>(null);
+  const [configs, setConfigs] = useState<ConfigVersion[]>([]);
   const [mode, setMode] = useState<ViewMode>("wsi");
   const [bbox, setBbox] = useState<ViewportBbox | null>(null);
   const [busy, setBusy] = useState(false);
@@ -29,7 +31,6 @@ export function SlideProcessingPage() {
   const [importOpen, setImportOpen] = useState(false);
 
   const [otsuSensitivity, setOtsuSensitivity] = useState(0.65);
-  const [tissueFracPct, setTissueFracPct] = useState(60);
   const [morphOpen, setMorphOpen] = useState(3);
   const [morphClose, setMorphClose] = useState(5);
   const [maskCacheBust, setMaskCacheBust] = useState(0);
@@ -39,18 +40,50 @@ export function SlideProcessingPage() {
     return () => setActiveSlide(null);
   }, [sid]);
 
+  // Start the detection sliders from the active version's saved tissue
+  // defaults whenever the version changes (not on every refresh, which would
+  // discard adjustments made since the last detection run).
+  useEffect(() => {
+    if (!config) return;
+    const t = tissueParamsOf(config);
+    setOtsuSensitivity(t.otsu_sensitivity);
+    setMorphOpen(t.morph_open_px);
+    setMorphClose(t.morph_close_px);
+  }, [config?.id]);
+
   function refresh() {
     getSlide(sid)
       .then(async (s) => {
         setSlide(s);
         setActiveSlide(s);
-        if (s.active_config_version_id) {
-          const c = await getConfig(s.active_config_version_id);
-          setConfig(c);
-          setTissueFracPct(Math.round(c.min_tissue_fraction * 100));
-        }
+        const [all, active] = await Promise.all([
+          listConfigs(s.project_id),
+          s.active_config_version_id ? getConfig(s.active_config_version_id) : Promise.resolve(null),
+        ]);
+        setConfigs(all);
+        setConfig(active);
       })
       .catch(() => pushToast("Failed to load slide", "error"));
+  }
+
+  async function handleSwitchConfig(configId: number) {
+    setBusy(true);
+    try {
+      const updated = await setSlideActiveConfig(sid, configId);
+      const chosen = configs.find((c) => c.id === configId);
+      pushToast(
+        updated.status === "patches_generated"
+          ? `Now using ${chosen?.version_label}`
+          : `Now using ${chosen?.version_label} -- run Generate Coords to create its patches`,
+        "success",
+      );
+      setGridRefresh((n) => n + 1);
+      refresh();
+    } catch (e) {
+      pushToast(e instanceof Error ? e.message : "Failed to switch config version", "error");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleDetectTissue() {
@@ -108,6 +141,23 @@ export function SlideProcessingPage() {
               Tissue Segmented
             </span>
           )}
+          <label className="ml-space-md flex items-center gap-1.5">
+            <span className="text-label-sm">Config version</span>
+            <select
+              value={slide.active_config_version_id ?? ""}
+              onChange={(e) => handleSwitchConfig(Number(e.target.value))}
+              disabled={busy || configs.length < 2}
+              className="bg-[#1e293b] border border-slate-700 rounded px-space-sm py-1 text-label-md text-white font-mono disabled:opacity-60"
+              title={configs.length < 2 ? "Create another version on the Config Versions page to switch" : "Which configuration this slide's patches and annotations use"}
+            >
+              {configs.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.version_label}
+                  {c.title ? ` - ${c.title}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         <div className="flex bg-[#070d1e] rounded-lg p-0.5">
@@ -222,32 +272,29 @@ export function SlideProcessingPage() {
             onChange={setOtsuSensitivity}
             display={otsuSensitivity.toFixed(2)}
           />
-          <SliderField
-            label="Min. Patch Tissue Fraction"
-            value={tissueFracPct}
-            min={10}
-            max={90}
-            step={5}
-            onChange={setTissueFracPct}
-            display={`${tissueFracPct}%`}
-          />
           <SliderField label="Morph Open (px)" value={morphOpen} min={0} max={15} step={1} onChange={setMorphOpen} display={String(morphOpen)} />
           <SliderField label="Morph Close (px)" value={morphClose} min={0} max={15} step={1} onChange={setMorphClose} display={String(morphClose)} />
 
           {config && (
-            <div className="grid grid-cols-3 gap-space-sm bg-[#0b1329] rounded p-space-sm text-center">
-              <div>
-                <div className="font-mono text-label-lg">{config.patch_width}</div>
-                <div className="text-label-sm text-slate-500">Width</div>
+            <div className="bg-[#0b1329] rounded p-space-sm flex flex-col gap-space-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-label-md text-slate-300">
+                  Patch grid <span className="font-mono text-slate-500">({config.version_label})</span>
+                </span>
+                <Link to={`/projects/${pid}/versions`} className="text-label-sm text-sky-400 hover:underline flex items-center gap-1">
+                  <MaterialIcon name="edit" className="!text-[14px]" />
+                  Edit configuration
+                </Link>
               </div>
-              <div>
-                <div className="font-mono text-label-lg">{config.patch_height}</div>
-                <div className="text-label-sm text-slate-500">Height</div>
+              <div className="grid grid-cols-4 gap-space-sm text-center">
+                <GridStat label="Width" value={config.patch_width} />
+                <GridStat label="Height" value={config.patch_height} />
+                <GridStat label="Stride" value={config.stride_x} />
+                <GridStat label="Min tissue" value={`${Math.round(config.min_tissue_fraction * 100)}%`} />
               </div>
-              <div>
-                <div className="font-mono text-label-lg">{config.stride_x}</div>
-                <div className="text-label-sm text-slate-500">Stride</div>
-              </div>
+              <span className="text-label-sm text-slate-500">
+                Set per configuration version; used by Generate Coords.
+              </span>
             </div>
           )}
 
@@ -270,6 +317,15 @@ export function SlideProcessingPage() {
           refresh();
         }}
       />
+    </div>
+  );
+}
+
+function GridStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div>
+      <div className="font-mono text-label-lg">{value}</div>
+      <div className="text-label-sm text-slate-500">{label}</div>
     </div>
   );
 }

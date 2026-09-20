@@ -157,3 +157,23 @@ export interface GeometryAnnotation {
   created_at: string;
   updated_at: string;
 }
+
+export interface ConfigUsage {
+  patch_count: number;
+  annotation_count: number;
+  slide_count: number;
+}
+
+export interface SlideBatchImportResult {
+  slides: Slide[];
+  skipped: { name: string; reason: string }[];
+  ignored_file_count: number;
+  warnings: string[];
+}
+
+export interface WsiFormats {
+  formats: { extension: string; description: string }[];
+  archives: string[];
+  max_upload_bytes: number;
+  max_upload_files: number;
+}

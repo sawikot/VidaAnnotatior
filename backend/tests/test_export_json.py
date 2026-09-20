@@ -103,14 +103,3 @@ def test_excluded_patches_are_left_out_of_export(db):
     exporter = get_exporter("wsi_json")
     result = exporter.export(db, slide)
     assert result["annotations"] == []
-
-
-def test_unimplemented_exporters_raise_not_implemented(db):
-    slide, _, _ = _seed_project_with_annotation(db)
-    for fmt in ("geojson", "coco", "patch_csv", "stats_csv"):
-        exporter = get_exporter(fmt)
-        try:
-            exporter.export(db, slide)
-            assert False, f"{fmt} should not be implemented yet"
-        except NotImplementedError:
-            pass

@@ -16,6 +16,7 @@ from app.models.project import Project
 from app.models.slide import Slide
 from app.schemas.project import ProjectCreate, ProjectDetailOut, ProjectOut, ProjectStats, ProjectUpdate
 from app.services import reader_cache
+from app.services.deepzoom_service import purge_slide_tiles
 from app.services.config_versioning import compute_config_hash
 from app.services.slugify import slugify, unique_project_slug
 
@@ -79,7 +80,13 @@ def update_project(
     project: Project = Depends(get_project_or_404),
     db: Session = Depends(get_db),
 ) -> Project:
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    changes = payload.model_dump(exclude_unset=True)
+    new_active = changes.get("active_config_version_id")
+    if new_active is not None:
+        config = db.get(ProjectConfigVersion, new_active)
+        if config is None or config.project_id != project.id:
+            raise HTTPException(status_code=422, detail="That config version does not belong to this project")
+    for field, value in changes.items():
         setattr(project, field, value)
     db.commit()
     db.refresh(project)
@@ -93,6 +100,7 @@ def delete_project(project: Project = Depends(get_project_or_404), db: Session =
 
     for slide_id in slide_ids:
         reader_cache.invalidate(slide_id)
+        purge_slide_tiles(slide_id)
 
     # Delete in explicit dependency order. Project.config_versions and
     # Project.slides both cascade via SQLAlchemy relationships, but
@@ -138,38 +146,29 @@ def _to_detail(db: Session, project: Project) -> ProjectDetailOut:
         .scalar()
         or 0
     )
-    slide_ids = [s.id for s in db.query(Slide.id).filter(Slide.project_id == project.id).all()]
-    total_patches = 0
-    annotated = 0
-    reviewed = 0
-    flagged = 0
-    tissue_area = 0.0
-    if slide_ids:
-        total_patches = (
-            db.query(func.count(Patch.id)).filter(Patch.slide_id.in_(slide_ids)).scalar() or 0
-        )
-        annotated = (
+    # Count each slide's patches under its *active* config version only, so a
+    # forked version doesn't double-count the slide's older patches.
+    def patch_count(*criteria) -> int:
+        return (
             db.query(func.count(Patch.id))
-            .filter(Patch.slide_id.in_(slide_ids), Patch.status.in_(["annotated", "reviewed"]))
+            .join(Slide, Patch.slide_id == Slide.id)
+            .filter(
+                Slide.project_id == project.id,
+                Patch.config_version_id == Slide.active_config_version_id,
+                *criteria,
+            )
             .scalar()
             or 0
         )
-        reviewed = (
-            db.query(func.count(Patch.id))
-            .filter(Patch.slide_id.in_(slide_ids), Patch.status == "reviewed")
-            .scalar()
-            or 0
-        )
-        flagged = (
-            db.query(func.count(Patch.id)).filter(Patch.slide_id.in_(slide_ids), Patch.flagged.is_(True)).scalar()
-            or 0
-        )
-        tissue_area = (
-            db.query(func.coalesce(func.sum(Slide.tissue_area_mm2), 0.0))
-            .filter(Slide.project_id == project.id)
-            .scalar()
-            or 0.0
-        )
+
+    total_patches = patch_count()
+    annotated = patch_count(Patch.status.in_(["annotated", "reviewed"]))
+    reviewed = patch_count(Patch.status == "reviewed")
+    flagged = patch_count(Patch.flagged.is_(True))
+    tissue_area = (
+        db.query(func.coalesce(func.sum(Slide.tissue_area_mm2), 0.0)).filter(Slide.project_id == project.id).scalar()
+        or 0.0
+    )
 
     active_config = db.get(ProjectConfigVersion, project.active_config_version_id) if project.active_config_version_id else None
 

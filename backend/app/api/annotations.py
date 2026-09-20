@@ -33,13 +33,10 @@ def list_slide_annotations(
     Full WSI Annotation Overview screen. Not bbox-filtered server-side (the
     stitched overlay needs the whole slide's annotations to render correctly
     even when panned out), but capped by `limit` as a safety valve."""
-    return (
-        db.query(GeometryAnnotation)
-        .filter(GeometryAnnotation.slide_id == slide.id)
-        .order_by(GeometryAnnotation.id.asc())
-        .limit(limit)
-        .all()
-    )
+    q = db.query(GeometryAnnotation).filter(GeometryAnnotation.slide_id == slide.id)
+    if slide.active_config_version_id is not None:
+        q = q.filter(GeometryAnnotation.config_version_id == slide.active_config_version_id)
+    return q.order_by(GeometryAnnotation.id.asc()).limit(limit).all()
 
 
 def _origin_for_patch(patch: Patch) -> PatchOrigin:

@@ -31,9 +31,10 @@ class Settings(BaseSettings):
     # In-memory LRU cache size (tile count) for dynamically generated DZI tiles.
     tile_cache_size: int = 512
 
-    max_upload_bytes: int = 20 * 1024 * 1024 * 1024  # 20 GB safety ceiling
-
-    supported_wsi_extensions: tuple[str, ...] = (".svs", ".tif", ".tiff", ".ndpi")
+    # Ceilings for one upload request / one unpacked archive. Uploaded bytes and
+    # unpacked bytes are each capped by max_upload_bytes.
+    max_upload_bytes: int = 20 * 1024 * 1024 * 1024  # 20 GB
+    max_upload_files: int = 20_000  # files in one request, and entries in one zip
 
 
 @lru_cache

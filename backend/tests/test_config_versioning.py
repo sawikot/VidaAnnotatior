@@ -7,14 +7,14 @@ from app.models.slide import Slide
 from app.services.config_versioning import ConfigLockedError, assert_mutable, compute_config_hash, fork_config
 
 
-def _seed(db):
+def _seed(db, status="draft"):
     project = Project(slug="BCA_2026", name="Breast Cancer Annotation")
     db.add(project)
     db.flush()
     config = ProjectConfigVersion(
         project_id=project.id,
         version_label="v1.0",
-        status="locked",
+        status=status,
         patch_width=512,
         patch_height=512,
         stride_x=512,
@@ -31,6 +31,14 @@ def _seed(db):
 def test_mutable_when_no_patches_generated(db):
     project, config = _seed(db)
     assert_mutable(db, config, {"patch_width": 1024})  # should not raise
+
+
+def test_explicitly_locked_version_blocks_critical_edits_even_without_patches(db):
+    project, config = _seed(db, status="locked")
+    with pytest.raises(ConfigLockedError):
+        assert_mutable(db, config, {"stride_x": 256})
+    # Non-geometry settings stay editable on a locked version.
+    assert_mutable(db, config, {"allow_skip": False, "title": "Renamed"})
 
 
 def test_locked_once_patches_exist(db):

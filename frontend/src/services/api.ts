@@ -1,4 +1,5 @@
 import type {
+  ConfigUsage,
   ConfigVersion,
   GeometryAnnotation,
   GeometryType,
@@ -8,15 +9,32 @@ import type {
   Project,
   ProjectDetail,
   Slide,
+  SlideBatchImportResult,
+  WsiFormats,
 } from "../types/api";
 
 export const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8088/api";
+
+/** FastAPI returns `detail` as a string for our own errors and as a list of
+ * {loc, msg} objects for request-validation errors -- flatten both to text. */
+function describeDetail(detail: unknown): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((d: { loc?: unknown[]; msg?: string }) => {
+        const field = Array.isArray(d.loc) ? d.loc.slice(1).join(".") : "";
+        return field ? `${field}: ${d.msg}` : String(d.msg ?? JSON.stringify(d));
+      })
+      .join("; ");
+  }
+  return JSON.stringify(detail);
+}
 
 export class ApiError extends Error {
   status: number;
   detail: unknown;
   constructor(status: number, detail: unknown) {
-    super(typeof detail === "string" ? detail : JSON.stringify(detail));
+    super(describeDetail(detail));
     this.status = status;
     this.detail = detail;
   }
@@ -66,26 +84,93 @@ export const createConfig = (projectId: number, payload: unknown) =>
 export const updateConfig = (id: number, payload: unknown) =>
   request<ConfigVersion>(`/configs/${id}`, { method: "PUT", body: JSON.stringify(payload) });
 export const lockConfig = (id: number) => request<ConfigVersion>(`/configs/${id}/lock`, { method: "POST" });
+export interface ClassSyncItem {
+  id?: number;
+  name: string;
+  color_hex: string;
+  hotkey: string | null;
+}
 export const forkConfig = (
   id: number,
-  payload: { new_version_label: string; overrides?: Record<string, unknown>; created_by?: string },
+  payload: {
+    new_version_label: string;
+    overrides?: Record<string, unknown>;
+    created_by?: string;
+    annotation_classes?: ClassSyncItem[];
+  },
 ) => request<ConfigVersion>(`/configs/${id}/fork`, { method: "POST", body: JSON.stringify(payload) });
+export const getConfigUsage = (id: number) => request<ConfigUsage>(`/configs/${id}/usage`);
+export const setSlideActiveConfig = (slideId: number, configVersionId: number) =>
+  request<Slide>(`/slides/${slideId}/active-config`, {
+    method: "PUT",
+    body: JSON.stringify({ config_version_id: configVersionId }),
+  });
 
 // ---- Slides ----
 export const listSlides = (projectId: number) => request<Slide[]>(`/projects/${projectId}/slides`);
 export const getSlide = (id: number) => request<Slide>(`/slides/${id}`);
 export const deleteSlide = (id: number) => request<void>(`/slides/${id}`, { method: "DELETE" });
-export const uploadSlide = (projectId: number, file: File, configVersionId?: number) => {
-  const form = new FormData();
-  form.append("file", file);
-  const q = qs({ config_version_id: configVersionId });
-  return request<Slide>(`/projects/${projectId}/slides/upload${q}`, { method: "POST", body: form });
-};
+export const getWsiFormats = () => request<WsiFormats>("/wsi-formats");
+
 export const importSlideByPath = (projectId: number, path: string, configVersionId?: number) =>
-  request<Slide>(`/projects/${projectId}/slides/import-path`, {
+  request<SlideBatchImportResult>(`/projects/${projectId}/slides/import-path`, {
     method: "POST",
     body: JSON.stringify({ path, config_version_id: configVersionId }),
   });
+
+export interface UploadItem {
+  file: File;
+  /** Path relative to the picked folder (or just the file name). Sent in a
+   * manifest because browsers only transmit a bare name per file part -- this
+   * is what keeps a folder's structure (e.g. Slide.mrxs next to Slide/). */
+  path: string;
+}
+
+export class UploadAborted extends Error {
+  constructor() {
+    super("Upload cancelled");
+  }
+}
+
+/** Uploads any mix of slide files, folder contents and .zip archives in one
+ * request. Uses XMLHttpRequest rather than fetch because fetch can't report
+ * upload progress, which matters for multi-gigabyte slides. */
+export function uploadSlides(
+  projectId: number,
+  items: UploadItem[],
+  opts: {
+    configVersionId?: number;
+    onProgress?: (sentBytes: number, totalBytes: number) => void;
+    /** Fired when every byte has been sent; the server is then still unpacking/reading. */
+    onSent?: () => void;
+  } = {},
+): { promise: Promise<SlideBatchImportResult>; abort: () => void } {
+  const xhr = new XMLHttpRequest();
+  const promise = new Promise<SlideBatchImportResult>((resolve, reject) => {
+    const form = new FormData();
+    for (const item of items) form.append("files", item.file, item.file.name);
+    form.append("manifest", JSON.stringify(items.map((i) => i.path)));
+
+    xhr.open("POST", `${API_BASE}/projects/${projectId}/slides/upload${qs({ config_version_id: opts.configVersionId })}`);
+    xhr.upload.onprogress = (e) => e.lengthComputable && opts.onProgress?.(e.loaded, e.total);
+    xhr.upload.onload = () => opts.onSent?.();
+    xhr.onload = () => {
+      let body: unknown = null;
+      try {
+        body = JSON.parse(xhr.responseText);
+      } catch {
+        /* non-JSON error body */
+      }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(body as SlideBatchImportResult);
+      else reject(new ApiError(xhr.status, (body as { detail?: unknown } | null)?.detail ?? (xhr.responseText || xhr.statusText)));
+    };
+    xhr.onerror = () => reject(new Error("Network error -- is the backend running?"));
+    xhr.onabort = () => reject(new UploadAborted());
+    xhr.send(form);
+  });
+  return { promise, abort: () => xhr.abort() };
+}
+
 export const createDemoSlide = (projectId: number, filename?: string, configVersionId?: number) =>
   request<Slide>(`/projects/${projectId}/slides/demo`, {
     method: "POST",
@@ -190,6 +275,34 @@ export const importAnnotations = (
 
 // ---- Export ----
 export const exportSlideUrl = (slideId: number, formatId: string) => `${API_BASE}/slides/${slideId}/export/${formatId}`;
+/** ZIP with one file per processed slide of the project, plus manifest.json. */
+export const exportProjectUrl = (projectId: number, formatId: string) => `${API_BASE}/projects/${projectId}/export/${formatId}`;
+
+/**
+ * Downloads the project-wide ZIP and resolves with its file name. Fetched rather than
+ * navigated to, so a refusal (e.g. no slide processed yet) surfaces as a thrown message
+ * instead of replacing the page with a JSON error. Server-side detail is passed through.
+ */
+export async function downloadProjectExport(projectId: number, formatId: string): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch(exportProjectUrl(projectId, formatId));
+  } catch {
+    throw new Error("Export failed: could not reach the server");
+  }
+  if (!res.ok) {
+    const detail = await res.json().then((b) => b.detail).catch(() => null);
+    throw new Error(typeof detail === "string" ? detail : "Export failed");
+  }
+  const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? `project_${formatId}_all_slides.zip`;
+  const url = URL.createObjectURL(await res.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(url);
+  return name;
+}
 
 // ---- Dev ----
 export const seedDemoProject = () => request<Project>("/dev/seed-demo", { method: "POST" });

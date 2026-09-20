@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MaterialIcon } from "../components/MaterialIcon";
+import { Field, Toggle } from "../components/formControls";
 import { Button, Card } from "../components/primitives";
+import { MVP_TOOLS, ORGANS } from "../features/projects/constants";
 import { createProject } from "../services/api";
 import { useUiStore } from "../stores/uiStore";
 
@@ -28,12 +30,6 @@ const PRESETS: [number, number, number, number][] = [
   [1024, 1024, 512, 512],
 ];
 
-const MVP_TOOLS = [
-  { id: "polygon", label: "Polygon (L0)", icon: "polyline" },
-  { id: "rectangle", label: "Bounding Box", icon: "crop_square" },
-  { id: "point", label: "Point Nuclei", icon: "adjust" },
-  { id: "freehand", label: "Freehand", icon: "gesture" },
-];
 const PLANNED_TOOLS = [
   { id: "brush", label: "Brush Mask", icon: "brush" },
   { id: "sam", label: "SAM Assisted", icon: "auto_fix_high" },
@@ -180,7 +176,7 @@ export function NewProjectWizardPage() {
           </Field>
           <Field label="Primary Organ">
             <select className="input" value={organ} onChange={(e) => setOrgan(e.target.value)}>
-              {["Breast", "Prostate", "Lung", "Colon-GI", "Kidney", "Brain"].map((o) => (
+              {ORGANS.map((o) => (
                 <option key={o}>{o}</option>
               ))}
             </select>
@@ -409,24 +405,6 @@ function SectionTitle({ n, title }: { n: number; title: string }) {
       </span>
       <h2 className="font-headline-md text-headline-md text-on-surface">{title}</h2>
     </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-label-md text-on-surface-variant">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <label className="flex items-center gap-space-sm cursor-pointer">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="w-4 h-4" />
-      <span className="text-body-md text-on-surface">{label}</span>
-    </label>
   );
 }
 
