@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_config_or_404, get_project_or_404
+from app.api.deps import forbid_for_image_project, get_config_or_404, get_project_or_404
 from app.database.session import get_db
 from app.models.config_version import AnnotationClass, ProjectConfigVersion
 from app.models.project import Project
@@ -43,6 +43,7 @@ def create_config(
     project: Project = Depends(get_project_or_404),
     db: Session = Depends(get_db),
 ):
+    forbid_for_image_project(project, "Creating another configuration version")
     data = payload.model_dump(exclude={"annotation_classes"})
     config = ProjectConfigVersion(project_id=project.id, status="draft", **data)
     config.config_hash = compute_config_hash(config)
@@ -116,6 +117,7 @@ def fork_config_endpoint(
     config: ProjectConfigVersion = Depends(get_config_or_404),
     db: Session = Depends(get_db),
 ):
+    forbid_for_image_project(db.get(Project, config.project_id), "Forking a configuration version")
     label = payload.new_version_label.strip()
     taken = {
         row[0]

@@ -15,10 +15,13 @@ const DENSITY_COLS: Record<string, string> = {
 
 type FilterKey = "all" | PatchStatus | "flagged";
 
+import { useImageProjectRedirect } from "../features/images/useImageProjectRedirect";
+
 export function PatchGalleryPage() {
   const { projectId, slideId } = useParams();
   const pid = Number(projectId);
   const sid = Number(slideId);
+  useImageProjectRedirect(pid);
   const navigate = useNavigate();
 
   const [slide, setSlide] = useState<Slide | null>(null);

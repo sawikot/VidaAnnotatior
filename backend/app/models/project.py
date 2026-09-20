@@ -16,6 +16,9 @@ class Project(Base, TimestampMixin):
     description: Mapped[str | None] = mapped_column(String(2000), default=None)
     team: Mapped[str | None] = mapped_column(String(200), default=None)
     status: Mapped[str] = mapped_column(String(20), default="active")  # active|review|completed
+    # "wsi": gigapixel slides, tiled into virtual patches. "image": ordinary images (or
+    # pre-cut patches) annotated as they are -- each image is one slide with one patch.
+    project_type: Mapped[str] = mapped_column(String(20), default="wsi", server_default="wsi")
 
     active_config_version_id: Mapped[int | None] = mapped_column(
         ForeignKey("project_config_versions.id", use_alter=True, name="fk_project_active_config"),

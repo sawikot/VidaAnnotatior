@@ -12,7 +12,7 @@ from pathlib import Path
 
 from app.core.config import get_settings
 from app.models.slide import Slide
-from app.services.wsi_reader import DemoWSIReader, OpenSlideReader, WSIReader
+from app.services.wsi_reader import DemoWSIReader, ImageReader, OpenSlideReader, WSIReader
 
 _lock = threading.Lock()
 _cache: dict[int, WSIReader] = {}
@@ -36,7 +36,7 @@ def get_reader_for_slide(slide: Slide) -> WSIReader:
                 raise PermissionError("Resolved slide path escapes the managed storage directory")
             if not full_path.exists():
                 raise FileNotFoundError(f"Slide file not found: {full_path}")
-            reader = OpenSlideReader(full_path)
+            reader = ImageReader(full_path) if slide.project.project_type == "image" else OpenSlideReader(full_path)
 
         if len(_cache) >= _MAX_OPEN:
             oldest_id = next(iter(_cache))

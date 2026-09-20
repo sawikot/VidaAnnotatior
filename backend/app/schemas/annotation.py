@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
+
+from app.services.geometry import validate_shape
 
 
 class GeometryAnnotationCreate(BaseModel):
-    type: str  # polygon|rectangle|point|freehand
+    type: str  # point|line|freehand_line|rectangle|circle|polygon|freehand
     class_id: int | None = None
     coordinates_patch_local: list[list[float]]
     created_by: str | None = None
@@ -14,6 +16,11 @@ class GeometryAnnotationCreate(BaseModel):
     unsure: bool = False
     flagged: bool = False
     excluded: bool = False
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> "GeometryAnnotationCreate":
+        validate_shape(self.type, self.coordinates_patch_local)  # ValueError -> HTTP 422
+        return self
 
 
 class GeometryAnnotationUpdate(BaseModel):
@@ -52,6 +59,7 @@ class ImportAnnotationsResponse(BaseModel):
     skipped_no_matching_patch: int
     skipped_unknown_class: int
     skipped_duplicate: int
+    skipped_invalid_shape: int = 0
 
 
 class GeometryAnnotationOut(BaseModel):

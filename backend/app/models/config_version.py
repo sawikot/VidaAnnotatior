@@ -50,7 +50,7 @@ class ProjectConfigVersion(Base, TimestampMixin):
 
     # --- Annotation settings ---
     enabled_tools: Mapped[list] = mapped_column(
-        JSON, default=lambda: ["polygon", "rectangle", "point", "freehand"]
+        JSON, default=lambda: ["polygon", "rectangle", "point", "freehand", "line", "freehand_line", "circle"]
     )
 
     # --- Quality control settings ---

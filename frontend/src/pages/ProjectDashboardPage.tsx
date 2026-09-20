@@ -25,7 +25,6 @@ export function ProjectDashboardPage() {
   useEffect(() => {
     setProject(null); // show "Loading..." only when opening a project, never on later refreshes
     refresh();
-    return () => setActiveProject(null);
   }, [pid]);
 
   // Updates in place. It must not swap the page for a loading state, or the
@@ -53,6 +52,8 @@ export function ProjectDashboardPage() {
   }
 
   const config = project.active_config;
+  const isImage = project.project_type === "image";
+  const stats = project.stats;
 
   return (
     <div className="max-w-[1720px] mx-auto px-gutter sm:px-margin py-space-lg flex flex-col gap-space-lg">
@@ -74,12 +75,19 @@ export function ProjectDashboardPage() {
             <StatusPill status={project.status} />
           </div>
           <div className="flex items-center gap-space-sm">
+            {isImage && stats.total_patches > 0 && (
+              <Button variant="primary" icon="adjust" onClick={() => navigate(`/projects/${pid}/annotate`)}>
+                Annotate
+              </Button>
+            )}
             <Button icon="add_photo_alternate" onClick={() => setAddOpen(true)}>
-              Add WSI Slides
+              {isImage ? "Add Images" : "Add WSI Slides"}
             </Button>
             <ExportAllMenu
               projectId={pid}
               slideCount={slides.length}
+              projectType={project.project_type}
+              optionsPath={slides[0] ? `/projects/${pid}/slides/${slides[0].id}/export?scope=project` : undefined}
               disabledReason={
                 slides.some((s) => ["patches_generated", "annotating", "reviewed"].includes(s.status))
                   ? undefined
@@ -96,7 +104,15 @@ export function ProjectDashboardPage() {
         </div>
       </div>
 
-      {config && (
+      {config && isImage && (
+        <Card className="p-space-md bg-surface-container-low flex flex-wrap items-center gap-space-md text-label-md font-mono">
+          <ChipKv k="Project Type" v="Images / patches" />
+          <ChipKv k="Coordinates" v="image pixels (origin top-left)" />
+          <ChipKv k="Classes" v={config.annotation_classes.map((c) => c.name).join(", ") || "none"} />
+        </Card>
+      )}
+
+      {config && !isImage && (
         <Card className="p-space-md bg-surface-container-low flex flex-wrap items-center gap-space-md text-label-md font-mono">
           <ChipKv k="Tile Matrix" v={`${config.patch_width}x${config.patch_height}`} />
           <ChipKv k="Stride" v={`${config.stride_x}px`} />
@@ -108,6 +124,15 @@ export function ProjectDashboardPage() {
       )}
 
       {/* Metrics */}
+      {isImage ? (
+        <div className="grid grid-cols-2 xl:grid-cols-5 gap-space-md">
+          <Metric label="Total Images" value={stats.total_patches.toLocaleString()} sub={`${stats.slide_count.toLocaleString()} imported`} />
+          <Metric label="Annotated" value={stats.annotated_patches.toLocaleString()} sub={pct(stats.annotated_patches, stats.total_patches)} />
+          <Metric label="Remaining" value={Math.max(0, stats.total_patches - stats.annotated_patches).toLocaleString()} sub="still to annotate" />
+          <Metric label="Reviewed QA" value={stats.reviewed_patches.toLocaleString()} sub={pct(stats.reviewed_patches, stats.total_patches)} />
+          <Metric label="Flagged" value={stats.flagged_patches.toLocaleString()} sub="needs attention" />
+        </div>
+      ) : (
       <div className="grid grid-cols-2 xl:grid-cols-6 gap-space-md">
         <Metric label="Total Slides" value={String(project.stats.slide_count)} sub={`${project.stats.processed_slide_count} processed`} />
         <Metric label="Tissue Extracted" value={`${project.stats.tissue_area_mm2} mm²`} sub="across all slides" />
@@ -124,8 +149,42 @@ export function ProjectDashboardPage() {
         />
         <Metric label="Flagged" value={project.stats.flagged_patches.toLocaleString()} sub="needs attention" />
       </div>
+      )}
+
+      {isImage && (
+        <Card className="p-space-lg flex flex-col gap-space-md">
+          <div className="flex items-center justify-between flex-wrap gap-space-sm">
+            <div>
+              <div className="font-headline-md text-headline-md">Images</div>
+              <div className="text-body-sm text-on-surface-variant">
+                Each image is annotated as it is, with coordinates in its own pixels. Browse them all, or jump straight in.
+              </div>
+            </div>
+            <div className="flex items-center gap-space-sm">
+              <Button icon="grid_on" onClick={() => navigate(`/projects/${pid}/images`)} disabled={stats.total_patches === 0}>
+                Browse images
+              </Button>
+              <Button variant="primary" icon="adjust" onClick={() => navigate(`/projects/${pid}/annotate`)} disabled={stats.total_patches === 0}>
+                {stats.annotated_patches > 0 ? "Continue annotating" : "Start annotating"}
+              </Button>
+            </div>
+          </div>
+          <div className="h-2 rounded-full bg-surface-container-high overflow-hidden" aria-label="Annotation progress">
+            <div
+              className="h-full bg-primary"
+              style={{ width: `${stats.total_patches ? Math.min(100, (stats.annotated_patches / stats.total_patches) * 100) : 0}%` }}
+            />
+          </div>
+          {stats.total_patches === 0 && (
+            <div className="text-body-md text-on-surface-variant">
+              No images yet. Click "Add Images" to upload images, a folder, or a .zip of them.
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Slide table */}
+      {!isImage && (
       <Card>
         <div className="flex items-center gap-space-sm p-space-sm border-b border-outline-variant flex-wrap">
           {(
@@ -174,6 +233,7 @@ export function ProjectDashboardPage() {
           </div>
         )}
       </Card>
+      )}
 
       <EditProjectModal
         open={editOpen}
@@ -190,6 +250,7 @@ export function ProjectDashboardPage() {
         open={addOpen}
         onClose={() => setAddOpen(false)}
         projectId={pid}
+        projectType={project.project_type}
         configVersionId={project.active_config_version_id}
         onImported={refresh}
       />

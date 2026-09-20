@@ -52,7 +52,7 @@ class ConfigVersionCreate(BaseModel):
     tissue_method: str = "hsv_otsu"
     tissue_params: dict = {}
 
-    enabled_tools: list[str] = ["polygon", "rectangle", "point", "freehand"]
+    enabled_tools: list[str] = ["polygon", "rectangle", "point", "freehand", "line", "freehand_line", "circle"]
 
     allow_skip: bool = True
     allow_unsure: bool = True

@@ -1,6 +1,9 @@
 import type { UploadItem } from "../../services/api";
 
 const LOOSE_SLIDE_EXTENSIONS = new Set([".svs", ".tif", ".tiff", ".ndpi", ".scn", ".bif", ".svslide", ".vms", ".vmu", ".mrxs"]);
+/** File types an image project accepts (kept in step with the server's IMAGE_EXTENSIONS). */
+export const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp", ".gif"];
+
 const VMS_COMPANIONS = new Set([".jpg", ".jpeg", ".opt", ".ngr"]);
 
 export function extensionOf(name: string): string {

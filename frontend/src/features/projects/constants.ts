@@ -1,9 +1,12 @@
 export const ORGANS = ["Breast", "Prostate", "Lung", "Colon-GI", "Kidney", "Brain"];
 
-/** Annotation tools that are fully implemented; the rest render disabled. */
+/** Drawing tools a project can enable (Select is always available). Order is the toolbar order. */
 export const MVP_TOOLS = [
-  { id: "polygon", label: "Polygon (L0)", icon: "polyline" },
-  { id: "rectangle", label: "Bounding Box", icon: "crop_square" },
-  { id: "point", label: "Point Nuclei", icon: "adjust" },
-  { id: "freehand", label: "Freehand", icon: "gesture" },
+  { id: "point", label: "Point", icon: "control_point" },
+  { id: "line", label: "Line", icon: "horizontal_rule" },
+  { id: "freehand_line", label: "Freehand Line", icon: "gesture" },
+  { id: "rectangle", label: "Rectangle", icon: "crop_square" },
+  { id: "circle", label: "Circle", icon: "radio_button_unchecked" },
+  { id: "polygon", label: "Polygon", icon: "pentagon" },
+  { id: "freehand", label: "Freehand Polygon", icon: "draw" },
 ];

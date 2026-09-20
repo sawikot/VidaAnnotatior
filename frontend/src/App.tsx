@@ -9,6 +9,8 @@ import { PatchGalleryPage } from "./pages/PatchGalleryPage";
 import { FullOverviewPage } from "./pages/FullOverviewPage";
 import { ConfigVersioningPage } from "./pages/ConfigVersioningPage";
 import { ExportPage } from "./pages/ExportPage";
+import { ImageAnnotateRedirect } from "./pages/ImageAnnotateRedirect";
+import { ImageGalleryPage } from "./pages/ImageGalleryPage";
 
 export default function App() {
   return (
@@ -21,6 +23,8 @@ export default function App() {
           <Route path="/projects/:projectId/wizard" element={<NewProjectWizardPage />} />
           <Route path="/projects/:projectId" element={<ProjectDashboardPage />} />
           <Route path="/projects/:projectId/versions" element={<ConfigVersioningPage />} />
+          <Route path="/projects/:projectId/images" element={<ImageGalleryPage />} />
+          <Route path="/projects/:projectId/annotate" element={<ImageAnnotateRedirect />} />
           <Route path="/projects/:projectId/slides/:slideId/processing" element={<SlideProcessingPage />} />
           <Route path="/projects/:projectId/slides/:slideId/workspace" element={<MainWorkspacePage />} />
           <Route path="/projects/:projectId/slides/:slideId/gallery" element={<PatchGalleryPage />} />

@@ -12,7 +12,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
 
-from app.api.deps import get_project_or_404, get_slide_or_404
+from app.api.deps import forbid_for_image_project, get_project_or_404, get_slide_or_404
 from app.core.config import get_settings
 from app.database.session import get_db
 from app.models.config_version import ProjectConfigVersion
@@ -30,6 +30,7 @@ from app.schemas.slide import (
     WsiFormatsOut,
 )
 from app.services import reader_cache
+from app.services.image_import import IMAGE_EXTENSIONS, ImageDiscovery, ImageItem, discover_images
 from app.services.deepzoom_service import DeepZoomAdapter, purge_slide_tiles, render_tile_bytes
 from app.services.wsi_bundles import (
     ARCHIVE_EXTENSIONS,
@@ -159,6 +160,89 @@ def _import_discovered(
     )
 
 
+def _register_image(
+    db: Session, project: Project, item: ImageItem, source_type: str, move: bool
+) -> Slide | SkippedItemOut:
+    """One image becomes one slide whose Level-0 grid is the image itself, holding a
+    single virtual patch that covers all of it. Annotating it therefore needs no tissue
+    detection or patch generation, and every coordinate is simply an image pixel."""
+    settings = get_settings()
+    if project.active_config_version_id is None:
+        return SkippedItemOut(name=item.name, reason="the project has no configuration to annotate against")
+
+    image_dir = settings.wsi_storage_dir / str(project.id) / slide_dir_name(item.path.stem)
+    try:
+        image_dir.mkdir(parents=True)
+        stored = image_dir / item.path.name
+        (shutil.move if move else shutil.copy2)(item.path, stored)
+    except OSError as exc:
+        shutil.rmtree(image_dir, ignore_errors=True)
+        return SkippedItemOut(name=item.name, reason=f"could not store the file: {exc}")
+
+    try:
+        slide = Slide(
+            project_id=project.id,
+            filename=item.name,
+            file_path=stored.relative_to(settings.wsi_storage_dir).as_posix(),
+            source_type=source_type,
+            format=stored.suffix.lower(),
+            status="patches_generated",  # nothing to detect or generate: the image is its own patch
+            width_l0=item.width,
+            height_l0=item.height,
+            level_count=1,
+            level_dimensions=[[item.width, item.height]],
+            level_downsamples=[1.0],
+            active_config_version_id=project.active_config_version_id,
+        )
+        db.add(slide)
+        db.flush()
+        db.add(
+            Patch(
+                slide_id=slide.id,
+                config_version_id=project.active_config_version_id,
+                patch_index=0,
+                x=0,
+                y=0,
+                level=0,
+                width=item.width,
+                height=item.height,
+                width_l0=item.width,
+                height_l0=item.height,
+                tissue_fraction=1.0,
+                status="unannotated",
+            )
+        )
+        db.commit()
+    except Exception:  # noqa: BLE001 - never leave a stored file without its rows
+        db.rollback()
+        shutil.rmtree(image_dir, ignore_errors=True)
+        raise
+    db.refresh(slide)
+    return slide
+
+
+def _import_images(
+    db: Session,
+    project: Project,
+    discovery: ImageDiscovery,
+    source_type: str,
+    move: bool,
+    warnings: list[str],
+    skipped: list[SkippedItemOut],
+) -> SlideBatchImportResult:
+    slides: list[Slide] = []
+    skipped.extend(SkippedItemOut(name=i.name, reason=i.reason) for i in discovery.skipped)
+    for item in discovery.items:
+        outcome = _register_image(db, project, item, source_type, move)
+        if isinstance(outcome, Slide):
+            slides.append(outcome)
+        else:
+            skipped.append(outcome)
+    return SlideBatchImportResult(
+        slides=slides, skipped=skipped, ignored_file_count=discovery.ignored_files, warnings=warnings
+    )
+
+
 class _ByteBudget:
     def __init__(self, limit: int):
         self.remaining = limit
@@ -225,6 +309,9 @@ def _ingest_uploads(
             else:
                 _save_upload(upload, tree.joinpath(*parts), budget)
 
+        if project.project_type == "image":
+            images = discover_images(tree, max_pixels=settings.max_image_pixels)
+            return _import_images(db, project, images, "upload", True, warnings, skipped)
         discovery = discover_bundles(tree)
         return _import_discovered(db, project, discovery, config_version_id, "upload", True, warnings, skipped)
     finally:
@@ -267,6 +354,34 @@ async def upload_slides(
     return await run_in_threadpool(_ingest_uploads, db, project, uploads, names, config_version_id)
 
 
+def _import_images_from_path(db: Session, project: Project, src: Path) -> SlideBatchImportResult:
+    """Path import for image projects: a single image, a folder of images, or a .zip of them."""
+    settings = get_settings()
+    ext = src.suffix.lower()
+    max_pixels = settings.max_image_pixels
+    if src.is_dir():
+        return _import_images(db, project, discover_images(src, max_pixels=max_pixels), "path", False, [], [])
+    if ext in IMAGE_EXTENSIONS:
+        return _import_images(db, project, discover_images(src.parent, max_pixels=max_pixels, only=src), "path", False, [], [])
+    if ext in ARCHIVE_EXTENSIONS:
+        staging = settings.wsi_storage_dir / "_staging" / uuid.uuid4().hex
+        try:
+            try:
+                warnings = extract_zip(
+                    src, staging / "tree", max_bytes=settings.max_upload_bytes, max_files=settings.max_upload_files
+                )
+            except ArchiveError as exc:
+                raise HTTPException(status_code=422, detail=f"{src.name}: archive {exc}") from exc
+            images = discover_images(staging / "tree", max_pixels=max_pixels)
+            return _import_images(db, project, images, "path", True, warnings, [])
+        finally:
+            shutil.rmtree(staging, ignore_errors=True)
+    raise HTTPException(
+        status_code=415,
+        detail=f"Unsupported file type '{ext}'. Expected an image ({', '.join(IMAGE_EXTENSIONS)}), a .zip, or a folder.",
+    )
+
+
 @router.post("/projects/{project_id}/slides/import-path", response_model=SlideBatchImportResult)
 def import_slides_by_path(
     payload: SlideImportPathRequest,
@@ -290,6 +405,9 @@ def import_slides_by_path(
         raise HTTPException(status_code=404, detail=f"Not found: {src}")
 
     ext = src.suffix.lower()
+    if project.project_type == "image":
+        return _import_images_from_path(db, project, src)
+
     if src.is_dir():
         discovery = discover_bundles(src)
         return _import_discovered(db, project, discovery, payload.config_version_id, "path", False, [], [])
@@ -324,6 +442,8 @@ def create_demo_slide(
     project: Project = Depends(get_project_or_404),
     db: Session = Depends(get_db),
 ):
+    if project.project_type == "image":
+        raise HTTPException(status_code=422, detail="Demo slides are for WSI projects; add images to this project instead.")
     slide = Slide(
         project_id=project.id,
         filename=payload.filename,
@@ -360,6 +480,7 @@ def set_slide_active_config(
     follows the slide's active version, so switching just changes which set is
     shown. If the chosen version has no patches for this slide yet, the slide
     drops back to the stage where they can be generated."""
+    forbid_for_image_project(slide.project, "Switching configuration versions")
     config = db.get(ProjectConfigVersion, payload.config_version_id)
     if config is None or config.project_id != slide.project_id:
         raise HTTPException(status_code=404, detail="Config version not found in this slide's project")
@@ -450,6 +571,10 @@ def get_dynamic_patch(
     import io
 
     buf = io.BytesIO()
+    if slide.project.project_type == "image":
+        # Plain images are annotated pixel-for-pixel; don't re-compress them.
+        region.save(buf, format="PNG", compress_level=3)
+        return Response(content=buf.getvalue(), media_type="image/png")
     region.save(buf, format="JPEG", quality=92)
     return Response(content=buf.getvalue(), media_type="image/jpeg")
 

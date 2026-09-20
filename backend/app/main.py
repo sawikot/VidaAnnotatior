@@ -3,7 +3,7 @@ import shutil
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import annotations, configs, dev, export, patches, processing, projects, slides
+from app.api import annotations, configs, dev, export, images, patches, processing, projects, slides
 from app.core.config import get_settings
 from app.database.session import init_db
 
@@ -40,4 +40,5 @@ app.include_router(processing.router, prefix=settings.api_prefix)
 app.include_router(patches.router, prefix=settings.api_prefix)
 app.include_router(annotations.router, prefix=settings.api_prefix)
 app.include_router(export.router, prefix=settings.api_prefix)
+app.include_router(images.router, prefix=settings.api_prefix)
 app.include_router(dev.router, prefix=settings.api_prefix)

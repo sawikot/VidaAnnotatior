@@ -1,4 +1,6 @@
 export type ProjectStatus = "active" | "review" | "completed";
+/** "wsi": gigapixel slides tiled into virtual patches. "image": ordinary images annotated as they are. */
+export type ProjectType = "wsi" | "image";
 export type SlideStatus =
   | "imported"
   | "tissue_detected"
@@ -7,7 +9,8 @@ export type SlideStatus =
   | "reviewed"
   | "error";
 export type PatchStatus = "unannotated" | "active" | "annotated" | "reviewed" | "skipped" | "flagged";
-export type GeometryType = "polygon" | "rectangle" | "point" | "freehand";
+/** point, line, freehand_line (open path), rectangle, circle (centre + edge point), polygon, freehand (closed outline). */
+export type GeometryType = "point" | "line" | "freehand_line" | "rectangle" | "circle" | "polygon" | "freehand";
 export type ConfigStatus = "draft" | "locked" | "experimental" | "deprecated";
 
 export interface AnnotationClass {
@@ -73,6 +76,7 @@ export interface Project {
   description: string | null;
   team: string | null;
   status: ProjectStatus;
+  project_type: ProjectType;
   active_config_version_id: number | null;
   created_at: string;
   updated_at: string;
@@ -176,4 +180,23 @@ export interface WsiFormats {
   archives: string[];
   max_upload_bytes: number;
   max_upload_files: number;
+}
+
+/** One image of an image project with the state of its single patch. */
+export interface ImageSummary {
+  slide_id: number;
+  patch_id: number;
+  filename: string;
+  width: number;
+  height: number;
+  status: PatchStatus;
+  unsure: boolean;
+  flagged: boolean;
+  excluded: boolean;
+  annotation_count: number;
+}
+
+export interface ImageList {
+  total: number;
+  items: ImageSummary[];
 }

@@ -5,9 +5,20 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.models.slide import Slide
-from app.services.geometry import closed_ring, has_area, is_simple_polygon, polygon_area
+from app.services.geometry import (
+    AREA_TYPES,
+    LINE_TYPES,
+    area_ring,
+    circle_center_radius,
+    closed_ring,
+    has_extent,
+    is_simple_polygon,
+    line_length,
+    shape_area,
+)
 
-from .base import POLYGON_TYPES, Exporter, dumps_with_line_items, load_export_data
+from .base import Exporter, dumps_with_line_items, load_export_data
+from .options import ExportOptions
 
 
 def hex_to_rgb(color_hex: str) -> list[int]:
@@ -27,18 +38,21 @@ class GeoJSONExporter(Exporter):
     content_type = "application/geo+json"
     file_extension = "geojson"
 
-    def export(self, db: Session, slide: Slide) -> dict:
-        data = load_export_data(db, slide)
+    def export(self, db: Session, slide: Slide, options: ExportOptions | None = None) -> dict:
+        data = load_export_data(db, slide, options)
         features: list[dict[str, Any]] = []
         skipped_degenerate = 0
 
         for ann in data.annotations:
             coords = ann.coordinates_level0
-            if ann.type in POLYGON_TYPES:
-                if not has_area(coords):
-                    skipped_degenerate += 1  # fewer than 3 distinct points, or all on one line
-                    continue
-                geometry: dict[str, Any] = {"type": "Polygon", "coordinates": [closed_ring(coords)]}
+            if ann.type != "point" and not has_extent(ann.type, coords):
+                skipped_degenerate += 1  # collapsed: no area, zero length or zero radius
+                continue
+            if ann.type in AREA_TYPES:
+                # a circle becomes a 64-sided polygon: GeoJSON has no circles
+                geometry: dict[str, Any] = {"type": "Polygon", "coordinates": [closed_ring(area_ring(ann.type, coords))]}
+            elif ann.type in LINE_TYPES:
+                geometry = {"type": "LineString", "coordinates": [[round(x, 2), round(y, 2)] for x, y in coords]}
             elif ann.type == "point" and coords:
                 geometry = {"type": "Point", "coordinates": [round(coords[0][0], 2), round(coords[0][1], 2)]}
             else:
@@ -63,11 +77,15 @@ class GeoJSONExporter(Exporter):
             if label:
                 cls = data.classes[ann.class_id]
                 properties["classification"] = {"name": label, "color": hex_to_rgb(cls.color_hex)}
-            if ann.type in POLYGON_TYPES:
-                properties["area_px2"] = round(polygon_area(coords), 2)
+            if ann.type in AREA_TYPES:
+                properties["area_px2"] = round(shape_area(ann.type, coords), 2)
                 # False for a self-crossing outline (usually a freehand slip);
                 # the shape is exported as drawn so nothing is silently altered.
-                properties["valid_geometry"] = is_simple_polygon(coords)
+                properties["valid_geometry"] = is_simple_polygon(area_ring(ann.type, coords))
+                if ann.type == "circle":
+                    properties["radius_px"] = round(circle_center_radius(coords)[1], 2)
+            elif ann.type in LINE_TYPES:
+                properties["length_px"] = round(line_length(coords), 2)
 
             features.append({"type": "Feature", "id": f"ann_{ann.id:06d}", "geometry": geometry, "properties": properties})
 

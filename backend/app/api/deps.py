@@ -17,6 +17,13 @@ def get_project_or_404(project_id: int, db: Session = Depends(get_db)) -> Projec
     return project
 
 
+def forbid_for_image_project(project: Project, what: str) -> None:
+    """Image projects annotate each image as it is: one slide, one patch covering it,
+    one configuration. Tiling or forking would strand or delete that patch."""
+    if project.project_type == "image":
+        raise HTTPException(status_code=409, detail=f"{what} is not available in an image project.")
+
+
 def get_slide_or_404(slide_id: int, db: Session = Depends(get_db)) -> Slide:
     slide = db.get(Slide, slide_id)
     if slide is None:

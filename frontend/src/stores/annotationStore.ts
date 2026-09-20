@@ -1,6 +1,7 @@
+import type { GeometryType } from "../types/api";
 import { create } from "zustand";
 
-export type AnnotationTool = "select" | "polygon" | "rectangle" | "point" | "freehand";
+export type AnnotationTool = "select" | GeometryType;
 export type SaveState = "idle" | "saving" | "saved" | "error";
 
 interface AnnotationUiState {

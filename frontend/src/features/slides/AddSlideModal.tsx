@@ -11,8 +11,8 @@ import {
   type UploadItem,
 } from "../../services/api";
 import { useUiStore } from "../../stores/uiStore";
-import type { SlideBatchImportResult, WsiFormats } from "../../types/api";
-import { extensionOf, findProblems, formatBytes, mergeSelections, summarize, toUploadItem } from "./uploadSelection";
+import type { ProjectType, SlideBatchImportResult, WsiFormats } from "../../types/api";
+import { IMAGE_EXTENSIONS, extensionOf, findProblems, formatBytes, mergeSelections, summarize, toUploadItem } from "./uploadSelection";
 
 type Tab = "upload" | "path" | "demo";
 type Phase = "idle" | "uploading" | "processing" | "done";
@@ -23,12 +23,16 @@ interface Props {
   open: boolean;
   onClose: () => void;
   projectId: number;
+  /** Image projects take ordinary images; the default is whole-slide images. */
+  projectType?: ProjectType;
   configVersionId: number | null;
   /** Called whenever at least one slide was added, so the caller can refresh. */
   onImported: () => void;
 }
 
-export function AddSlideModal({ open, onClose, projectId, configVersionId, onImported }: Props) {
+export function AddSlideModal({ open, onClose, projectId, projectType = "wsi", configVersionId, onImported }: Props) {
+  const isImage = projectType === "image";
+  const noun = isImage ? "image" : "slide";
   const pushToast = useUiStore((s) => s.pushToast);
   const [tab, setTab] = useState<Tab>("upload");
   const [phase, setPhase] = useState<Phase>("idle");
@@ -45,7 +49,7 @@ export function AddSlideModal({ open, onClose, projectId, configVersionId, onImp
 
   const busy = phase === "uploading" || phase === "processing";
   const summary = useMemo(() => summarize(items), [items]);
-  const problems = useMemo(() => findProblems(items), [items]);
+  const problems = useMemo(() => (isImage ? [] : findProblems(items)), [items, isImage]);
   const tooBig = formats ? summary.bytes > formats.max_upload_bytes : false;
 
   function reset() {
@@ -65,10 +69,10 @@ export function AddSlideModal({ open, onClose, projectId, configVersionId, onImp
     setResult(res);
     setPhase("done");
     if (res.slides.length > 0) {
-      pushToast(`Imported ${res.slides.length} slide${res.slides.length === 1 ? "" : "s"}`, "success");
+      pushToast(`Imported ${res.slides.length} ${noun}${res.slides.length === 1 ? "" : "s"}`, "success");
       onImported();
     } else {
-      pushToast("No slides were imported -- see the details below", "error");
+      pushToast(`No ${noun}s were imported -- see the details below`, "error");
     }
   }
 
@@ -135,7 +139,7 @@ export function AddSlideModal({ open, onClose, projectId, configVersionId, onImp
     <Modal open={open} onClose={requestClose} widthClass="max-w-2xl">
       <div className="p-space-lg flex flex-col gap-space-md">
         <div className="flex items-center justify-between">
-          <h2 className="font-headline-md text-headline-md">Add WSI slides</h2>
+          <h2 className="font-headline-md text-headline-md">{isImage ? "Add images" : "Add WSI slides"}</h2>
           <button onClick={requestClose} disabled={phase === "uploading"} aria-label="Close" className="disabled:opacity-30">
             <MaterialIcon name="close" />
           </button>
@@ -143,7 +147,7 @@ export function AddSlideModal({ open, onClose, projectId, configVersionId, onImp
 
         {!showResult && (
           <div className="flex bg-surface-container-low rounded p-0.5">
-            {(["upload", "path", "demo"] as const).map((m) => (
+            {(isImage ? (["upload", "path"] as const) : (["upload", "path", "demo"] as const)).map((m) => (
               <button
                 key={m}
                 disabled={busy}
@@ -156,10 +160,11 @@ export function AddSlideModal({ open, onClose, projectId, configVersionId, onImp
           </div>
         )}
 
-        {showResult && <ResultPanel result={result} onMore={reset} onDone={requestClose} />}
+        {showResult && <ResultPanel result={result} noun={noun} onMore={reset} onDone={requestClose} />}
 
         {!showResult && tab === "upload" && (
           <UploadTab
+            isImage={isImage}
             formats={formats}
             items={items}
             summary={summary}
@@ -179,9 +184,13 @@ export function AddSlideModal({ open, onClose, projectId, configVersionId, onImp
           <div className="flex flex-col gap-space-sm">
             <p className="text-body-md text-on-surface-variant">
               Import from the server's watch directory (<span className="font-mono text-label-md">WSI_WATCH_DIR</span>) without
-              uploading anything. Give a slide file (a <span className="font-mono text-label-md">.mrxs</span>'s data folder is
-              found automatically), a folder of slides, or a <span className="font-mono text-label-md">.zip</span>. Files are copied;
-              the originals are never modified. Best for very large slides.
+              uploading anything. {isImage ? (
+                <>Give an image, a folder of images, or a <span className="font-mono text-label-md">.zip</span>. </>
+              ) : (
+                <>Give a slide file (a <span className="font-mono text-label-md">.mrxs</span>'s data folder is
+                found automatically), a folder of slides, or a <span className="font-mono text-label-md">.zip</span>. </>
+              )}
+              Files are copied; the originals are never modified.{isImage ? "" : " Best for very large slides."}
             </p>
             <input className="input font-mono" placeholder="C:/path/to/watch-dir/slides" value={path} onChange={(e) => setPath(e.target.value)} disabled={busy} />
             <Button variant="primary" disabled={busy || !path.trim()} onClick={handlePathImport}>
@@ -207,6 +216,7 @@ export function AddSlideModal({ open, onClose, projectId, configVersionId, onImp
 }
 
 function UploadTab({
+  isImage,
   formats,
   items,
   summary,
@@ -220,6 +230,7 @@ function UploadTab({
   onUpload,
   onCancel,
 }: {
+  isImage: boolean;
   formats: WsiFormats | null;
   items: UploadItem[];
   summary: ReturnType<typeof summarize>;
@@ -241,8 +252,8 @@ function UploadTab({
   return (
     <div className="flex flex-col gap-space-md">
       <p className="text-body-md text-on-surface-variant">
-        Pick slide files, a whole folder, or <strong>.zip</strong> archives -- any mix, as many as you like. A zip can hold
-        several slides and they are all imported.
+        {isImage ? "Pick images" : "Pick slide files"}, a whole folder, or <strong>.zip</strong> archives -- any mix, as many as you
+        like. A zip can hold several {isImage ? "images" : "slides"} and they are all imported.{isImage && " Sub-folders are kept in each image's name."}
       </p>
 
       <div className="flex flex-wrap gap-space-sm">
@@ -275,7 +286,25 @@ function UploadTab({
         />
       </div>
 
-      {formats && (
+      {isImage && (
+        <div className="text-body-sm text-on-surface-variant flex flex-col gap-1.5">
+          <div className="flex flex-wrap items-center gap-1">
+            <span>Supported:</span>
+            {IMAGE_EXTENSIONS.map((ext) => (
+              <span key={ext} className="px-space-sm py-0.5 rounded-full bg-surface-container-high font-mono text-label-sm">
+                {ext}
+              </span>
+            ))}
+            <span className="px-space-sm py-0.5 rounded-full bg-primary-fixed font-mono text-label-sm">.zip</span>
+          </div>
+          <span>
+            Each image is annotated as it is and stays unmodified on disk. Photos are turned upright using their EXIF rotation, and
+            images up to 8192 px per side (25 megapixels) are accepted -- anything bigger belongs in a WSI project.
+          </span>
+        </div>
+      )}
+
+      {!isImage && formats && (
         <div className="text-body-sm text-on-surface-variant flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-1">
             <span>Supported:</span>
@@ -308,7 +337,7 @@ function UploadTab({
           <ul className="max-h-44 overflow-y-auto divide-y divide-outline-variant/50">
             {items.slice(0, MAX_LISTED).map((it, i) => (
               <li key={`${it.path}-${i}`} className="flex items-center gap-space-sm px-space-md py-1.5 text-body-sm">
-                <MaterialIcon name={extensionOf(it.path) === ".zip" ? "folder_zip" : "draft"} className="!text-[16px] text-on-surface-variant" />
+                <MaterialIcon name={extensionOf(it.path) === ".zip" ? "folder_zip" : isImage ? "image" : "draft"} className="!text-[16px] text-on-surface-variant" />
                 <span className="flex-1 truncate font-mono" title={it.path}>
                   {it.path}
                 </span>
@@ -354,7 +383,9 @@ function UploadTab({
             <span>
               {phase === "uploading"
                 ? `Uploading ${pct}% (${formatBytes(progress.sent)} of ${formatBytes(progress.total)})`
-                : "Unpacking and reading slides on the server -- large slides can take a minute..."}
+                : isImage
+                  ? "Unpacking and checking images on the server..."
+                  : "Unpacking and reading slides on the server -- large slides can take a minute..."}
             </span>
             {phase === "uploading" && (
               <Button variant="ghost" onClick={onCancel}>
@@ -372,14 +403,14 @@ function UploadTab({
   );
 }
 
-function ResultPanel({ result, onMore, onDone }: { result: SlideBatchImportResult; onMore: () => void; onDone: () => void }) {
+function ResultPanel({ result, noun, onMore, onDone }: { result: SlideBatchImportResult; noun: string; onMore: () => void; onDone: () => void }) {
   return (
     <div className="flex flex-col gap-space-md">
       <div className="flex items-center gap-space-sm">
         <MaterialIcon name={result.slides.length ? "check_circle" : "error"} className={result.slides.length ? "text-tertiary" : "text-error"} />
         <h3 className="font-headline-sm text-headline-sm">
           {result.slides.length
-            ? `Imported ${result.slides.length} slide${result.slides.length === 1 ? "" : "s"}`
+            ? `Imported ${result.slides.length} ${noun}${result.slides.length === 1 ? "" : "s"}`
             : "Nothing was imported"}
           {result.skipped.length > 0 && <span className="text-on-surface-variant font-normal"> &middot; {result.skipped.length} skipped</span>}
         </h3>
@@ -391,7 +422,7 @@ function ResultPanel({ result, onMore, onDone }: { result: SlideBatchImportResul
             <li key={s.id} className="flex items-center justify-between px-space-md py-1.5 text-body-sm">
               <span className="font-mono truncate">{s.filename}</span>
               <span className="text-on-surface-variant font-mono shrink-0 ml-space-md">
-                {s.width_l0?.toLocaleString()} x {s.height_l0?.toLocaleString()} px &middot; {s.level_count} levels
+                {s.width_l0?.toLocaleString()} x {s.height_l0?.toLocaleString()} px{noun === "slide" && <> &middot; {s.level_count} levels</>}
               </span>
             </li>
           ))}
@@ -417,8 +448,8 @@ function ResultPanel({ result, onMore, onDone }: { result: SlideBatchImportResul
           {result.ignored_file_count > 0 && (
             <span>
               {result.ignored_file_count === 1
-                ? "1 other file isn't a slide and was ignored."
-                : `${result.ignored_file_count.toLocaleString()} other files aren't slides and were ignored.`}
+                ? `1 other file isn't ${noun === "image" ? "an image" : "a slide"} and was ignored.`
+                : `${result.ignored_file_count.toLocaleString()} other files aren't ${noun}s and were ignored.`}
             </span>
           )}
           {result.warnings.map((w) => (

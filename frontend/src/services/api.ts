@@ -1,9 +1,11 @@
+import { optionsQuery, summaryQuery, type ExportOptions, type ExportSummary } from "../utils/exportOptions";
 import type {
   ConfigUsage,
   ConfigVersion,
   GeometryAnnotation,
   GeometryType,
   Patch,
+  ImageList,
   PatchListResponse,
   PatchStatus,
   Project,
@@ -198,6 +200,10 @@ export const generatePatches = (slideId: number, configVersionId: number) =>
     body: JSON.stringify({ config_version_id: configVersionId }),
   });
 
+// ---- Images (image projects) ----
+export const listImages = (projectId: number, params: { status?: string; limit?: number; offset?: number } = {}) =>
+  request<ImageList>(`/projects/${projectId}/images${qs(params)}`);
+
 // ---- Patches ----
 export const listPatches = (
   slideId: number,
@@ -263,6 +269,8 @@ export interface ImportAnnotationsResult {
   skipped_no_matching_patch: number;
   skipped_unknown_class: number;
   skipped_duplicate: number;
+  /** Entries with a malformed or unknown shape (older servers don't send this). */
+  skipped_invalid_shape?: number;
 }
 export const importAnnotations = (
   slideId: number,
@@ -274,19 +282,26 @@ export const importAnnotations = (
   });
 
 // ---- Export ----
-export const exportSlideUrl = (slideId: number, formatId: string) => `${API_BASE}/slides/${slideId}/export/${formatId}`;
-/** ZIP with one file per processed slide of the project, plus manifest.json. */
-export const exportProjectUrl = (projectId: number, formatId: string) => `${API_BASE}/projects/${projectId}/export/${formatId}`;
+export const exportSlideUrl = (slideId: number, formatId: string, options?: ExportOptions) =>
+  `${API_BASE}/slides/${slideId}/export/${formatId}${options ? optionsQuery(options) : ""}`;
+/** One file per processed slide of the project (zipped), or one combined file; see `projectDownloadKind`. */
+export const exportProjectUrl = (projectId: number, formatId: string, options?: ExportOptions) =>
+  `${API_BASE}/projects/${projectId}/export/${formatId}${options ? optionsQuery(options, { project: true }) : ""}`;
+
+/** What an export with these options would cover (counts only; nothing is rendered). */
+export const getExportSummary = (scope: "slide" | "project", id: number, options: ExportOptions) =>
+  request<ExportSummary>(`/${scope === "slide" ? "slides" : "projects"}/${id}/export-summary${summaryQuery(options)}`);
 
 /**
- * Downloads the project-wide ZIP and resolves with its file name. Fetched rather than
- * navigated to, so a refusal (e.g. no slide processed yet) surfaces as a thrown message
- * instead of replacing the page with a JSON error. Server-side detail is passed through.
+ * Downloads an export through fetch and resolves with its file name. Going through fetch rather than
+ * navigating means a refusal (nothing processed yet, too many images ...) surfaces as a thrown message
+ * instead of replacing the page with a JSON error. Server-side detail is passed through. The file is
+ * held in memory, so use `navigateDownload` for large ones.
  */
-export async function downloadProjectExport(projectId: number, formatId: string): Promise<string> {
+export async function downloadExport(url: string, fallbackName: string): Promise<string> {
   let res: Response;
   try {
-    res = await fetch(exportProjectUrl(projectId, formatId));
+    res = await fetch(url);
   } catch {
     throw new Error("Export failed: could not reach the server");
   }
@@ -294,14 +309,22 @@ export async function downloadProjectExport(projectId: number, formatId: string)
     const detail = await res.json().then((b) => b.detail).catch(() => null);
     throw new Error(typeof detail === "string" ? detail : "Export failed");
   }
-  const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? `project_${formatId}_all_slides.zip`;
-  const url = URL.createObjectURL(await res.blob());
+  const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? fallbackName;
+  const objectUrl = URL.createObjectURL(await res.blob());
   const link = document.createElement("a");
-  link.href = url;
+  link.href = objectUrl;
   link.download = name;
   link.click();
-  URL.revokeObjectURL(url);
+  URL.revokeObjectURL(objectUrl);
   return name;
+}
+
+export const downloadProjectExport = (projectId: number, formatId: string, options?: ExportOptions) =>
+  downloadExport(exportProjectUrl(projectId, formatId, options), `project_${formatId}_all_slides.zip`);
+
+/** Hands the URL to the browser, which streams the response straight to disk (no copy in memory). */
+export function navigateDownload(url: string): void {
+  window.location.assign(url);
 }
 
 // ---- Dev ----

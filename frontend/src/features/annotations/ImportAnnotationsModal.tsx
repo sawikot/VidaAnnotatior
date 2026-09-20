@@ -114,6 +114,7 @@ export function ImportAnnotationsModal({ open, onClose, slideId, onImported }: P
             <ResultRow label="Skipped -- no matching patch" value={result.skipped_no_matching_patch} tone={result.skipped_no_matching_patch ? "warn" : undefined} />
             <ResultRow label="Skipped -- unknown class label" value={result.skipped_unknown_class} tone={result.skipped_unknown_class ? "warn" : undefined} />
             <ResultRow label="Skipped -- already imported" value={result.skipped_duplicate} />
+            {!!result.skipped_invalid_shape && <ResultRow label="Skipped -- malformed shape" value={result.skipped_invalid_shape} tone="warn" />}
           </div>
         )}
 

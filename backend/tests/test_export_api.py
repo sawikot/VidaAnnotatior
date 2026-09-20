@@ -81,7 +81,7 @@ def test_exported_geometry_is_the_patch_origin_plus_scaled_local_coordinates(ann
 
 def test_csv_downloads_parse_and_agree_with_the_data(annotated_slide):
     client, slide_id, patch = annotated_slide
-    patches = list(csv.DictReader(io.StringIO(client.get(f"/api/slides/{slide_id}/export/patch_csv").text)))
+    patches = list(csv.DictReader(io.StringIO(client.get(f"/api/slides/{slide_id}/export/patch_csv?patches=all").text)))
     assert len(patches) == client.get(f"/api/slides/{slide_id}/patches?limit=1").json()["total"]
     row = next(r for r in patches if int(r["patch_id"]) == patch["id"])
     assert (int(row["level0_x"]), int(row["level0_y"]), row["dominant_class"], row["n_annotations"]) == (patch["x"], patch["y"], "Tumor", "1")

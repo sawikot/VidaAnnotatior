@@ -6,11 +6,14 @@ import { WsiViewer, type ViewportBbox } from "../features/viewer/WsiViewer";
 import { PatchGridOverlay } from "../features/viewer/PatchGridOverlay";
 import { getConfig, getSlide, listSlideAnnotations, tissueMaskUrl } from "../services/api";
 import type { ConfigVersion, GeometryAnnotation, Slide } from "../types/api";
-import { polygonArea } from "../utils/geometry";
+import { circleGeometry, isLineShape, shapeArea } from "../utils/shapes";
+
+import { useImageProjectRedirect } from "../features/images/useImageProjectRedirect";
 
 export function FullOverviewPage() {
   const { projectId, slideId } = useParams();
   const sid = Number(slideId);
+  useImageProjectRedirect(Number(projectId));
 
   const [slide, setSlide] = useState<Slide | null>(null);
   const [config, setConfig] = useState<ConfigVersion | null>(null);
@@ -33,7 +36,7 @@ export function FullOverviewPage() {
   const byClass = useMemo(() => {
     const map = new Map<number | null, { count: number; areaPx: number }>();
     for (const a of annotations) {
-      const areaPx = a.type === "point" ? 0 : polygonArea(a.coordinates_level0);
+      const areaPx = shapeArea(a.type, a.coordinates_level0);
       const entry = map.get(a.class_id) ?? { count: 0, areaPx: 0 };
       entry.count += 1;
       entry.areaPx += areaPx;
@@ -96,6 +99,25 @@ export function FullOverviewPage() {
                     const r = (slide.width_l0 ?? 10000) * 0.002;
                     return <circle key={a.id} cx={x} cy={y} r={r} fill={color} fillOpacity={opacity} stroke={color} />;
                   }
+                  const strokeWidth = (slide.width_l0 ?? 10000) * 0.0006;
+                  if (isLineShape(a.type)) {
+                    return (
+                      <polyline
+                        key={a.id}
+                        points={a.coordinates_level0.map((p) => p.join(",")).join(" ")}
+                        fill="none"
+                        stroke={color}
+                        strokeOpacity={Math.max(opacity, 0.7)}
+                        strokeWidth={strokeWidth * 1.5}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    );
+                  }
+                  if (a.type === "circle") {
+                    const { cx, cy, r } = circleGeometry(a.coordinates_level0);
+                    return <circle key={a.id} cx={cx} cy={cy} r={r} fill={color} fillOpacity={opacity * 0.5} stroke={color} strokeWidth={strokeWidth} />;
+                  }
                   return (
                     <polygon
                       key={a.id}
@@ -123,7 +145,7 @@ export function FullOverviewPage() {
 
           <Card className="p-space-sm bg-surface-container-low">
             <div className="text-label-md text-on-surface-variant">Object Stitching Total</div>
-            <div className="font-headline-lg text-headline-lg">{annotations.length} Polygons</div>
+            <div className="font-headline-lg text-headline-lg">{annotations.length} Objects</div>
             <div className="text-body-sm text-on-surface-variant">from Level-0-anchored patches</div>
             <div className="h-2 rounded-full overflow-hidden flex mt-space-sm bg-surface-container-high">
               {[...byClass.entries()].map(([classId, v]) => {

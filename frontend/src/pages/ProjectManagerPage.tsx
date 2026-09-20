@@ -230,7 +230,9 @@ export function ProjectManagerPage() {
                 <tr key={p.id} className="border-t border-outline-variant hover:bg-surface-container-low/50">
                   <td className="px-space-md py-space-sm">
                     <div className="font-headline-sm text-headline-sm">{p.name}</div>
-                    <div className="font-mono text-label-sm text-secondary">{p.slug}</div>
+                    <div className="font-mono text-label-sm text-secondary">
+                      {p.slug} &middot; {p.project_type === "image" ? "images" : "WSI"}
+                    </div>
                   </td>
                   <td className="px-space-md py-space-sm">{p.organ ?? "--"}</td>
                   <td className="px-space-md py-space-sm">
@@ -322,11 +324,16 @@ function ProjectCard({
   return (
     <div className="flex flex-col bg-surface-container-lowest rounded shadow-sm group hover:shadow-md transition-shadow">
       <div className="h-24 rounded-t bg-gradient-to-br from-primary-fixed to-primary-fixed-dim relative flex items-center justify-between px-space-sm py-space-sm">
-        {project.organ && (
+        <span className="flex items-center gap-1">
+          {project.organ && (
+            <span className="px-space-sm py-0.5 rounded-full bg-surface-container-lowest/90 backdrop-blur text-label-sm">
+              {project.organ}
+            </span>
+          )}
           <span className="px-space-sm py-0.5 rounded-full bg-surface-container-lowest/90 backdrop-blur text-label-sm">
-            {project.organ}
+            {project.project_type === "image" ? "Images" : "WSI"}
           </span>
-        )}
+        </span>
         <StatusPill status={project.status} />
       </div>
       <div className="p-space-md flex-1 flex flex-col gap-space-sm">

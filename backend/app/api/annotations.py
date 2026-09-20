@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_patch_or_404, get_slide_or_404
 from app.database.session import get_db
 from app.models.annotation import GeometryAnnotation
-from app.models.config_version import ProjectConfigVersion
+from app.models.config_version import AnnotationClass, ProjectConfigVersion
 from app.models.patch import Patch
 from app.models.slide import Slide
 from app.schemas.annotation import (
@@ -18,6 +18,7 @@ from app.schemas.annotation import (
     ImportAnnotationsRequest,
     ImportAnnotationsResponse,
 )
+from app.services.geometry import validate_shape
 from app.services.coordinate_transform import PatchOrigin, polygon_level0_to_patch_local, polygon_patch_local_to_level0
 
 router = APIRouter(tags=["annotations"])
@@ -87,9 +88,15 @@ def import_annotations(
     for ann in db.query(GeometryAnnotation).filter(GeometryAnnotation.slide_id == slide.id):
         existing_by_patch[ann.patch_id].append(ann)
 
-    imported = skipped_no_patch = skipped_no_class = skipped_duplicate = 0
+    imported = skipped_no_patch = skipped_no_class = skipped_duplicate = skipped_invalid = 0
 
     for entry in payload.annotations:
+        try:
+            validate_shape(entry.type, entry.coordinates)
+        except ValueError:
+            skipped_invalid += 1  # a malformed entry must not sink the rest of the file
+            continue
+
         x = entry.source_patch.get("x")
         y = entry.source_patch.get("y")
         patch = patch_by_origin.get((x, y)) if x is not None and y is not None else None
@@ -140,6 +147,7 @@ def import_annotations(
         skipped_no_matching_patch=skipped_no_patch,
         skipped_unknown_class=skipped_no_class,
         skipped_duplicate=skipped_duplicate,
+        skipped_invalid_shape=skipped_invalid,
     )
 
 
@@ -153,6 +161,16 @@ def list_patch_annotations(patch: Patch = Depends(get_patch_or_404), db: Session
     )
 
 
+def _require_class_of_config(db: Session, class_id: int | None, config_version_id: int) -> None:
+    """A shape may only carry a class of the config version it was drawn under: a class from
+    another version (or another project) would export under a name the file doesn't declare."""
+    if class_id is None:
+        return
+    owner = db.query(AnnotationClass.config_version_id).filter(AnnotationClass.id == class_id).scalar()
+    if owner != config_version_id:
+        raise HTTPException(status_code=422, detail=f"Class {class_id} does not belong to this configuration version")
+
+
 @router.post("/patches/{patch_id}/annotations", response_model=GeometryAnnotationOut, status_code=201)
 def create_patch_annotation(
     payload: GeometryAnnotationCreate,
@@ -162,6 +180,7 @@ def create_patch_annotation(
     if len(payload.coordinates_patch_local) < 1:
         raise HTTPException(status_code=422, detail="coordinates_patch_local must not be empty")
 
+    _require_class_of_config(db, payload.class_id, patch.config_version_id)
     origin = _origin_for_patch(patch)
     coords_l0 = polygon_patch_local_to_level0(origin, payload.coordinates_patch_local)
 
@@ -200,7 +219,13 @@ def update_annotation(
         raise HTTPException(status_code=404, detail=f"Annotation {annotation_id} not found")
 
     changes = payload.model_dump(exclude_unset=True)
+    if changes.get("class_id") is not None:
+        _require_class_of_config(db, changes["class_id"], annotation.config_version_id)
     if "coordinates_patch_local" in changes and changes["coordinates_patch_local"] is not None:
+        try:
+            validate_shape(annotation.type, changes["coordinates_patch_local"])  # the shape keeps its type
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         patch = db.get(Patch, annotation.patch_id)
         origin = _origin_for_patch(patch)
         annotation.coordinates_patch_local = changes["coordinates_patch_local"]

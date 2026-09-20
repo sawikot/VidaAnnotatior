@@ -6,9 +6,11 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.models.slide import Slide
-from app.services.geometry import has_area, polygon_area, polygon_bounds
+from app.services.geometry import AREA_TYPES, LINE_TYPES, area_ring, has_extent, polygon_area, polygon_bounds
 
-from .base import POLYGON_TYPES, Exporter, dumps_with_line_items, load_export_data
+from .base import Exporter, dumps_with_line_items, load_export_data
+from .options import ExportOptions
+from .patch_images import patch_image_name
 
 
 def _flat(points: list[list[float]]) -> list[float]:
@@ -37,27 +39,29 @@ class COCOExporter(Exporter):
     format_id = "coco"
     content_type = "application/json"
     file_extension = "json"
+    mergeable = True
 
-    def export(self, db: Session, slide: Slide) -> dict:
-        data = load_export_data(db, slide)
+    def export(self, db: Session, slide: Slide, options: ExportOptions | None = None) -> dict:
+        options = options or ExportOptions()
+        data = load_export_data(db, slide, options)
         config = data.config
-        stem = slide.filename.rsplit(".", 1)[0]
 
-        skipped = {"point_annotations": 0, "unclassified": 0, "degenerate_geometry": 0}
+        skipped = {"point_annotations": 0, "line_annotations": 0, "unclassified": 0, "degenerate_geometry": 0}
         annotations: list[dict[str, Any]] = []
         used_patch_ids: list[int] = []
 
         for ann in data.annotations:
-            if ann.type not in POLYGON_TYPES:
-                skipped["point_annotations"] += 1
+            if ann.type not in AREA_TYPES:
+                skipped["line_annotations" if ann.type in LINE_TYPES else "point_annotations"] += 1
                 continue
             if ann.class_id is None or ann.class_id not in data.classes:
                 skipped["unclassified"] += 1
                 continue
-            local, level0 = ann.coordinates_patch_local, ann.coordinates_level0
-            if not has_area(local):
+            if not has_extent(ann.type, ann.coordinates_patch_local):
                 skipped["degenerate_geometry"] += 1
                 continue
+            # COCO only knows polygons, so a circle goes in as its 64-sided outline.
+            local, level0 = area_ring(ann.type, ann.coordinates_patch_local), area_ring(ann.type, ann.coordinates_level0)
 
             min_x, min_y, max_x, max_y = polygon_bounds(local)
             annotations.append(
@@ -78,13 +82,24 @@ class COCOExporter(Exporter):
             if ann.patch_id not in used_patch_ids:
                 used_patch_ids.append(ann.patch_id)
 
+        # Which patches become COCO "images". Under the default scope that is those holding at
+        # least one exported shape; under the others it is every patch in scope, so empty ones
+        # (or reviewed negatives) appear as images without annotations.
+        if options.patch_scope == "annotated":
+            image_ids = sorted(used_patch_ids)
+        else:
+            image_ids = [p.id for p in data.patches if not p.excluded]
+
+        default_ext = options.image_ext if options.with_images else "png"
+
         images = []
-        for patch_id in sorted(used_patch_ids):
+        for patch_id in image_ids:
             p = data.patch_by_id[patch_id]
             images.append(
                 {
                     "id": p.id,
-                    "file_name": f"{stem}_p{p.patch_index}_x{p.x}_y{p.y}_L{p.level}.png",
+                    # Exactly the name written into the ZIP when images are exported alongside.
+                    "file_name": options.image_names.get(p.id) or patch_image_name(slide, p, default_ext),
                     "width": p.width,
                     "height": p.height,
                     "coco_url": f"/api/slides/{slide.id}/patch?x={p.x}&y={p.y}&width={p.width}&height={p.height}&level={p.level}",
@@ -128,6 +143,30 @@ class COCOExporter(Exporter):
             "images": images,
             "annotations": annotations,
             "categories": categories,
+        }
+
+    def merge(self, results: list[Any]) -> dict:
+        """One COCO dataset from several slides. Image, annotation and (for one
+        configuration) category ids are database ids, so they are already unique."""
+        first = results[0]
+        categories: dict[int, Any] = {}
+        skipped = {"point_annotations": 0, "line_annotations": 0, "unclassified": 0, "degenerate_geometry": 0}
+        for doc in results:
+            for category in doc["categories"]:
+                categories.setdefault(category["id"], category)
+            for key, count in doc["info"]["vp_skipped"].items():
+                skipped[key] += count
+
+        info = {k: v for k, v in first["info"].items() if k != "vp_slide"}
+        labelled = sum(len(doc["images"]) for doc in results)
+        info["description"] = f"{labelled} annotated images from {len(results)} in the project (VirtualPatch WSI Annotator)"
+        info["vp_skipped"] = skipped
+        return {
+            "info": info,
+            "licenses": [],
+            "images": [image for doc in results for image in doc["images"]],
+            "annotations": [ann for doc in results for ann in doc["annotations"]],
+            "categories": list(categories.values()),
         }
 
     def render(self, data: Any) -> str:

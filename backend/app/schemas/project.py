@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -9,6 +10,7 @@ from app.schemas.config_version import ConfigVersionCreate, ConfigVersionOut
 
 class ProjectCreate(BaseModel):
     name: str
+    project_type: Literal["wsi", "image"] = "wsi"
     slug: str | None = None
     organ: str | None = None
     description: str | None = None
@@ -35,6 +37,7 @@ class ProjectOut(BaseModel):
     description: str | None
     team: str | None
     status: str
+    project_type: str
     active_config_version_id: int | None
     created_at: datetime
     updated_at: datetime

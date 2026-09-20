@@ -40,6 +40,7 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db)) -> Pro
         description=payload.description,
         team=payload.team,
         status="active",
+        project_type=payload.project_type,
     )
     db.add(project)
     db.flush()

@@ -1,3 +1,5 @@
+import type { ProjectType } from "../types/api";
+
 export interface NavItem {
   key: string;
   label: string;
@@ -59,3 +61,31 @@ export const NAV_ITEMS: NavItem[] = [
     requiresProject: true,
   },
 ];
+
+/** Image projects have no tissue detection, patch grid or stitched overview: an image is
+ * annotated directly, and the gallery lists the images themselves. */
+const IMAGE_NAV_ITEMS: NavItem[] = [
+  NAV_ITEMS[0],
+  NAV_ITEMS[1],
+  {
+    key: "workspace-annotator",
+    label: "Annotate",
+    icon: "adjust",
+    // Inside an image: stay on it. Elsewhere: open the first image still to do.
+    path: (p, s) => (p && s ? `/projects/${p}/slides/${s}/workspace` : p ? `/projects/${p}/annotate` : "/projects"),
+    requiresProject: true,
+  },
+  {
+    key: "image-gallery",
+    label: "Images",
+    icon: "grid_on",
+    path: (p) => (p ? `/projects/${p}/images` : "/projects"),
+    requiresProject: true,
+  },
+  NAV_ITEMS[6],
+  NAV_ITEMS[7],
+];
+
+export function navItemsFor(projectType: ProjectType | undefined): NavItem[] {
+  return projectType === "image" ? IMAGE_NAV_ITEMS : NAV_ITEMS;
+}

@@ -13,10 +13,13 @@ import { useUiStore } from "../stores/uiStore";
 
 type ViewMode = "wsi" | "mask" | "grid";
 
+import { useImageProjectRedirect } from "../features/images/useImageProjectRedirect";
+
 export function SlideProcessingPage() {
   const { projectId, slideId } = useParams();
   const pid = Number(projectId);
   const sid = Number(slideId);
+  useImageProjectRedirect(pid);
   const navigate = useNavigate();
   const pushToast = useUiStore((s) => s.pushToast);
   const setActiveSlide = useContextStore((s) => s.setActiveSlide);

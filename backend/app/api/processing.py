@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_slide_or_404
+from app.api.deps import forbid_for_image_project, get_slide_or_404
 from app.core.config import get_settings
 from app.database.session import get_db
 from app.models.config_version import ProjectConfigVersion
@@ -34,6 +34,7 @@ def detect_tissue(
     slide: Slide = Depends(get_slide_or_404),
     db: Session = Depends(get_db),
 ):
+    forbid_for_image_project(slide.project, "Tissue detection")
     if slide.status == "error" or not slide.width_l0:
         raise HTTPException(status_code=422, detail="Slide metadata is not available; re-import the slide.")
 
@@ -94,6 +95,7 @@ def generate_patches(
     slide: Slide = Depends(get_slide_or_404),
     db: Session = Depends(get_db),
 ):
+    forbid_for_image_project(slide.project, "Patch generation")
     config = db.get(ProjectConfigVersion, payload.config_version_id)
     if config is None:
         raise HTTPException(status_code=404, detail="Config version not found")

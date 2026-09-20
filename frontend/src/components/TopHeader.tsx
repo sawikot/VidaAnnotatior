@@ -1,7 +1,7 @@
 import { useParams } from "react-router-dom";
 import { MaterialIcon } from "./MaterialIcon";
-import { NAV_ITEMS } from "./navConfig";
-import { NavLink } from "react-router-dom";
+import { HeaderNavMenu } from "./HeaderNavMenu";
+import { navItemsFor } from "./navConfig";
 import { useContextStore } from "../stores/contextStore";
 import { useUiStore } from "../stores/uiStore";
 
@@ -14,7 +14,11 @@ export function TopHeader() {
 
   const projectPill = activeProject
     ? `${activeProject.slug}: ${activeProject.name}${
-        activeProject.active_config ? ` [${activeProject.active_config.version_label} - ${activeProject.active_config.patch_width}px @ ${activeProject.active_config.target_magnification}x]` : ""
+        activeProject.active_config
+          ? activeProject.project_type === "image"
+            ? ` [${activeProject.active_config.version_label} - images]`
+            : ` [${activeProject.active_config.version_label} - ${activeProject.active_config.patch_width}px @ ${activeProject.active_config.target_magnification}x]`
+          : ""
       }`
     : null;
 
@@ -24,54 +28,36 @@ export function TopHeader() {
         <img src="/favicon.svg" alt="" className="h-8 w-8" />
         <div className="flex flex-col leading-tight">
           <span className="font-headline-sm text-headline-sm text-white">VirtualPatch WSI Annotator</span>
-          <span className="text-body-sm text-slate-400">Digital Pathology Research Suite (Level-0 Coordinate Engine)</span>
+          <span className="hidden xl:block text-body-sm text-slate-400">Digital Pathology Research Suite (Level-0 Coordinate Engine)</span>
         </div>
+      </div>
+
+      <div className="hidden md:block h-6 w-px bg-slate-700 shrink-0" />
+      <div className="hidden md:block shrink-0">
+        <HeaderNavMenu items={navItemsFor(activeProject?.project_type)} projectId={projectId} slideId={slideId} />
       </div>
 
       {projectPill && (
         <>
-          <div className="h-6 w-px bg-slate-700 shrink-0" />
-          <div className="hidden md:flex items-center gap-1.5 px-space-sm py-1 rounded-full bg-[#1e293b] border border-slate-700 text-cyan-200 font-mono text-label-sm shrink-0 max-w-md truncate">
-            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+          <div className="hidden md:block h-6 w-px bg-slate-700 shrink-0" />
+          <div
+            title={projectPill}
+            className="hidden md:flex items-center gap-1.5 px-space-sm py-1 rounded-full bg-[#1e293b] border border-slate-700 text-cyan-200 font-mono text-label-sm min-w-0 max-w-md"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
             <span className="truncate">{projectPill}</span>
           </div>
         </>
       )}
 
-      <div className="hidden xl:block h-6 w-px bg-slate-700 shrink-0" />
-      <nav className="hidden xl:flex items-center gap-1 overflow-x-auto">
-        {NAV_ITEMS.map((item) => {
-          const disabled =
-            (item.requiresProject && !projectId) || (item.requiresProjectSlide && !(projectId && slideId));
-          return (
-            <NavLink
-              key={item.key}
-              to={item.path(projectId, slideId)}
-              onClick={(e) => disabled && e.preventDefault()}
-              className={({ isActive }) =>
-                `px-space-sm py-1.5 rounded-lg text-label-md whitespace-nowrap transition-colors ${
-                  disabled
-                    ? "text-slate-600 cursor-not-allowed"
-                    : isActive
-                      ? "bg-[#1e293b] text-white font-headline-sm"
-                      : "text-slate-400 hover:text-white hover:bg-[#1e293b]/60"
-                }`
-              }
-            >
-              {item.label}
-            </NavLink>
-          );
-        })}
-      </nav>
-
       <div className="flex-1" />
 
-      <div className="hidden lg:flex items-center gap-1.5 px-space-sm py-1 rounded-full bg-emerald-950/40 border border-emerald-800 text-emerald-300 text-label-sm font-mono shrink-0">
+      <div className="hidden 2xl:flex items-center gap-1.5 px-space-sm py-1 rounded-full bg-emerald-950/40 border border-emerald-800 text-emerald-300 text-label-sm font-mono shrink-0">
         <MaterialIcon name="check_circle" className="!text-[14px]" />
         Dynamic Coordinate Engine: Active
       </div>
 
-      <div className="hidden md:block w-52 shrink-0">
+      <div className="hidden lg:block w-52 shrink-0">
         <input
           type="text"
           placeholder="Search slides & coords..."
@@ -86,7 +72,7 @@ export function TopHeader() {
       <div className="h-6 w-px bg-slate-700 shrink-0" />
 
       <div className="flex items-center gap-2 shrink-0">
-        <div className="hidden sm:flex flex-col items-end leading-tight">
+        <div className="hidden lg:flex flex-col items-end leading-tight">
           <span className="text-label-md text-white">{annotatorName}</span>
           <span className="text-body-sm text-slate-400">Senior Computational Pathologist</span>
         </div>

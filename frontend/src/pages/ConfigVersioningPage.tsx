@@ -58,6 +58,7 @@ export function ConfigVersioningPage() {
   }
 
   if (!project) return <div className="p-space-xl text-center text-on-surface-variant">Loading...</div>;
+  const isImage = project.project_type === "image";
 
   return (
     <div className="max-w-6xl mx-auto px-gutter sm:px-margin py-space-lg flex flex-col gap-space-lg">
@@ -70,7 +71,7 @@ export function ConfigVersioningPage() {
         </div>
         <div className="flex items-center justify-between flex-wrap gap-space-sm">
           <h1 className="font-headline-lg text-headline-lg">Configuration Versioning & Reproducibility Audit</h1>
-          {project.active_config && (
+          {project.active_config && !isImage && (
             <Button variant="primary" icon="account_tree" onClick={() => setTarget({ config: project.active_config!, mode: "fork" })}>
               Create New Config Version
             </Button>
@@ -81,10 +82,20 @@ export function ConfigVersioningPage() {
       <Card className="p-space-md bg-surface-container-low border-l-4 border-error flex items-start gap-space-sm">
         <MaterialIcon name="gavel" className="text-error shrink-0" />
         <span className="text-body-md">
-          Patch size, stride, magnification and tissue threshold define where every patch and annotation sits, so they
-          can't be changed in place once a version has generated patches or is locked -- editing them creates a new
-          version instead. Classes, tools, QC settings and tissue-detection defaults can always be edited. To run an
-          existing slide on another version, pick it in the slide's <em>Config version</em> selector on Slide Processing.
+          {isImage ? (
+            <>
+              An image project has a single configuration: each image is annotated as it is, so there is no patch grid to
+              version. Classes, tools and QC settings can be edited at any time; annotations keep pointing at their class
+              when you rename or recolor it.
+            </>
+          ) : (
+            <>
+              Patch size, stride, magnification and tissue threshold define where every patch and annotation sits, so they
+              can't be changed in place once a version has generated patches or is locked -- editing them creates a new
+              version instead. Classes, tools, QC settings and tissue-detection defaults can always be edited. To run an
+              existing slide on another version, pick it in the slide's <em>Config version</em> selector on Slide Processing.
+            </>
+          )}
         </span>
       </Card>
 
@@ -96,7 +107,8 @@ export function ConfigVersioningPage() {
             usage={usage[c.id]}
             isDefault={c.id === project.active_config_version_id}
             onEdit={() => setTarget({ config: c, mode: "edit" })}
-            onFork={() => setTarget({ config: c, mode: "fork" })}
+            onFork={isImage ? undefined : () => setTarget({ config: c, mode: "fork" })}
+            isImage={isImage}
             onLock={() => handleLock(c.id)}
             onMakeDefault={() => handleMakeDefault(c.id)}
           />
@@ -108,6 +120,7 @@ export function ConfigVersioningPage() {
         onClose={() => setTarget(null)}
         config={target?.config ?? null}
         mode={target?.mode ?? "edit"}
+        projectType={project.project_type}
         existingLabels={configs.map((c) => c.version_label)}
         onSaved={() => {
           setTarget(null);
@@ -124,6 +137,7 @@ function ConfigCard({
   isDefault,
   onEdit,
   onFork,
+  isImage = false,
   onLock,
   onMakeDefault,
 }: {
@@ -131,7 +145,8 @@ function ConfigCard({
   usage?: ConfigUsage;
   isDefault: boolean;
   onEdit: () => void;
-  onFork: () => void;
+  onFork?: () => void;
+  isImage?: boolean;
   onLock: () => void;
   onMakeDefault: () => void;
 }) {
@@ -161,21 +176,25 @@ function ConfigCard({
               Lock
             </Button>
           )}
-          <Button variant="secondary" icon="call_split" onClick={onFork}>
-            New version
-          </Button>
+          {onFork && (
+            <Button variant="secondary" icon="call_split" onClick={onFork}>
+              New version
+            </Button>
+          )}
           <Button variant="primary" icon="edit" onClick={onEdit}>
             Edit
           </Button>
         </div>
       </div>
 
+      {!isImage && (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-space-md text-label-md">
         <Kv label="Patch dimension" value={`${config.patch_width}x${config.patch_height}`} />
         <Kv label="Stride" value={config.stride_x === config.stride_y ? `${config.stride_x}px` : `${config.stride_x} x ${config.stride_y}px`} />
         <Kv label="Magnification" value={`${config.target_magnification}x`} />
         <Kv label="Tissue threshold" value={`>=${Math.round(config.min_tissue_fraction * 100)}%`} />
       </div>
+      )}
 
       <div className="mt-space-md flex flex-wrap gap-x-space-md gap-y-1.5 items-center">
         {config.annotation_classes.map((k) => (
@@ -194,14 +213,14 @@ function ConfigCard({
         </span>
         {usage ? (
           <>
-            <span>{count(usage.patch_count, "patch", "patches")}</span>
+            <span>{isImage ? count(usage.patch_count, "image", "images") : count(usage.patch_count, "patch", "patches")}</span>
             <span>{count(usage.annotation_count, "annotation", "annotations")}</span>
-            <span>{count(usage.slide_count, "slide", "slides")} using it</span>
+            {!isImage && <span>{count(usage.slide_count, "slide", "slides")} using it</span>}
           </>
         ) : (
           <span>usage unavailable</span>
         )}
-        <span>Coordinate frame: Level-0 absolute (px)</span>
+        <span>{isImage ? "Coordinate frame: image pixels" : "Coordinate frame: Level-0 absolute (px)"}</span>
       </div>
     </Card>
   );

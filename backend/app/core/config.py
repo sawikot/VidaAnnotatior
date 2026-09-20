@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     max_upload_bytes: int = 20 * 1024 * 1024 * 1024  # 20 GB
     max_upload_files: int = 20_000  # files in one request, and entries in one zip
 
+    # Image projects annotate ordinary images as-is, so each one is decoded whole into
+    # memory. Larger images are refused (they belong in a WSI project).
+    max_image_pixels: int = 25_000_000
+
+    # Most patch images one export download may contain (they are cut from the slide on the fly).
+    max_export_images: int = 50_000
+
 
 @lru_cache
 def get_settings() -> Settings:

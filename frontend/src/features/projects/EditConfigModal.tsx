@@ -4,7 +4,7 @@ import { MaterialIcon } from "../../components/MaterialIcon";
 import { Button, Modal } from "../../components/primitives";
 import { forkConfig, getConfigUsage, updateConfig } from "../../services/api";
 import { useUiStore } from "../../stores/uiStore";
-import type { ConfigUsage, ConfigVersion } from "../../types/api";
+import type { ConfigUsage, ConfigVersion, ProjectType } from "../../types/api";
 import { MVP_TOOLS } from "./constants";
 import {
   diffDraft,
@@ -22,10 +22,13 @@ interface Props {
   /** "edit" changes this version in place where that is safe and otherwise
    * offers a new version; "fork" always creates a new version from it. */
   mode: "edit" | "fork";
+  /** Image projects have no patch grid or tissue detection to edit, and never fork. */
+  projectType?: ProjectType;
   onSaved: (result: { kind: "updated" | "forked"; config: ConfigVersion }) => void;
 }
 
-export function EditConfigModal({ open, onClose, config, existingLabels, mode, onSaved }: Props) {
+export function EditConfigModal({ open, onClose, config, existingLabels, mode, projectType = "wsi", onSaved }: Props) {
+  const isImage = projectType === "image";
   const pushToast = useUiStore((s) => s.pushToast);
   const annotatorName = useUiStore((s) => s.annotatorName);
 
@@ -60,7 +63,7 @@ export function EditConfigModal({ open, onClose, config, existingLabels, mode, o
 
   const hasData = (usage?.patch_count ?? 0) > 0;
   const geometryLocked = hasData || config.status === "locked";
-  const willFork = mode === "fork" || (geometryLocked && diff.touchedCritical.length > 0);
+  const willFork = !isImage && (mode === "fork" || (geometryLocked && diff.touchedCritical.length > 0));
   const labelTaken = willFork && existingLabels.includes(label.trim());
   const labelOk = !willFork || (!!label.trim() && !labelTaken);
   const canSave = !busy && usageLoaded && !problem && labelOk && (mode === "fork" || diff.changed);
@@ -120,7 +123,7 @@ export function EditConfigModal({ open, onClose, config, existingLabels, mode, o
             Creates an independent version starting from {config.version_label}'s settings. Nothing already generated
             or annotated is touched.
           </p>
-        ) : geometryLocked ? (
+        ) : geometryLocked && !isImage ? (
           <div className="flex gap-space-sm rounded bg-surface-container-low border-l-4 border-primary p-space-md text-body-md">
             <MaterialIcon name="lock" className="text-primary shrink-0" />
             <span>
@@ -145,6 +148,8 @@ export function EditConfigModal({ open, onClose, config, existingLabels, mode, o
           </Field>
         </Section>
 
+        {!isImage && (
+        <>
         <Section title="WSI & patch grid">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-space-md">
             <Field label="Target magnification (x)">
@@ -199,6 +204,9 @@ export function EditConfigModal({ open, onClose, config, existingLabels, mode, o
             </Field>
           </div>
         </Section>
+
+        </>
+        )}
 
         <Section title="Diagnostic classes">
           <div className="flex flex-col gap-space-sm">

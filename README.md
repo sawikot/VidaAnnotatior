@@ -34,6 +34,48 @@ Backend service modules (`backend/app/services/`):
 | `config_versioning.py` | Locks a config version's critical fields once patches exist; forks a new version instead of mutating |
 | `exporter/` | Export format registry (`get_exporter`). One small class per format — `wsi_json`, `geojson`, `coco`, `patch_csv`, `stats_csv` — all reading the same `ExportData` snapshot (see *Export formats* below) |
 | `geometry.py` | Shapely-backed polygon area/validity helpers shared by the exporters |
+| `image_import.py` | Finds and validates plain images for *image projects* (see below); `ImageReader` in `wsi_reader.py` presents one as a single-level slide |
+
+## Annotation tools
+
+| Tool | Key | How | Stored as |
+|---|---|---|---|
+| Select / Move | `V` | Click a shape to select it, drag to move it (stays inside the patch; undoable), `Delete` removes it | — |
+| Point | `N` | Click | `point`: 1 point |
+| Line | `L` | Drag from start to end | `line`: 2 points |
+| Freehand line | `G` | Drag along a path | `freehand_line`: an open path, ≥ 2 points |
+| Rectangle | `R` | Drag a corner to the opposite corner | `rectangle`: 4 corners |
+| Circle | `C` | Drag from the centre outwards | `circle`: the centre and one point on the edge |
+| Polygon | `P` | Click the vertices, then double-click or `Enter` | `polygon`: ≥ 3 points |
+| Freehand polygon | `F` | Drag around the outline | `freehand`: a closed outline, ≥ 3 points |
+
+**Modifying an annotation** (Select tool, or click an object in the workspace's object list): the selected
+shape shows handles. Drag the shape to move it; drag a handle to reshape it — a polygon, freehand or line
+vertex; a rectangle's corners (the opposite corner stays fixed) or side midpoints; a circle's edge handle
+to resize it and its centre handle to move it. Double-click an outline to add a point, a point to remove
+it (a polygon keeps at least 3, a freehand line 2). The *Edit* panel under the object list changes its
+class, unsure/flag marks and a note, or deletes it. Every one of these changes is saved at once and can be
+undone with `Ctrl+Z` (redo with `Ctrl+Shift+Z`); a shape can only be given a class of its own project
+configuration (the server answers 422 otherwise).
+
+`Esc` abandons a shape in progress. Which of these a project offers is set in its configuration
+(*Config → Tools*); Select is always available, and new projects get all of them. Projects created
+before the line/freehand-line/circle tools existed were upgraded automatically, unless their tool list
+had been customised.
+
+A circle is stored as centre + edge point, not as a polygon, so it stays exact: the local→Level-0
+transform is a uniform scale plus a shift, so the centre and the radius convert exactly. The server checks
+each shape (right number of points, finite numbers, a line with length, a circle with a radius) and
+answers 422 otherwise. The type name `freehand` has always meant the closed freehand polygon and is kept
+so existing data and exports stay valid.
+
+How each export treats them: **WSI JSON** keeps the native shape and adds `radius` (circle) or `length`
+(lines); **GeoJSON** writes lines as `LineString` (with `length_px`) and circles as 64-sided polygons
+(with the exact `area_px2` and `radius_px`); **COCO** has no lines or points, so those are counted in
+`info.vp_skipped` (`point_annotations`, `line_annotations`) and circles go in as their 64-sided outline;
+**masks** paint circles as discs and leave lines and points out; **statistics CSV** counts circles as
+polygons (exact πr² area) and reports lines in `n_lines`, `summed_length_px` and `summed_length_um`
+(blank without resolution metadata).
 
 ## Coordinate model (read this before touching geometry code)
 
@@ -121,7 +163,7 @@ Open `http://localhost:5173`.
      reported, not unpacked.
 3. **Process**: open *Slide Processing* → *Re-run Detection* (HSV+Otsu tissue mask, tunable via sliders)
    → *Generate Coords* (walks the grid, keeps patches meeting the tissue threshold — coordinates only).
-4. **Annotate**: open the *Workspace* → draw Polygon/Rectangle/Point/Freehand shapes, assign a class,
+4. **Annotate**: open the *Workspace* → draw shapes with the tools below, assign a class,
    navigate with `A`/`D` or the on-screen buttons, `Space` jumps to the next unannotated patch. Every
    shape autosaves on completion; the save-state pill shows Saving/Saved/Error honestly (never a fake
    "Saved" if the API call failed).
@@ -173,6 +215,45 @@ Backend tests cover coordinate transforms (including a downsampled-level case), 
 sampling, patch-grid generation/bounds, config-version lock/fork behavior, and JSON export shape —
 all against synthetic fixtures, no OpenSlide/file dependency, so they run anywhere.
 
+Tests never touch your real data: `tests/conftest.py` points the storage and watch directories at
+throw-away temp folders for every test (an earlier version of the project-deletion test removed the real
+`data/uploads/1`, because a project has id 1 in the in-memory test database). `test_storage_isolation.py`
+guards against that regression.
+
+## Project types: WSI or images
+
+Choose the type in step 1 of the *New Project* wizard.
+
+- **Whole-slide images (WSI)** — the workflow described above: tissue detection, virtual patch grid, annotate
+  patch by patch.
+- **Images / patches** — for datasets that are already ordinary images or pre-cut patches (PNG, JPEG, TIFF, BMP,
+  WebP, GIF). Each image is annotated as it is: no magnification, patch grid or tissue detection, so the wizard
+  skips those steps. Upload images, a folder, or a `.zip` (or import from the watch directory); sub-folders are
+  kept in each image's name (`tumor/001.png`).
+
+How an image project maps onto the same model (so annotation, storage and export need no special cases): each
+image is one slide whose Level-0 grid **is the image**, holding a single virtual patch that covers all of it.
+Origin is (0, 0) and the downsample is 1, so local and global coordinates are the same image pixels. The original
+file is never modified and is served losslessly (PNG). Photos are turned upright by their EXIF rotation and
+transparent / 16-bit images are converted to RGB the same way on every read, so coordinates always refer to the
+pixels the annotator saw.
+
+Differences worth knowing:
+
+- Images up to 8192 px per side and 25 megapixels (`MAX_IMAGE_PIXELS`) are accepted; anything bigger belongs in a
+  WSI project. Unreadable or oversized images are reported, not imported.
+- An image project has one configuration. Classes, tools and QC settings are edited in place; forking versions,
+  tissue detection and patch generation are refused (they would strand or delete the whole-image patch).
+- The workspace lists the project's images on the left; *Next / Prev / Next Unannotated / Next Flagged* (and
+  A / D / Space) move across images, and *Validate* / *Skip* advance to the next one. The gallery (*Images*) is the
+  whole project as a filterable thumbnail grid.
+- Exports: COCO and both CSVs are dataset-level formats, so *Export All* returns **one merged file** for the whole
+  project (COCO lists every annotated or reviewed image, including confirmed negatives; `file_name` is the
+  image's own relative path). GeoJSON and WSI JSON are per-image coordinate spaces and stay one file per image in a ZIP.
+
+Existing databases are upgraded automatically at startup (a `project_type` column is added, defaulting every
+existing project to WSI).
+
 ## Export formats
 
 `GET /api/slides/{id}/export/{format}` — every format covers the slide's **active config version** only
@@ -183,7 +264,7 @@ patches, marked `excluded = true`, so it stays a complete registry).
 |---|---|---|---|
 | `wsi_json` | `.json` | Level-0 | The native schema; also what *Import Annotations* reads back. |
 | `geojson` | `.geojson` | Level-0 | RFC 7946 FeatureCollection in **image pixels** (y down), not lon/lat. Polygons and points; QuPath-style `objectType` / `classification` properties, so it opens in QuPath directly. Self-crossing polygons are exported as drawn and flagged `valid_geometry: false`; polygons with no area are skipped and counted in `virtualpatch.skipped_degenerate_geometry`. |
-| `coco` | `.json` | **Patch pixels** (+ Level-0) | Each annotated patch is a COCO `image` (`width`/`height` = the patch at its read level); `segmentation`, `bbox` and `area` are in that image's own pixels, which is what Detectron2/MMDetection-style code expects. `coco_url` is the API path that renders that exact patch from the original slide (patches are never stored). Each annotation also carries `vp_level0_segmentation`, and each image its `vp_origin_level0` / `vp_downsample`, so nothing about position on the slide is lost. COCO has no point type and requires a category, so points and unclassified shapes are omitted and counted in `info.vp_skipped`. |
+| `coco` | `.json` | **Patch pixels** (+ Level-0) | Each annotated patch is a COCO `image` (`width`/`height` = the patch at its read level); `segmentation`, `bbox` and `area` are in that image's own pixels, which is what Detectron2/MMDetection-style code expects. `coco_url` is the API path that renders that exact patch from the original slide (patches are never stored). Each annotation also carries `vp_level0_segmentation`, and each image its `vp_origin_level0` / `vp_downsample`, so nothing about position on the slide is lost. COCO has no point or line type and requires a category, so points, lines and unclassified shapes are omitted and counted in `info.vp_skipped`; circles are written as their 64-sided outline. |
 | `patch_csv` | `.csv` | Level-0 | One row per patch: `level0_x/y`, `width_level0/height_level0`, `read_level`, `width_px/height_px`, `tissue_fraction`, `status`, review flags, `n_annotations`, `dominant_class` (largest summed area on that patch). |
 | `stats_csv` | `.csv` | px² / mm² | Long ("tidy") layout, one row per class — including classes with zero annotations and an `(unclassified)` row — with counts, summed/mean area in px² and mm², share of annotated and of tissue area, plus slide-level patch counts. mm² columns are blank when the slide has no resolution (mpp) metadata. Areas are summed **per annotation**, so overlapping shapes count twice. |
 
@@ -192,6 +273,32 @@ slide (same content as the single-slide download) plus a `manifest.json`. Slides
 whose export fails, don't block the download; they're listed under `skipped` with the reason. On the Export
 screen use the *Scope* switch (*This slide* / *All slides*).
 
+### Export options
+
+Every export (one slide or the whole project) takes these options; the Export screen shows them with a live
+count of what the selection covers.
+
+| Option | Values | Effect |
+|---|---|---|
+| `patches` | `annotated` (default), `all`, `empty`, `reviewed` | Which patches are covered. `annotated`: at least one annotation. `all`: every patch, empty ones included (negatives). `empty`: no annotation at all. `reviewed`: marked Reviewed/QA, confirmed negatives included. Patches flagged *Exclude from training* never contribute annotations or images; they are only listed in the registries (WSI JSON `patches`, patch CSV) under `all`. |
+| `content` | `annotations` (default), `images` | `images` returns a ZIP: `annotations/` (the chosen format), `images/` (one file per patch, cut from the original slide), optional `masks/`, and a `manifest.json`. |
+| `image_format` | `jpg` (default), `png` | JPEG is smaller; PNG is lossless. |
+| `masks` | `true` / `false` | With images: a single-channel PNG per patch, pixel value 0 = background and 1..N = the class (by class order; `mask_classes.json` lists them). Where shapes overlap the later one wins; points are not painted. |
+| `combine` | `true` / `false` (project export) | One file for the whole project for COCO and the CSVs, instead of one per slide. On by default in image projects and whenever images are included. |
+
+How the scope applies to each format: **COCO** lists the patches in scope as images (empty ones as images
+without annotations); **WSI JSON** adds a `patches` array listing them (with `annotation_count`);
+**patch CSV** has one row per patch in scope; **GeoJSON** holds shapes only, so scope simply selects which
+patches' shapes are written; **statistics CSV** counts the shapes on the selected patches while its
+slide-level columns still describe the whole grid. Download names carry the scope (`..._all.json`,
+`..._with_images.zip`).
+
+With images, the COCO `file_name` of each image is exactly its name under `images/`, so the ZIP is a
+ready-to-train dataset. The images are generated on the fly for that one download (streamed from a temporary
+file that is deleted afterwards) and **nothing is stored on the server**, so the "no permanent patch extraction"
+rule still holds. One download holds at most `MAX_EXPORT_IMAGES` (50,000) images; `GET
+/api/{slides|projects}/{id}/export-summary?patches=...` returns the counts and a rough size beforehand.
+
 CSV cells that begin with `=`, `+`, `-`, `@` are prefixed with `'` so a note like `=HYPERLINK(...)`
 can't execute when the file is opened in Excel; numbers are never altered. Download names are reduced
 to `[A-Za-z0-9._-]`. Adding a format means one `Exporter` subclass registered in
@@ -199,9 +306,11 @@ to `[A-Za-z0-9._-]`. Adding a format means one `Exporter` subclass registered in
 
 ## Scope of this MVP (intentional, not accidental)
 
-- **Annotation tools**: Select/Move, Polygon, Rectangle, Point, Freehand are fully functional. Brush
-  mask, SAM-assisted, and Ruler/Caliper are visible in the toolbar per the design but disabled with a
-  "planned" tooltip — the spec explicitly defers these past the core MVP phases.
+- **Annotation tools**: Select/Move, Point, Line, Freehand line, Rectangle, Circle, Polygon and Freehand
+  polygon are fully functional (see *Annotation tools*). Brush mask, SAM-assisted, and Ruler/Caliper
+  are shown in the project wizard per the design but disabled with a "planned" tooltip — the spec
+  explicitly defers these past the core MVP phases. Existing shapes can be moved, reshaped
+  and reclassified (see *Annotation tools*); rotating a shape is not supported.
 - **No auth/multi-user system**: `created_by` / `reviewed_by` are free-text fields, not a relational
   `Annotator`/`Review` system. Not requested by the spec; would be scope creep.
 - **No Alembic migrations** for the SQLite MVP — noted here as the natural next step for Postgres.

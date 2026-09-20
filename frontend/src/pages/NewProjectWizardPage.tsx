@@ -5,6 +5,7 @@ import { Field, Toggle } from "../components/formControls";
 import { Button, Card } from "../components/primitives";
 import { MVP_TOOLS, ORGANS } from "../features/projects/constants";
 import { createProject } from "../services/api";
+import type { ProjectType } from "../types/api";
 import { useUiStore } from "../stores/uiStore";
 
 const DEFAULT_CLASSES = [
@@ -14,14 +15,31 @@ const DEFAULT_CLASSES = [
   { name: "Normal", color_hex: "#2563eb", hotkey: "4" },
 ];
 
+// Steps 2-4 only exist for whole-slide projects: an image project has no magnification,
+// patch grid or tissue detection to configure.
 const STEPS = [
-  { n: 1, label: "Project Info", anchor: "step-1" },
-  { n: 2, label: "WSI Configuration", anchor: "step-2" },
-  { n: 3, label: "Patch Grid Matrix", anchor: "step-3" },
-  { n: 4, label: "Tissue Detection", anchor: "step-4" },
-  { n: 5, label: "Classes", anchor: "step-5" },
-  { n: 6, label: "Tools", anchor: "step-6" },
-  { n: 7, label: "Quality Control", anchor: "step-7" },
+  { anchor: "step-1", label: "Project Info", wsiOnly: false },
+  { anchor: "step-2", label: "WSI Configuration", wsiOnly: true },
+  { anchor: "step-3", label: "Patch Grid Matrix", wsiOnly: true },
+  { anchor: "step-4", label: "Tissue Detection", wsiOnly: true },
+  { anchor: "step-5", label: "Classes", wsiOnly: false },
+  { anchor: "step-6", label: "Tools", wsiOnly: false },
+  { anchor: "step-7", label: "Quality Control", wsiOnly: false },
+];
+
+const PROJECT_TYPES: { id: ProjectType; icon: string; title: string; body: string }[] = [
+  {
+    id: "wsi",
+    icon: "biotech",
+    title: "Whole-slide images (WSI)",
+    body: "Gigapixel slides (.svs, .ndpi, .mrxs ...). Tissue is detected and cut into virtual patches that you annotate one by one.",
+  },
+  {
+    id: "image",
+    icon: "image",
+    title: "Images / patches",
+    body: "Ordinary images (PNG, JPEG, TIFF ...) or patches you already cut. Each image is annotated as it is -- no tiling, no tissue detection.",
+  },
 ];
 
 const PRESETS: [number, number, number, number][] = [
@@ -40,6 +58,10 @@ export function NewProjectWizardPage() {
   const navigate = useNavigate();
   const pushToast = useUiStore((s) => s.pushToast);
   const [submitting, setSubmitting] = useState(false);
+  const [projectType, setProjectType] = useState<ProjectType>("wsi");
+  const isImage = projectType === "image";
+  const visibleSteps = STEPS.filter((st) => !(isImage && st.wsiOnly));
+  const stepNumber = (anchor: string) => visibleSteps.findIndex((st) => st.anchor === anchor) + 1;
 
   // Step 1
   const [name, setName] = useState("");
@@ -70,7 +92,7 @@ export function NewProjectWizardPage() {
   const [classes, setClasses] = useState(DEFAULT_CLASSES);
 
   // Step 6
-  const [enabledTools, setEnabledTools] = useState<string[]>(["polygon", "rectangle", "point", "freehand"]);
+  const [enabledTools, setEnabledTools] = useState<string[]>(MVP_TOOLS.map((t) => t.id));
 
   // Step 7
   const [allowSkip, setAllowSkip] = useState(true);
@@ -103,10 +125,21 @@ export function NewProjectWizardPage() {
     try {
       const project = await createProject({
         name,
+        project_type: projectType,
         organ,
         description,
         team,
-        config: {
+        config: isImage
+          ? {
+              version_label: "v1.0",
+              enabled_tools: enabledTools,
+              allow_skip: allowSkip,
+              allow_unsure: allowUnsure,
+              require_annotation: requireAnnotation,
+              reviewer_mode: reviewerMode,
+              annotation_classes: classes,
+            }
+          : {
           version_label: "v1.0",
           target_magnification: targetMag,
           mpp_handling: mppHandling,
@@ -154,14 +187,14 @@ export function NewProjectWizardPage() {
       </div>
 
       {/* Stepper (jump links) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-space-xs">
-        {STEPS.map((s) => (
+      <div className={`grid grid-cols-2 sm:grid-cols-4 gap-space-xs ${isImage ? "lg:grid-cols-4" : "lg:grid-cols-7"}`}>
+        {visibleSteps.map((s, idx) => (
           <a
-            key={s.n}
+            key={s.anchor}
             href={`#${s.anchor}`}
             className="flex flex-col gap-1 p-space-sm rounded bg-surface-container-lowest shadow-sm hover:shadow-md transition-shadow"
           >
-            <span className="text-label-sm text-on-surface-variant">Step 0{s.n}</span>
+            <span className="text-label-sm text-on-surface-variant">Step 0{idx + 1}</span>
             <span className="text-label-md font-headline-sm text-on-surface">{s.label}</span>
           </a>
         ))}
@@ -170,6 +203,30 @@ export function NewProjectWizardPage() {
       {/* Step 1 */}
       <Card className="p-space-lg" id="step-1">
         <SectionTitle n={1} title="Project Info" />
+        <div className="mt-space-md">
+          <div className="text-label-md text-on-surface-variant mb-1">What are you annotating?</div>
+          <div role="radiogroup" aria-label="Project type" className="grid md:grid-cols-2 gap-space-md">
+            {PROJECT_TYPES.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="radio"
+                aria-checked={projectType === t.id}
+                onClick={() => setProjectType(t.id)}
+                className={`text-left p-space-md rounded-xl flex gap-space-md items-start transition-shadow ${
+                  projectType === t.id ? "ring-2 ring-primary bg-primary-fixed/30" : "bg-surface-container-low hover:shadow-md"
+                }`}
+              >
+                <MaterialIcon name={t.icon} className="text-primary mt-0.5" />
+                <span className="flex flex-col gap-0.5">
+                  <span className="font-headline-sm text-headline-sm">{t.title}</span>
+                  <span className="text-body-sm text-on-surface-variant">{t.body}</span>
+                </span>
+                <MaterialIcon name={projectType === t.id ? "radio_button_checked" : "radio_button_unchecked"} className="text-primary ml-auto" />
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="grid md:grid-cols-2 gap-space-md mt-space-md">
           <Field label="Project Name">
             <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Breast Cancer Annotation" />
@@ -190,6 +247,8 @@ export function NewProjectWizardPage() {
         </div>
       </Card>
 
+      {!isImage && (
+        <>
       {/* Step 2 */}
       <Card className="p-space-lg" id="step-2">
         <SectionTitle n={2} title="WSI Configuration" />
@@ -303,10 +362,13 @@ export function NewProjectWizardPage() {
         </div>
       </Card>
 
+        </>
+      )}
+
       {/* Step 5 + 6 + 7 bento */}
       <div className="grid md:grid-cols-3 gap-space-md">
         <Card className="p-space-lg" id="step-5">
-          <SectionTitle n={5} title="Diagnostic Classes" />
+          <SectionTitle n={stepNumber("step-5")} title="Diagnostic Classes" />
           <div className="flex flex-col gap-space-sm mt-space-md">
             {classes.map((cls, i) => (
               <div key={i} className="flex items-center gap-space-sm">
@@ -339,7 +401,7 @@ export function NewProjectWizardPage() {
         </Card>
 
         <Card className="p-space-lg" id="step-6">
-          <SectionTitle n={6} title="Clinical Tool Suite" />
+          <SectionTitle n={stepNumber("step-6")} title="Clinical Tool Suite" />
           <div className="grid grid-cols-2 gap-space-sm mt-space-md">
             {MVP_TOOLS.map((t) => {
               const on = enabledTools.includes(t.id);
@@ -372,7 +434,7 @@ export function NewProjectWizardPage() {
         </Card>
 
         <Card className="p-space-lg" id="step-7">
-          <SectionTitle n={7} title="Quality Control Protocol" />
+          <SectionTitle n={stepNumber("step-7")} title="Quality Control Protocol" />
           <div className="flex flex-col gap-space-sm mt-space-md">
             <Toggle label="Allow Skip" checked={allowSkip} onChange={setAllowSkip} />
             <Toggle label="Allow Unsure Flag" checked={allowUnsure} onChange={setAllowUnsure} />
@@ -386,7 +448,9 @@ export function NewProjectWizardPage() {
       <div className="fixed bottom-4 left-14 right-4 z-30 flex justify-center pointer-events-none">
         <div className="pointer-events-auto bg-surface-container-lowest rounded-xl shadow-xl border border-outline-variant px-space-lg py-space-md flex items-center gap-space-md">
           <span className="text-body-sm text-on-surface-variant hidden sm:block">
-            {classes.length} classes &middot; {patchWidth}x{patchHeight} @ {targetMag}x &middot; {minTissue}% tissue
+            {isImage
+              ? `${classes.length} classes · image project`
+              : `${classes.length} classes · ${patchWidth}x${patchHeight} @ ${targetMag}x · ${minTissue}% tissue`}
           </span>
           <Button variant="primary" icon="rocket_launch" onClick={handleCreate} disabled={submitting}>
             {submitting ? "Creating..." : "Create Project"}

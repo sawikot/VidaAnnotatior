@@ -49,3 +49,11 @@ export const EXPORT_FORMATS: ExportFormat[] = [
     note: "One row per class (including classes with no annotations): counts, summed and mean area in px² and mm², share of annotated and tissue area. Areas are summed per annotation, so overlapping shapes count twice.",
   },
 ];
+
+/** In an image project the dataset-level formats come back as one merged file for the whole
+ * project (what a training pipeline wants); the per-image coordinate formats stay zipped. */
+const MERGED_IN_IMAGE_PROJECTS = new Set(["coco", "patch_csv", "stats_csv"]);
+
+export function isMergedExport(projectType: string | undefined, formatId: string): boolean {
+  return projectType === "image" && MERGED_IN_IMAGE_PROJECTS.has(formatId);
+}

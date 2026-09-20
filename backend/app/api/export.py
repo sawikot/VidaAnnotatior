@@ -6,17 +6,22 @@ import logging
 import re
 import zipfile
 from datetime import datetime, timezone
+from typing import Iterator
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response, StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_project_or_404, get_slide_or_404
+from app.core.config import get_settings
 from app.database.session import get_db
 from app.models.patch import Patch
 from app.models.project import Project
 from app.models.slide import Slide
 from app.services.exporter import get_exporter
+from app.services.exporter.bundle import Bundle, ExportTooLarge, build_bundle, summarize
+from app.services.exporter.options import ExportOptions, parse_options
 
 router = APIRouter(tags=["export"])
 log = logging.getLogger(__name__)
@@ -27,9 +32,67 @@ def _safe_stem(name: str, fallback: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("._") or fallback
 
 
+def _options(patches: str, content: str, image_format: str, masks: bool, combine: bool | None) -> ExportOptions:
+    try:
+        return parse_options(patches, content, image_format, masks, combine)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _suffix(options: ExportOptions) -> str:
+    """Download names say what they hold, so files from different runs stay apart."""
+    return "" if options.patch_scope == "annotated" else f"_{options.patch_scope}"
+
+
+def _has_grid(db: Session, slide: Slide) -> bool:
+    return (
+        slide.active_config_version_id is not None
+        and db.query(Patch.id)
+        .filter(Patch.slide_id == slide.id, Patch.config_version_id == slide.active_config_version_id)
+        .first()
+        is not None
+    )
+
+
+def _stream(bundle: Bundle, filename: str) -> StreamingResponse:
+    """Send the temporary ZIP in chunks and delete it afterwards."""
+
+    def chunks() -> Iterator[bytes]:
+        try:
+            while chunk := bundle.file.read(1 << 20):
+                yield chunk
+        finally:
+            bundle.file.close()
+
+    return StreamingResponse(
+        chunks(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"', "Content-Length": str(bundle.size)},
+    )
+
+
+def _bundle(
+    db: Session, slides: list[Slide], exporter, options: ExportOptions, *, combine: bool, label: str, skipped: list[dict] | None = None
+) -> Bundle:
+    try:
+        return build_bundle(
+            db, slides, exporter, options, combine=combine, label=label,
+            max_images=get_settings().max_export_images, skipped_slides=skipped,
+        )
+    except ExportTooLarge as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
+
+
+# --------------------------------------------------------------------------- one slide
+
+
 @router.get("/slides/{slide_id}/export/{format_id}")
 def export_slide(
     format_id: str,
+    patches: str = Query("annotated", description="annotated | all | empty | reviewed"),
+    content: str = Query("annotations", description="annotations | images (adds the patch images, as a ZIP)"),
+    image_format: str = Query("jpg", description="jpg | png"),
+    masks: bool = Query(False, description="with content=images: also write label masks"),
     slide: Slide = Depends(get_slide_or_404),
     db: Session = Depends(get_db),
 ):
@@ -37,64 +100,101 @@ def export_slide(
         exporter = get_exporter(format_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-    try:
-        result = exporter.export(db, slide)
-    except NotImplementedError as exc:
-        raise HTTPException(status_code=501, detail=str(exc)) from exc
+    options = _options(patches, content, image_format, masks, None)
 
     # The stored filename is user-supplied; keep the download name to safe characters
     # so it can't break out of the header or smuggle a path.
     stem = _safe_stem(slide.filename.rsplit(".", 1)[0], "slide")
-    filename = f"{stem}_{format_id}.{exporter.file_extension}"
-    body = exporter.render(result)
+
+    if options.with_images:
+        bundle = _bundle(db, [slide], exporter, options, combine=False, label=stem)
+        return _stream(bundle, f"{stem}_{format_id}{_suffix(options)}_with_images.zip")
+
+    try:
+        result = exporter.export(db, slide, options)
+    except NotImplementedError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+
     return Response(
-        content=body,
+        content=exporter.render(result),
         media_type=exporter.content_type,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'attachment; filename="{stem}_{format_id}{_suffix(options)}.{exporter.file_extension}"'},
     )
+
+
+# ------------------------------------------------------------------------ whole project
 
 
 @router.get("/projects/{project_id}/export/{format_id}")
 def export_project(
     format_id: str,
+    patches: str = Query("annotated", description="annotated | all | empty | reviewed"),
+    content: str = Query("annotations", description="annotations | images"),
+    image_format: str = Query("jpg", description="jpg | png"),
+    masks: bool = Query(False),
+    combine: bool | None = Query(None, description="one combined file for dataset-level formats (COCO, CSV)"),
     project: Project = Depends(get_project_or_404),
     db: Session = Depends(get_db),
 ):
-    """Every processed slide of the project, exported in one format and bundled
-    into a single ZIP (one file per slide plus a ``manifest.json``). Slides that
-    have no patch grid yet, or whose export fails, don't sink the download: they
-    are listed under ``skipped`` in the manifest with the reason."""
+    """Every processed slide of the project, exported in one format.
+
+    Normally a ZIP (one file per slide plus a ``manifest.json``): slides that have no patch grid
+    yet, or whose export fails, don't sink the download but are listed as skipped with the reason.
+
+    Dataset-level formats (COCO, both CSVs) can be *combined* into a single file for the whole
+    project, which is what a training pipeline wants. That is the default in an image project and
+    whenever patch images are included; otherwise ask for it with ``combine=true``.
+
+    With ``content=images`` the ZIP also holds the patch images (cut from the slides on the fly).
+    """
     try:
         exporter = get_exporter(format_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    options = _options(patches, content, image_format, masks, combine)
 
     slides = sorted(project.slides, key=lambda s: s.id)
+    ready = [s for s in slides if _has_grid(db, s)]
+    skipped = [
+        {"slide_id": s.id, "slide": s.filename, "reason": "No patch grid generated yet"} for s in slides if s not in ready
+    ]
+    if not ready:
+        raise HTTPException(status_code=422, detail="Nothing to export yet: no slide in this project is ready.")
+
+    slug = _safe_stem(project.slug, "project")
+    wants_combined = options.combine if options.combine is not None else (project.project_type == "image" or options.with_images)
+    merged = wants_combined and exporter.mergeable
+
+    if options.with_images:
+        bundle = _bundle(db, ready, exporter, options, combine=bool(wants_combined), label=slug, skipped=skipped)
+        return _stream(bundle, f"{slug}_{format_id}{_suffix(options)}_with_images.zip")
+
+    results: list[tuple[Slide, object]] = []
+    for slide in ready:
+        try:
+            results.append((slide, exporter.export(db, slide, options)))
+        except Exception:  # one bad slide must not lose the rest of a ZIP
+            if merged:
+                raise  # ...but a dataset file must never be silently incomplete
+            log.exception("Bulk export of slide %s failed", slide.id)
+            skipped.append({"slide_id": slide.id, "slide": slide.filename, "reason": "Export failed; see server log"})
+
+    if not results:
+        raise HTTPException(status_code=422, detail="Nothing could be exported.")
+
+    if merged:
+        return Response(
+            content=exporter.render(exporter.merge([r for _, r in results])),
+            media_type=exporter.content_type,
+            headers={"Content-Disposition": f'attachment; filename="{slug}_{format_id}{_suffix(options)}.{exporter.file_extension}"'},
+        )
+
     files: list[dict] = []
-    skipped: list[dict] = []
     used_names: set[str] = set()
     buffer = io.BytesIO()
-
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for slide in slides:
-            has_grid = (
-                slide.active_config_version_id is not None
-                and db.query(Patch.id)
-                .filter(Patch.slide_id == slide.id, Patch.config_version_id == slide.active_config_version_id)
-                .first()
-                is not None
-            )
-            if not has_grid:
-                skipped.append({"slide_id": slide.id, "slide": slide.filename, "reason": "No patch grid generated yet"})
-                continue
-            try:
-                body = exporter.render(exporter.export(db, slide)).encode("utf-8")
-            except Exception:  # one bad slide must not lose the rest of the batch
-                log.exception("Bulk export of slide %s failed", slide.id)
-                skipped.append({"slide_id": slide.id, "slide": slide.filename, "reason": "Export failed; see server log"})
-                continue
-
+        for slide, result in results:
+            body = exporter.render(result).encode("utf-8")
             stem = _safe_stem(slide.filename.rsplit(".", 1)[0], "slide")
             name = f"{stem}_{format_id}.{exporter.file_extension}"
             if name in used_names:  # two slides can share a filename
@@ -103,12 +203,10 @@ def export_project(
             archive.writestr(name, body)
             files.append({"slide_id": slide.id, "slide": slide.filename, "file": name, "bytes": len(body)})
 
-        if not files:
-            raise HTTPException(status_code=422, detail="No slide in this project has a patch grid yet; nothing to export.")
-
         manifest = {
             "project_id": project.slug,
             "format": format_id,
+            "patches": options.patch_scope,
             "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "slide_count": len(files),
             "files": files,
@@ -116,9 +214,58 @@ def export_project(
         }
         archive.writestr("manifest.json", json.dumps(manifest, indent=2))
 
-    filename = f"{_safe_stem(project.slug, 'project')}_{format_id}_all_slides.zip"
     return Response(
         content=buffer.getvalue(),
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'attachment; filename="{slug}_{format_id}{_suffix(options)}_all_slides.zip"'},
     )
+
+
+# --------------------------------------------------------------------------- preview counts
+
+
+class ExportSummaryOut(BaseModel):
+    slides: int
+    patches: int
+    annotations: int
+    images: int
+    approx_image_bytes: int
+    max_images: int  # most images one download may hold
+
+
+# Rough bytes per pixel of a tissue patch: JPEG (quality 95) and PNG. Only used to give an
+# order of magnitude before a large download, never for anything that has to be exact.
+_BYTES_PER_PIXEL = {"jpg": 0.3, "png": 1.8}
+
+
+def _summary_out(db: Session, slides: list[Slide], options: ExportOptions, image_format: str) -> ExportSummaryOut:
+    total = summarize(db, [s for s in slides if _has_grid(db, s)], options)
+    return ExportSummaryOut(
+        slides=total.slides,
+        patches=total.patches,
+        annotations=total.annotations,
+        images=total.images,
+        approx_image_bytes=int(total.image_pixels * _BYTES_PER_PIXEL.get(image_format, 1.0)),
+        max_images=get_settings().max_export_images,
+    )
+
+
+@router.get("/slides/{slide_id}/export-summary", response_model=ExportSummaryOut)
+def export_slide_summary(
+    patches: str = Query("annotated"),
+    image_format: str = Query("jpg"),
+    slide: Slide = Depends(get_slide_or_404),
+    db: Session = Depends(get_db),
+):
+    """What an export with these options would cover -- counts only, nothing is rendered."""
+    return _summary_out(db, [slide], _options(patches, "annotations", image_format, False, None), image_format)
+
+
+@router.get("/projects/{project_id}/export-summary", response_model=ExportSummaryOut)
+def export_project_summary(
+    patches: str = Query("annotated"),
+    image_format: str = Query("jpg"),
+    project: Project = Depends(get_project_or_404),
+    db: Session = Depends(get_db),
+):
+    return _summary_out(db, sorted(project.slides, key=lambda s: s.id), _options(patches, "annotations", image_format, False, None), image_format)

@@ -13,6 +13,7 @@ from app.models.patch import Patch
 from app.models.project import Project
 from app.models.slide import Slide
 from app.services.exporter import REGISTRY, get_exporter
+from app.services.exporter.options import ExportOptions
 from app.services.exporter.tables import to_csv
 
 INJECTION = '=HYPERLINK("http://evil.example","click")'
@@ -203,16 +204,19 @@ def test_coco_reports_what_it_could_not_represent(db):
     doc = get_exporter("coco").export(db, s["slide"])
     ids = {a["id"] for a in doc["annotations"]}
     assert ids == {s[k].id for k in ("rect", "tri", "square", "bowtie", "down")}
-    assert doc["info"]["vp_skipped"] == {"point_annotations": 1, "unclassified": 1, "degenerate_geometry": 1}
+    assert doc["info"]["vp_skipped"] == {"point_annotations": 1, "line_annotations": 0, "unclassified": 1, "degenerate_geometry": 1}
     assert doc["info"]["vp_config_version"] == "v1.0" and doc["info"]["vp_slide"]["width_level0"] == 100000
 
 
 # ----------------------------------------------------------------- Patch CSV
 
 
+ALL = ExportOptions(patch_scope="all")
+
+
 def test_patch_csv_lists_every_patch_with_level0_coordinates(db):
     s = seed(db)
-    text = get_exporter("patch_csv").export(db, s["slide"])
+    text = get_exporter("patch_csv").export(db, s["slide"], ALL)
     assert text.splitlines()[0].split(",")[:7] == [
         "slide", "patch_id", "patch_index", "level0_x", "level0_y", "width_level0", "height_level0",
     ]  # fmt: skip
@@ -228,7 +232,7 @@ def test_patch_csv_lists_every_patch_with_level0_coordinates(db):
 
 def test_patch_csv_flags_counts_and_dominant_class(db):
     s = seed(db)
-    a, b, c, d = rows(get_exporter("patch_csv").export(db, s["slide"]))
+    a, b, c, d = rows(get_exporter("patch_csv").export(db, s["slide"], ALL))
     assert a["n_annotations"] == "7" and a["dominant_class"] == "Stroma"  # 10050 px2 beats Tumor's 7500
     assert b["dominant_class"] == "Tumor" and b["flagged"] == "false" and b["status"] == "reviewed" and b["patch_label"] == "Tumor"
     assert (c["excluded"], c["n_annotations"]) == ("true", "1")
@@ -237,7 +241,7 @@ def test_patch_csv_flags_counts_and_dominant_class(db):
 
 def test_csv_text_that_looks_like_a_formula_is_neutralised(db):
     s = seed(db)
-    d = rows(get_exporter("patch_csv").export(db, s["slide"]))[3]
+    d = rows(get_exporter("patch_csv").export(db, s["slide"], ALL))[3]
     assert d["notes"] == "'" + INJECTION  # would otherwise execute when opened in Excel
     # numbers (including negative ones) are never altered
     assert to_csv(["n", "t"], [[-5, "-cmd"]]) == "n,t\n-5,'-cmd\n"
@@ -319,4 +323,4 @@ def test_only_the_active_config_version_is_exported(db):
     db.commit()
     assert get_exporter("geojson").export(db, s["slide"])["features"] == []
     assert get_exporter("coco").export(db, s["slide"])["images"] == []
-    assert rows(get_exporter("patch_csv").export(db, s["slide"])) == []
+    assert rows(get_exporter("patch_csv").export(db, s["slide"], ALL)) == []

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base, TimestampMixin
 
-GEOMETRY_TYPES = ("polygon", "rectangle", "point", "freehand")
+from app.services.geometry import SHAPE_TYPES as GEOMETRY_TYPES  # noqa: E402,F401
 
 
 class GeometryAnnotation(Base, TimestampMixin):
@@ -19,7 +19,7 @@ class GeometryAnnotation(Base, TimestampMixin):
     config_version_id: Mapped[int] = mapped_column(ForeignKey("project_config_versions.id"), index=True)
     class_id: Mapped[int | None] = mapped_column(ForeignKey("annotation_classes.id"), default=None)
 
-    type: Mapped[str] = mapped_column(String(20))  # polygon|rectangle|point|freehand
+    type: Mapped[str] = mapped_column(String(20))  # point|line|freehand_line|rectangle|circle|polygon|freehand (see services/geometry.py)
 
     # Provenance: coordinates as drawn, in the patch's *display* pixel space.
     coordinates_patch_local: Mapped[list] = mapped_column(JSON)
