@@ -82,6 +82,49 @@ class COCOExporter(Exporter):
             if ann.patch_id not in used_patch_ids:
                 used_patch_ids.append(ann.patch_id)
 
+        # Slide-level annotations reach COCO through the patches they cover: the piece inside each patch,
+        # in that patch's pixels. Each piece needs its own unique id (the annotation may span many
+        # patches), so it is the annotation's id and the patch's id combined.
+        for slide_ann in data.slide_annotations:
+            if slide_ann.type not in AREA_TYPES:
+                skipped["line_annotations" if slide_ann.type in LINE_TYPES else "point_annotations"] += 1
+            elif slide_ann.class_id is None or slide_ann.class_id not in data.classes:
+                skipped["unclassified"] += 1
+            elif not has_extent(slide_ann.type, slide_ann.coordinates_level0):
+                skipped["degenerate_geometry"] += 1
+
+        for patch in data.patches:
+            if patch.excluded:
+                continue
+            scale_x, scale_y = patch.width_l0 / patch.width, patch.height_l0 / patch.height
+            for piece in data.projections.get(patch.id, []):
+                ann = piece.annotation
+                if not piece.is_area or ann.class_id is None or ann.class_id not in data.classes:
+                    continue
+                rings = [area_ring("circle", part) if piece.type == "circle" else part for part in piece.parts]
+                xs = [x for ring in rings for x, _ in ring]
+                ys = [y for ring in rings for _, y in ring]
+                annotations.append(
+                    {
+                        "id": ann.id * 10**9 + patch.id,
+                        "image_id": patch.id,
+                        "category_id": ann.class_id,
+                        "segmentation": [_flat(ring) for ring in rings],
+                        "area": round(sum(polygon_area(ring) for ring in rings), 2),
+                        "bbox": [round(min(xs), 2), round(min(ys), 2), round(max(xs) - min(xs), 2), round(max(ys) - min(ys), 2)],
+                        "iscrowd": 0,
+                        "vp_level0_segmentation": [_flat([[x * scale_x + patch.x, y * scale_y + patch.y] for x, y in ring]) for ring in rings],
+                        "vp_shape_type": piece.type,
+                        "vp_unsure": ann.unsure,
+                        "vp_flagged": ann.flagged,
+                        "vp_scope": "slide",
+                        "vp_source_annotation_id": ann.id,
+                        "vp_clipped": piece.clipped,
+                    }
+                )
+                if patch.id not in used_patch_ids:
+                    used_patch_ids.append(patch.id)
+
         # Which patches become COCO "images". Under the default scope that is those holding at
         # least one exported shape; under the others it is every patch in scope, so empty ones
         # (or reviewed negatives) appear as images without annotations.

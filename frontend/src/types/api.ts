@@ -146,7 +146,8 @@ export interface PatchListResponse {
 
 export interface GeometryAnnotation {
   id: number;
-  patch_id: number;
+  /** null: drawn on the whole slide (WSI mode); its coordinates_level0 are then the only coordinates that exist. */
+  patch_id: number | null;
   slide_id: number;
   config_version_id: number;
   class_id: number | null;

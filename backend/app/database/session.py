@@ -47,6 +47,7 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     _add_missing_columns()
     _upgrade_enabled_tools()
+    _allow_slide_level_annotations()
 
 
 def _add_missing_columns(bind=None) -> None:
@@ -91,3 +92,61 @@ def _upgrade_enabled_tools(bind=None) -> None:
                     text("UPDATE project_config_versions SET enabled_tools = :tools WHERE id = :id"),
                     {"tools": json.dumps(tools + NEW_TOOLS), "id": config_id},
                 )
+
+
+def _allow_slide_level_annotations(bind=None) -> None:
+    """Let ``geometry_annotations.patch_id`` be NULL (annotations drawn on the whole slide).
+
+    Older databases declared the column NOT NULL, and SQLite cannot drop a constraint in place, so the
+    table is rebuilt: renamed aside, recreated from the current model, rows copied across, old table
+    dropped -- all in one transaction with foreign keys switched off and re-checked before committing.
+    A no-op once the column is nullable, so it is safe to run on every startup.
+    """
+    from sqlalchemy.schema import CreateIndex, CreateTable
+
+    from app.models import annotation, config_version, patch, project, slide  # noqa: F401  (foreign keys resolve through all models)
+    from app.models.annotation import GeometryAnnotation
+
+    bind = bind or engine
+    if bind.dialect.name != "sqlite":
+        return  # a fresh database of any other kind is created nullable by create_all
+
+    table = GeometryAnnotation.__table__
+    raw = bind.raw_connection()
+    original_isolation = raw.isolation_level
+    try:
+        raw.isolation_level = None  # explicit BEGIN/COMMIT below
+        cur = raw.cursor()
+        info = cur.execute(f"PRAGMA table_info({table.name})").fetchall()
+        not_null = {row[1]: bool(row[3]) for row in info}
+        if not info or not not_null.get("patch_id"):
+            return
+
+        old_columns = [row[1] for row in info]
+        columns = ", ".join(c.name for c in table.columns if c.name in old_columns)
+        old_indexes = [r[0] for r in cur.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name=? AND sql IS NOT NULL", (table.name,))]
+
+        cur.execute("PRAGMA foreign_keys=OFF")
+        cur.execute("BEGIN")
+        try:
+            cur.execute(f"ALTER TABLE {table.name} RENAME TO {table.name}_old")
+            for name in old_indexes:
+                cur.execute(f'DROP INDEX "{name}"')
+            cur.execute(str(CreateTable(table).compile(dialect=bind.dialect)))
+            for index in table.indexes:
+                cur.execute(str(CreateIndex(index).compile(dialect=bind.dialect)))
+            cur.execute(f"INSERT INTO {table.name} ({columns}) SELECT {columns} FROM {table.name}_old")
+            cur.execute(f"DROP TABLE {table.name}_old")
+            if cur.execute("PRAGMA foreign_key_check").fetchall():
+                raise RuntimeError("foreign key violations after rebuilding geometry_annotations")
+            cur.execute("COMMIT")
+        except BaseException:
+            cur.execute("ROLLBACK")
+            raise
+    finally:
+        # This connection goes back to the pool: leave it exactly as it was found.
+        try:
+            raw.cursor().execute("PRAGMA foreign_keys=ON")
+            raw.isolation_level = original_isolation
+        finally:
+            raw.close()

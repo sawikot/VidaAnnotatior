@@ -5,6 +5,9 @@ import { IconButton } from "../components/primitives";
 import { AnnotationCanvas } from "../features/annotations/AnnotationCanvas";
 import { useAnnotationHistory } from "../features/annotations/useAnnotationHistory";
 import { neighbour, progress, type ImageFilter } from "../features/images/imageNav";
+import { AnnotationModeSwitch, rememberMode, rememberedMode, type AnnotationMode } from "../features/annotations/AnnotationModeSwitch";
+import { WsiAnnotationView, type WsiFocus } from "../features/annotations/WsiAnnotationView";
+import { HOTKEYS, visibleTools as toolsFor } from "../features/annotations/tools";
 import { PatchGridOverlay, PATCH_STATUS_COLORS } from "../features/viewer/PatchGridOverlay";
 import { WsiViewer, type ViewportBbox } from "../features/viewer/WsiViewer";
 import {
@@ -12,34 +15,24 @@ import {
   deleteAnnotation,
   dynamicPatchUrl,
   getConfig,
+  getPatch,
   getProject,
   getSlide,
   listImages,
   listPatchAnnotations,
+  listSlideAnnotations,
   listPatches,
   nextPatch,
   thumbnailUrl,
   updateAnnotation,
   updatePatch,
 } from "../services/api";
-import { useAnnotationStore, type AnnotationTool } from "../stores/annotationStore";
+import { useAnnotationStore } from "../stores/annotationStore";
 import { useContextStore } from "../stores/contextStore";
 import { useUiStore } from "../stores/uiStore";
 import type { ConfigVersion, GeometryAnnotation, GeometryType, ImageSummary, Patch, Slide } from "../types/api";
 import type { Point } from "../utils/coordinates";
-
-const TOOLS: { id: AnnotationTool; icon: string; key: string; label: string }[] = [
-  { id: "select", icon: "near_me", key: "V", label: "Select / Move" },
-  { id: "point", icon: "control_point", key: "N", label: "Point" },
-  { id: "line", icon: "horizontal_rule", key: "L", label: "Line (drag)" },
-  { id: "freehand_line", icon: "gesture", key: "G", label: "Freehand line (drag)" },
-  { id: "rectangle", icon: "crop_square", key: "R", label: "Rectangle (drag)" },
-  { id: "circle", icon: "radio_button_unchecked", key: "C", label: "Circle (drag from the centre)" },
-  { id: "polygon", icon: "pentagon", key: "P", label: "Polygon (click points, double-click or Enter to finish)" },
-  { id: "freehand", icon: "draw", key: "F", label: "Freehand polygon (drag)" },
-];
-
-const HOTKEYS: Record<string, AnnotationTool> = Object.fromEntries(TOOLS.map((t) => [t.key.toLowerCase(), t.id]));
+import { projectSlideShapes } from "../utils/slideProjection";
 
 type AnnotationFields = Partial<Pick<GeometryAnnotation, "class_id" | "unsure" | "flagged" | "notes" | "coordinates_patch_local">>;
 
@@ -81,6 +74,62 @@ export function MainWorkspacePage() {
   const [area, setArea] = useState({ w: 0, h: 0 });
 
   const history = useAnnotationHistory();
+
+  // Annotate one patch at a time ("patch"), or directly on the whole slide ("wsi"). Image projects have
+  // no whole slide to speak of: an image is its own patch.
+  const [mode, setModeState] = useState<AnnotationMode>(() => {
+    const asked = searchParams.get("mode");
+    return asked === "wsi" || asked === "patch" ? asked : rememberedMode();
+  });
+  const [slideAnnotations, setSlideAnnotations] = useState<GeometryAnnotation[]>([]); // drawn on the whole slide
+  const [wsiFocus, setWsiFocus] = useState<WsiFocus | null>(null);
+  const [noPatches, setNoPatches] = useState(false);
+  const wsiActive = !isImage && mode === "wsi"; // the whole-slide view has taken over the page
+  const pendingSelect = useRef<number | null>(null); // an annotation to select once its patch has loaded
+
+  function setMode(next: AnnotationMode) {
+    setModeState(next);
+    rememberMode(next);
+    history.reset();
+    // Pick up changes made elsewhere (another tab, another annotator) each time the view changes.
+    listSlideAnnotations(sid, "slide").then(setSlideAnnotations).catch(() => undefined);
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      params.set("mode", next);
+      return params;
+    });
+  }
+
+  function showPatchOnSlide() {
+    setWsiFocus(patch ? { rect: { x: patch.x, y: patch.y, width: patch.width_l0, height: patch.height_l0 } } : null);
+    setMode("wsi");
+  }
+
+  function showAnnotationOnSlide(annotationId: number) {
+    setWsiFocus({ annotationId });
+    setMode("wsi");
+  }
+
+  async function openPatchFromSlide(patchId: number, annotationId: number) {
+    try {
+      if (patch?.id === patchId) {
+        // Already the patch on screen: nothing will reload, so select the annotation right away.
+        setSelectedAnnId(annotationId);
+        setTool("select");
+      } else {
+        pendingSelect.current = annotationId; // selected once that patch's annotations have loaded
+        setPatch(await getPatch(patchId));
+      }
+      setMode("patch");
+    } catch {
+      pendingSelect.current = null;
+      pushToast("Could not open that patch", "error");
+    }
+  }
+
+  useEffect(() => {
+    listSlideAnnotations(sid, "slide").then(setSlideAnnotations).catch(() => setSlideAnnotations([]));
+  }, [sid]);
 
   useEffect(() => {
     getProject(pid)
@@ -133,9 +182,11 @@ export function MainWorkspacePage() {
         const list = await listPatches(sid, { limit: 5000 });
         const found = list.items.find((p) => p.id === Number(paramId));
         setPatch(found ?? list.items[0] ?? null);
+        setNoPatches(list.items.length === 0);
       } else {
         const list = await listPatches(sid, { limit: 1 });
         setPatch(list.items[0] ?? null);
+        setNoPatches(list.items.length === 0);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -143,10 +194,20 @@ export function MainWorkspacePage() {
 
   useEffect(() => {
     if (!patch) return;
-    listPatchAnnotations(patch.id).then(setAnnotations);
+    listPatchAnnotations(patch.id).then((list) => {
+      setAnnotations(list);
+      if (pendingSelect.current !== null) {
+        // arrived from the whole-slide view by pressing one of this patch's own annotations
+        if (list.some((a) => a.id === pendingSelect.current)) {
+          setSelectedAnnId(pendingSelect.current);
+          setTool("select");
+        }
+        pendingSelect.current = null;
+      }
+    });
     setNotes(patch.notes ?? "");
     history.reset();
-    setSelectedAnnId(null);
+    if (pendingSelect.current === null) setSelectedAnnId(null);
     if (isImage !== true) {
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
@@ -167,12 +228,12 @@ export function MainWorkspacePage() {
   const selectedAnn = annotations.find((a) => a.id === selectedAnnId) ?? null;
 
   // The project's configuration decides which drawing tools are offered; Select is always there.
-  const enabledTools = config?.enabled_tools ?? [];
-  const visibleTools = TOOLS.filter((t) => t.id === "select" || enabledTools.length === 0 || enabledTools.includes(t.id));
+  const visibleTools = toolsFor(config?.enabled_tools);
   useEffect(() => {
-    if (config && !visibleTools.some((t) => t.id === tool)) setTool("select"); // the remembered tool is switched off here
+    // The remembered tool is switched off in this project, or is the whole-slide-only Pan (which the slide view manages itself).
+    if (config && !wsiActive && !visibleTools.some((t) => t.id === tool)) setTool("select");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config?.id, tool]);
+  }, [config?.id, tool, wsiActive]);
 
   useEffect(() => {
     if (!activeClassId && classes.length) setActiveClassId(classes[0].id);
@@ -183,6 +244,8 @@ export function MainWorkspacePage() {
     isImage && patch && area.w > 0 ? Math.max(0.05, Math.min(8, (area.w - 48) / patch.width, (area.h - 48) / patch.height)) : 1;
   const effectiveZoom = fitZoom * zoom;
   const maxZoom = isImage ? 8 : 4;
+
+  const onSlide = useMemo(() => (patch && !isImage ? projectSlideShapes(slideAnnotations, patch) : []), [slideAnnotations, patch, isImage]);
 
   const patchOrigin = useMemo(() => {
     if (!patch) return null;
@@ -258,7 +321,8 @@ export function MainWorkspacePage() {
   async function handleDeleteSelected() {
     if (!selectedAnnId) return;
     const target = annotations.find((a) => a.id === selectedAnnId);
-    if (!target) return;
+    const patchId = target?.patch_id; // the patch view only ever holds patch-drawn annotations
+    if (!target || patchId == null) return;
     setSaveState("saving");
     try {
       await deleteAnnotation(target.id);
@@ -272,7 +336,7 @@ export function MainWorkspacePage() {
           setAnnotations((prev) => prev.filter((a) => a.id !== target.id));
         },
         undo: async () => {
-          const recreated = await createAnnotation(target.patch_id, {
+          const recreated = await createAnnotation(patchId, {
             type: target.type,
             class_id: target.class_id,
             coordinates_patch_local: target.coordinates_patch_local,
@@ -325,9 +389,10 @@ export function MainWorkspacePage() {
   }
 
   useEffect(() => {
+    if (wsiActive) return; // the whole-slide view owns the keyboard: Space pans there, it must not jump patches
     function onKeyDown(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
 
       const picked = !e.ctrlKey && !e.metaKey && !e.altKey ? HOTKEYS[e.key.toLowerCase()] : undefined;
       if (picked && visibleTools.some((t) => t.id === picked)) setTool(picked);
@@ -349,10 +414,42 @@ export function MainWorkspacePage() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patch, classes, imagesLive, isImage, sid]);
+  }, [patch, classes, imagesLive, isImage, sid, wsiActive]);
 
-  if (!slide || !config || !patch || !patchOrigin || isImage === null) {
+  if (!slide || !config || isImage === null) {
     return <div className="p-space-xl text-center text-slate-400 bg-[#0a0f1d] h-[calc(100vh-3.5rem)]">Loading workspace...</div>;
+  }
+
+  if (wsiActive) {
+    return (
+      <WsiAnnotationView
+        slide={slide}
+        config={config}
+        slideAnnotations={slideAnnotations}
+        setSlideAnnotations={setSlideAnnotations}
+        focus={wsiFocus}
+        onModeChange={(next) => (next === "patch" ? setMode("patch") : undefined)}
+        onOpenPatch={openPatchFromSlide}
+      />
+    );
+  }
+
+  if (!patch || !patchOrigin) {
+    return noPatches ? (
+      <div className="p-space-xl text-center text-slate-300 bg-[#0a0f1d] h-[calc(100vh-3.5rem)] flex flex-col items-center gap-space-md">
+        <p>This slide has no patches yet, so there is nothing to annotate patch by patch.</p>
+        <div className="flex gap-space-sm">
+          <button className="px-space-md h-8 rounded bg-[#0284c7] text-white text-label-md" onClick={() => setMode("wsi")}>
+            Annotate the whole slide instead
+          </button>
+          <Link className="px-space-md h-8 rounded bg-surface-container-high text-on-surface text-label-md inline-flex items-center" to={`/projects/${pid}/slides/${sid}/processing`}>
+            Generate patches
+          </Link>
+        </div>
+      </div>
+    ) : (
+      <div className="p-space-xl text-center text-slate-400 bg-[#0a0f1d] h-[calc(100vh-3.5rem)]">Loading workspace...</div>
+    );
   }
 
   const imageUrl = dynamicPatchUrl(sid, patch.x, patch.y, patch.width, patch.height, patch.level);
@@ -366,6 +463,7 @@ export function MainWorkspacePage() {
       {/* Precision strip */}
       <div className="bg-[#0b1329] border-b border-[#1e293b] px-space-md py-1.5 flex items-center gap-space-md text-body-sm flex-wrap">
         <span className="font-headline-sm">{switching ? "Loading..." : slide.filename}</span>
+        {!isImage && <AnnotationModeSwitch mode="patch" onChange={(next) => (next === "wsi" ? showPatchOnSlide() : undefined)} />}
         {isImage ? (
           <span className="font-mono text-label-sm text-cyan-300">
             {patch.width.toLocaleString()} × {patch.height.toLocaleString()} px
@@ -461,6 +559,8 @@ export function MainWorkspacePage() {
               tool={tool}
               zoom={effectiveZoom}
               annotations={annotations}
+              background={onSlide}
+              onBackgroundPress={showAnnotationOnSlide}
               classes={classes}
               selectedId={selectedAnnId}
               onSelect={setSelectedAnnId}
@@ -522,6 +622,32 @@ export function MainWorkspacePage() {
               {annotations.length === 0 && <div className="text-body-sm text-on-surface-variant">No objects yet -- draw one with the tools above.</div>}
             </div>
           </div>
+
+          {onSlide.length > 0 && (
+            <div data-testid="from-the-slide">
+              <div className="text-label-md text-on-surface-variant mb-1">From the whole slide ({onSlide.length})</div>
+              <div className="flex flex-col gap-1">
+                {onSlide.map((a) => {
+                  const cls = classes.find((c) => c.id === a.class_id);
+                  return (
+                    <button
+                      key={a.id}
+                      onClick={() => showAnnotationOnSlide(a.id)}
+                      title="Edit this on the whole slide"
+                      className="flex items-center justify-between px-space-sm py-1.5 rounded bg-surface-container-low text-left hover:bg-surface-container"
+                    >
+                      <span className="flex items-center gap-1.5 text-label-md">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cls?.color_hex ?? "#94a3b8" }} />
+                        {cls?.name ?? "Unclassed"} #{a.id}
+                      </span>
+                      <span className="text-label-sm text-on-surface-variant capitalize">{a.type.replace("_", " ")}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-label-sm text-on-surface-variant mt-1">Drawn on the whole slide; shown here as they lie in this patch. Press one to edit it there.</p>
+            </div>
+          )}
 
           {selectedAnn && (
             <div className="rounded-lg bg-surface-container-low p-space-sm flex flex-col gap-space-sm" data-testid="selected-object">

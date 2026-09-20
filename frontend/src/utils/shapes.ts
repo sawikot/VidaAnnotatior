@@ -81,21 +81,25 @@ export function constrainCircleEdge(center: Point, edge: Point, width: number, h
   return [cx + (edge[0] - cx) * k, cy + (edge[1] - cy) * k];
 }
 
-/** Whether a finished gesture is big enough to keep. */
-export function isDrawnEnough(type: GeometryType, points: Point[]): boolean {
+/**
+ * Whether a finished gesture is big enough to keep. The minimum sizes are in screen pixels;
+ * `unit` is how many coordinate units one screen pixel spans (1 for a patch shown 1:1, far more
+ * on a zoomed-out whole slide), so a stray click is rejected at any zoom.
+ */
+export function isDrawnEnough(type: GeometryType, points: Point[], unit = 1): boolean {
   switch (type) {
     case "point":
       return points.length === 1;
     case "line":
-      return points.length === 2 && lineLength(points) > MIN_DRAG;
+      return points.length === 2 && lineLength(points) > MIN_DRAG * unit;
     case "circle":
-      return points.length === 2 && circleGeometry(points).r > MIN_RADIUS;
+      return points.length === 2 && circleGeometry(points).r > MIN_RADIUS * unit;
     case "rectangle": {
       const b = shapeBounds(type, points);
-      return b.maxX - b.minX > MIN_DRAG && b.maxY - b.minY > MIN_DRAG;
+      return b.maxX - b.minX > MIN_DRAG * unit && b.maxY - b.minY > MIN_DRAG * unit;
     }
     case "freehand_line":
-      return points.length >= 2 && lineLength(points) > MIN_FREEHAND_LINE;
+      return points.length >= 2 && lineLength(points) > MIN_FREEHAND_LINE * unit;
     case "polygon":
     case "freehand":
       return points.length >= 3;

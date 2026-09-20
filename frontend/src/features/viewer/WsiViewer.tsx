@@ -19,7 +19,12 @@ interface Props {
    * unlike OpenSeadragon's default sprite-image buttons). Off by default for
    * small embedded/non-interactive uses (e.g. the workspace's minimap). */
   showControls?: boolean;
-  onViewportChange?: (bbox: ViewportBbox, zoom: number) => void;
+  /** `scale` is screen pixels per Level-0 pixel at the current zoom. */
+  onViewportChange?: (bbox: ViewportBbox, zoom: number, scale: number) => void;
+  /** Asked before every drag: return true to keep the viewer still (an annotation is being drawn or dragged). */
+  blockPan?: () => boolean;
+  /** OpenSeadragon's own keyboard shortcuts (arrows, W/A/S/D ...); switch off where the keys mean something else. */
+  keyboardNav?: boolean;
   onViewerReady?: (viewer: OpenSeadragon.Viewer) => void;
   /** Rendered inside a single full-image SVG overlay whose viewBox is
    * "0 0 slideWidthL0 slideHeightL0" -- children can plot directly in
@@ -33,9 +38,13 @@ export function WsiViewer({
   showNavigator = true,
   showControls = true,
   onViewportChange,
+  blockPan,
+  keyboardNav = true,
   onViewerReady,
   children,
 }: Props) {
+  const blockPanRef = useRef(blockPan);
+  blockPanRef.current = blockPan; // read at event time, so the viewer need not be rebuilt when it changes
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<OpenSeadragon.Viewer | null>(null);
   const overlayElRef = useRef<HTMLDivElement>(document.createElement("div"));
@@ -53,6 +62,7 @@ export function WsiViewer({
       navigatorPosition: "BOTTOM_LEFT",
       showRotationControl: false,
       gestureSettingsMouse: { clickToZoom: false },
+      keyboardNavEnabled: keyboardNav,
       // OpenSeadragon's own zoom/home/fullpage buttons render from a sprite-sheet
       // image path we don't serve; we draw our own matching-styled controls
       // instead (see the `showControls` overlay below).
@@ -92,9 +102,16 @@ export function WsiViewer({
         onViewportChange(
           { x0: imgRect.x, y0: imgRect.y, x1: imgRect.x + imgRect.width, y1: imgRect.y + imgRect.height },
           viewer.viewport.getZoom(),
+          imgRect.width > 0 ? viewer.viewport.getContainerSize().x / imgRect.width : 1,
         );
       });
     }
+    // Let a layer on top claim a drag (drawing a shape, moving a handle) so the slide does not pan under it.
+    const holdStill = (event: OpenSeadragon.ViewerEvent) => {
+      if (blockPanRef.current?.()) (event as unknown as { preventDefaultAction: boolean }).preventDefaultAction = true;
+    };
+    viewer.addHandler("canvas-drag", holdStill);
+    viewer.addHandler("canvas-drag-end", holdStill);
     viewer.addHandler("animation", reportViewport);
     viewer.addHandler("resize", reportViewport);
 

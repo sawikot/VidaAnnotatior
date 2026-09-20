@@ -43,7 +43,7 @@ class GeoJSONExporter(Exporter):
         features: list[dict[str, Any]] = []
         skipped_degenerate = 0
 
-        for ann in data.annotations:
+        for ann in data.everything():
             coords = ann.coordinates_level0
             if ann.type != "point" and not has_extent(ann.type, coords):
                 skipped_degenerate += 1  # collapsed: no area, zero length or zero radius
@@ -59,17 +59,18 @@ class GeoJSONExporter(Exporter):
                 skipped_degenerate += 1
                 continue
 
-            patch = data.patch_by_id[ann.patch_id]
+            patch = data.patch_by_id.get(ann.patch_id)  # None: drawn on the whole slide
             label = data.class_name(ann)
             properties: dict[str, Any] = {
                 "objectType": "annotation",
                 "annotation_id": f"ann_{ann.id:06d}",
                 "shape_type": ann.type,
+                "drawn_in": "patch" if patch is not None else "slide",
                 "label": label,
-                "patch_id": patch.id,
-                "patch_x": patch.x,
-                "patch_y": patch.y,
-                "patch_level": patch.level,
+                "patch_id": patch.id if patch else None,
+                "patch_x": patch.x if patch else None,
+                "patch_y": patch.y if patch else None,
+                "patch_level": patch.level if patch else None,
                 "unsure": ann.unsure,
                 "flagged": ann.flagged,
                 "created_by": ann.created_by,

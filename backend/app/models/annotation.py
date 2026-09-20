@@ -14,7 +14,10 @@ class GeometryAnnotation(Base, TimestampMixin):
     __tablename__ = "geometry_annotations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    patch_id: Mapped[int] = mapped_column(ForeignKey("patches.id", ondelete="CASCADE"), index=True)
+    # NULL for a *slide-level* annotation: one drawn directly on the whole slide, which belongs to no
+    # single patch (it may cross many, or lie where no patch was generated). Its Level-0 coordinates
+    # are then the only ones that exist; ``coordinates_patch_local`` is empty.
+    patch_id: Mapped[int | None] = mapped_column(ForeignKey("patches.id", ondelete="CASCADE"), index=True, default=None)
     slide_id: Mapped[int] = mapped_column(ForeignKey("slides.id", ondelete="CASCADE"), index=True)
     config_version_id: Mapped[int] = mapped_column(ForeignKey("project_config_versions.id"), index=True)
     class_id: Mapped[int | None] = mapped_column(ForeignKey("annotation_classes.id"), default=None)
@@ -32,5 +35,5 @@ class GeometryAnnotation(Base, TimestampMixin):
     flagged: Mapped[bool] = mapped_column(Boolean, default=False)
     excluded: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    patch: Mapped["Patch"] = relationship("Patch", back_populates="geometry_annotations")
+    patch: Mapped["Patch | None"] = relationship("Patch", back_populates="geometry_annotations")
     annotation_class: Mapped["AnnotationClass | None"] = relationship("AnnotationClass")

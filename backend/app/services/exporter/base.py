@@ -23,6 +23,8 @@ from app.models.config_version import AnnotationClass, ProjectConfigVersion
 from app.models.patch import Patch
 from app.models.slide import Slide
 
+from app.services.projection import Projected, project_slide_annotations
+
 from .options import ExportOptions
 
 
@@ -32,16 +34,24 @@ class ExportData:
     slide: Slide
     config: ProjectConfigVersion | None
     patches: list[Patch]  # the patches in the requested scope (excluded ones only under scope "all")
-    annotations: list[GeometryAnnotation]  # on the non-excluded patches in scope
-    all_annotations: list[GeometryAnnotation]  # every annotation of the grid (for per-patch counts)
+    annotations: list[GeometryAnnotation]  # drawn in a patch, on the non-excluded patches in scope
+    all_annotations: list[GeometryAnnotation]  # drawn in any patch of the grid (for per-patch counts)
     patch_by_id: dict[int, Patch]  # the whole grid, not just the scope
     classes: dict[int, AnnotationClass]
     grid: list[Patch] = field(default_factory=list)  # every patch of the active version
+    counts: dict[int, int] = field(default_factory=dict)  # annotations per patch: its own plus slide-level ones reaching it
+    # Drawn directly on the whole slide (no patch), in Level-0 pixels. Always part of the slide's own
+    # export, whatever patch scope was chosen: the scope selects patches, and these belong to none.
+    slide_annotations: list[GeometryAnnotation] = field(default_factory=list)
+    # Per patch, the part of each slide-level annotation lying inside it, in that patch's pixels.
+    projections: dict[int, list[Projected]] = field(default_factory=dict)
 
     def annotation_count(self, patch: Patch) -> int:
         return self.counts.get(patch.id, 0)
 
-    counts: dict[int, int] = field(default_factory=dict)
+    def everything(self) -> list[GeometryAnnotation]:
+        """Patch-drawn (in scope) and slide-level annotations together, in creation order."""
+        return sorted([*self.annotations, *self.slide_annotations], key=lambda a: a.id)
 
     def class_name(self, ann: GeometryAnnotation) -> str | None:
         cls = self.classes.get(ann.class_id) if ann.class_id is not None else None
@@ -74,16 +84,22 @@ def load_export_data(db: Session, slide: Slide, options: ExportOptions | None = 
 
     grid = patch_query.order_by(Patch.patch_index.asc(), Patch.id.asc()).all()
     patch_by_id = {p.id: p for p in grid}
-    all_annotations = [a for a in ann_query.order_by(GeometryAnnotation.id.asc()).all() if a.patch_id in patch_by_id]
+    stored = ann_query.order_by(GeometryAnnotation.id.asc()).all()
+    all_annotations = [a for a in stored if a.patch_id in patch_by_id]
+    slide_annotations = [a for a in stored if a.patch_id is None]
+    projections = project_slide_annotations(slide_annotations, grid)
+
     counts: dict[int, int] = {}
     for a in all_annotations:
         counts[a.patch_id] = counts.get(a.patch_id, 0) + 1
+    for patch_id, pieces in projections.items():
+        counts[patch_id] = counts.get(patch_id, 0) + len(pieces)
 
     patches = [p for p in grid if _in_scope(p, counts.get(p.id, 0), options.patch_scope)]
     in_scope_ids = {p.id for p in patches if not p.excluded}
     annotations = [a for a in all_annotations if a.patch_id in in_scope_ids]
 
-    class_ids = {a.class_id for a in annotations if a.class_id is not None}
+    class_ids = {a.class_id for a in [*annotations, *slide_annotations] if a.class_id is not None}
     if config is not None:
         classes = {c.id: c for c in config.annotation_classes}
     else:
@@ -92,7 +108,7 @@ def load_export_data(db: Session, slide: Slide, options: ExportOptions | None = 
     if missing:
         classes.update({c.id: c for c in db.query(AnnotationClass).filter(AnnotationClass.id.in_(missing))})
 
-    return ExportData(slide, config, patches, annotations, all_annotations, patch_by_id, classes, grid, counts)
+    return ExportData(slide, config, patches, annotations, all_annotations, patch_by_id, classes, grid, counts, slide_annotations, projections)
 
 
 def dumps_with_line_items(doc: dict[str, Any], big_keys: tuple[str, ...]) -> str:

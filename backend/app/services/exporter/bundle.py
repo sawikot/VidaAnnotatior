@@ -53,7 +53,7 @@ def summarize(db: Session, slides: list[Slide], options: ExportOptions) -> Summa
         drawable = [p for p in data.patches if not p.excluded]
         total.slides += 1
         total.patches += len(data.patches)
-        total.annotations += len(data.annotations)
+        total.annotations += len(data.annotations) + len(data.slide_annotations)
         total.images += len(drawable)
         total.image_pixels += sum(p.width * p.height for p in drawable)
     return total
@@ -157,7 +157,7 @@ def build_bundle(
                     try:
                         image = render_patch(reader, patch)
                         payload = encode(image, options.image_format)
-                        mask = render_mask(patch, by_patch.get(patch.id, []), class_index) if options.masks else None
+                        mask = render_mask(patch, by_patch.get(patch.id, []), class_index, data.projections.get(patch.id, [])) if options.masks else None
                     except Exception as exc:  # noqa: BLE001
                         image_errors.append({"slide_id": slide.id, "patch_id": patch.id, "reason": str(exc)})
                         continue

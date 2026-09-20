@@ -33,7 +33,8 @@ Backend service modules (`backend/app/services/`):
 | `coordinate_transform.py` | The **single** source of truth for Level-0 ⇄ patch-local math (mirrored in `frontend/src/utils/coordinates.ts`) |
 | `config_versioning.py` | Locks a config version's critical fields once patches exist; forks a new version instead of mutating |
 | `exporter/` | Export format registry (`get_exporter`). One small class per format — `wsi_json`, `geojson`, `coco`, `patch_csv`, `stats_csv` — all reading the same `ExportData` snapshot (see *Export formats* below) |
-| `geometry.py` | Shapely-backed polygon area/validity helpers shared by the exporters |
+| `geometry.py` | Shape kinds, validation and Shapely-backed area/length helpers shared by the API and the exporters |
+| `projection.py` | Shows whole-slide annotations inside patches: `local = (level0 − origin) / downsample`, clipped to each patch |
 | `image_import.py` | Finds and validates plain images for *image projects* (see below); `ImageReader` in `wsi_reader.py` presents one as a single-level slide |
 
 ## Annotation tools
@@ -76,6 +77,48 @@ How each export treats them: **WSI JSON** keeps the native shape and adds `radiu
 **masks** paint circles as discs and leave lines and points out; **statistics CSV** counts circles as
 polygons (exact πr² area) and reports lines in `n_lines`, `summed_length_px` and `summed_length_um`
 (blank without resolution metadata).
+
+## Annotating in a patch or on the whole slide
+
+The workspace has a **Patch | WSI** switch (WSI projects; an image is its own patch). The last choice is
+remembered per browser, and `?mode=wsi` / `?mode=patch` in the URL selects one directly.
+
+- **Patch mode** — annotate one patch at a time, at full detail, in the patch's own pixels. Stored per patch
+  (patch-local *and* Level-0 coordinates), as before.
+- **WSI mode** — draw directly on the whole slide (zoom and pan freely) with the same tools, in **Level-0
+  pixels**. Such an annotation belongs to *no patch*: it may cross hundreds of them, or lie where no patch was
+  generated, so only its Level-0 coordinates are stored (`patch_id` is `NULL`, `coordinates_patch_local` is
+  empty). It survives regenerating the patch grid. The Pan tool (`H`) moves around; in any other tool, hold
+  `Space` to pan and scroll to zoom. Handles, lines and minimum sizes are constant on screen at any zoom.
+
+Each kind is **edited in the view that created it** and **shown in the other**:
+
+- Patch view: whole-slide annotations appear faintly (dashed), projected into the patch through its origin and
+  downsample and clipped by its border, and are listed under *From the whole slide*. Pressing one jumps to it on
+  the slide.
+- WSI view: patch-drawn annotations appear faintly (toggle: *Patch annotations*); pressing one offers *Open in
+  patch view*, with it selected. A *Patch grid* toggle shows where the patches are.
+
+Exports treat the two kinds like this:
+
+| Format | Slide-level annotations |
+|---|---|
+| WSI JSON | Included in Level-0, with `source_patch: null` (re-importable); each patch's `slide_annotation_count` says how many reach it. |
+| GeoJSON | Included in Level-0 (`drawn_in: "slide"`, patch properties null). |
+| Statistics CSV | Counted **once, in full** (a shape crossing 50 patches is one polygon); `n_patches` is the patches it reaches. |
+| COCO, masks, patch images | Through the patches: the piece of the shape inside each patch, in that patch's pixels (a shape wholly inside a patch is kept as drawn, a circle stays a circle; otherwise it becomes polygon pieces). Each piece has a unique `id` (`annotation id × 10⁹ + patch id`), `vp_source_annotation_id`, `vp_scope: "slide"` and `vp_clipped`. Only the part inside generated patches is included. |
+| Patch CSV | `n_annotations` counts own + reaching slide-level shapes; `n_slide_annotations` the latter; `dominant_class` uses the area *inside the patch*. |
+
+A patch reached by a slide-level annotation counts as **annotated** for the patch scope, so `annotated` /
+`empty` mean what they say whichever view the shapes were drawn in. The slide-level annotations always belong
+to the slide's own exports (WSI JSON, GeoJSON, statistics) whatever patch scope is chosen; the scope selects
+patches. API: `POST /slides/{id}/annotations` (Level-0 coordinates, inside the slide, class of the slide's
+configuration), `GET /slides/{id}/annotations?scope=all|patch|slide`; `PUT /annotations/{id}` takes
+`coordinates_level0` for a slide-level annotation and `coordinates_patch_local` for a patch-drawn one.
+
+Existing databases are upgraded at startup: `geometry_annotations.patch_id` used to be `NOT NULL`, and SQLite
+cannot drop that in place, so the table is rebuilt in one transaction (rows copied, foreign keys re-checked,
+rolled back on any problem).
 
 ## Coordinate model (read this before touching geometry code)
 

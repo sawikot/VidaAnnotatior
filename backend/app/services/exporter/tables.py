@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.models.slide import Slide
-from app.services.geometry import AREA_TYPES, LINE_TYPES, line_length, shape_area
+from app.services.geometry import AREA_TYPES, LINE_TYPES, line_length, polygon_area, shape_area
 
 from .base import Exporter, load_export_data
 from .options import ExportOptions
@@ -65,7 +65,7 @@ class PatchCSVExporter(Exporter):
     HEADER = [
         "slide", "patch_id", "patch_index", "level0_x", "level0_y", "width_level0", "height_level0",
         "read_level", "width_px", "height_px", "tissue_fraction", "status", "patch_label", "dominant_class",
-        "n_annotations", "unsure", "flagged", "excluded", "reviewed_by", "notes",
+        "n_annotations", "n_slide_annotations", "unsure", "flagged", "excluded", "reviewed_by", "notes",
     ]  # fmt: skip
 
     def export(self, db: Session, slide: Slide, options: ExportOptions | None = None) -> str:
@@ -78,16 +78,23 @@ class PatchCSVExporter(Exporter):
         rows = []
         for p in data.patches:
             anns = per_patch.get(p.id, [])
+            pieces = data.projections.get(p.id, [])  # slide-level annotations reaching this patch
             area_by_class: dict[str, float] = defaultdict(float)
             for a in anns:
                 name = data.class_name(a)
                 if name:
                     area_by_class[name] += shape_area(a.type, a.coordinates_level0)
+            scale = (p.width_l0 / p.width) * (p.height_l0 / p.height)  # patch px^2 -> Level-0 px^2
+            for piece in pieces:
+                name = data.class_name(piece.annotation)
+                if name and piece.is_area:
+                    local_area = sum(shape_area(piece.type, part) if piece.type == "circle" else polygon_area(part) for part in piece.parts)
+                    area_by_class[name] += local_area * scale
             dominant = max(area_by_class.items(), key=lambda kv: (kv[1], kv[0]))[0] if area_by_class else None
             rows.append([
                 slide.filename, p.id, p.patch_index, p.x, p.y, p.width_l0, p.height_l0,
                 p.level, p.width, p.height, round(p.tissue_fraction, 4), p.status, p.patch_label, dominant,
-                len(anns), p.unsure, p.flagged, p.excluded, p.reviewed_by, p.notes,
+                len(anns) + len(pieces), len(pieces), p.unsure, p.flagged, p.excluded, p.reviewed_by, p.notes,
             ])  # fmt: skip
         return to_csv(self.HEADER, rows)
 
@@ -119,8 +126,16 @@ class StatsCSVExporter(Exporter):
     def export(self, db: Session, slide: Slide, options: ExportOptions | None = None) -> str:
         data = load_export_data(db, slide, options)
 
+        # Slide-level annotations count in full (not once per patch they cross); the patch scope selects patches.
+        everything = data.everything()
+        touched: dict[int, set[int]] = defaultdict(set)  # slide-level annotation id -> patches it reaches
+        for patch_id, pieces in data.projections.items():
+            if not data.patch_by_id[patch_id].excluded:
+                for piece in pieces:
+                    touched[piece.annotation.id].add(patch_id)
+
         buckets: dict[str | None, list] = defaultdict(list)
-        for ann in data.annotations:
+        for ann in everything:
             buckets[data.class_name(ann)].append(ann)
 
         class_order = [c.name for c in sorted(data.classes.values(), key=lambda c: (c.order_index, c.id))]
@@ -138,7 +153,7 @@ class StatsCSVExporter(Exporter):
             return shape_area(ann.type, ann.coordinates_level0)
 
 
-        total_area = sum(area_of(a) for a in data.annotations)
+        total_area = sum(area_of(a) for a in everything)
         tissue_mm2 = slide.tissue_area_mm2
         config = data.config
 
@@ -161,7 +176,7 @@ class StatsCSVExporter(Exporter):
             rows.append([
                 slide.filename, slide.project.slug, config.version_label if config else None,
                 name if name is not None else "(unclassified)",
-                len(anns), n_polygons, n_points, len(lines), len({a.patch_id for a in anns}),
+                len(anns), n_polygons, n_points, len(lines), len({a.patch_id for a in anns if a.patch_id is not None}.union(*(touched[a.id] for a in anns))),
                 round(area_px2, 2),
                 round(area_mm2, 6) if area_mm2 is not None else None,
                 round(mean_mm2, 6) if mean_mm2 is not None else None,

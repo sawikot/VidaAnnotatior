@@ -17,6 +17,7 @@ from app.models.slide import Slide
 from app.services.wsi_reader import WSIReader
 
 from app.services.geometry import AREA_TYPES, circle_center_radius
+from app.services.projection import Projected
 
 _UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
 
@@ -71,24 +72,30 @@ def encode(image: Image.Image, image_format: str) -> bytes:
     return buf.getvalue()
 
 
-def render_mask(patch: Patch, annotations: Iterable[GeometryAnnotation], class_index: dict[int, int]) -> bytes:
+def render_mask(patch: Patch, annotations: Iterable[GeometryAnnotation], class_index: dict[int, int], projected: Iterable[Projected] = ()) -> bytes:
     """A single-channel label mask, same size as the patch image.
 
     Pixel value 0 is background and ``class_index[class_id]`` (1..N, by class order) marks
     the class covering that pixel. Shapes are painted in creation order, so where two overlap
     the later one wins. Points and lines have no area and are not painted; unclassified shapes are skipped.
+    ``projected`` are the slide-level annotations reaching this patch, already in its pixels; they are
+    painted in the same creation order as the patch's own shapes.
     """
+    layers = [(a.id, a.type, a.class_id, [a.coordinates_patch_local]) for a in annotations]
+    layers += [(piece.annotation.id, piece.type, piece.annotation.class_id, piece.parts) for piece in projected]
+
     mask = Image.new("L", (patch.width, patch.height), 0)
     draw = ImageDraw.Draw(mask)
-    for ann in annotations:
-        value = class_index.get(ann.class_id) if ann.class_id is not None else None
-        if not value or ann.type not in AREA_TYPES:
+    for _, kind, class_id, parts in sorted(layers, key=lambda layer: layer[0]):
+        value = class_index.get(class_id) if class_id is not None else None
+        if not value or kind not in AREA_TYPES:
             continue
-        if ann.type == "circle":
-            (cx, cy), r = circle_center_radius(ann.coordinates_patch_local)
-            draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=value)
-        elif len(ann.coordinates_patch_local) >= 3:
-            draw.polygon([(x, y) for x, y in ann.coordinates_patch_local], fill=value)
+        for part in parts:
+            if kind == "circle":
+                (cx, cy), r = circle_center_radius(part)
+                draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=value)
+            elif len(part) >= 3:
+                draw.polygon([(x, y) for x, y in part], fill=value)
     buf = io.BytesIO()
     mask.save(buf, format="PNG")
     return buf.getvalue()

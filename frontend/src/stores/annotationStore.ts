@@ -1,7 +1,8 @@
 import type { GeometryType } from "../types/api";
 import { create } from "zustand";
 
-export type AnnotationTool = "select" | GeometryType;
+/** "pan" only exists on the whole-slide view, where it leaves the mouse to the viewer (drag to move around). */
+export type AnnotationTool = "pan" | "select" | GeometryType;
 export type SaveState = "idle" | "saving" | "saved" | "error";
 
 interface AnnotationUiState {

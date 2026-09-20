@@ -23,9 +23,28 @@ class GeometryAnnotationCreate(BaseModel):
         return self
 
 
+class SlideAnnotationCreate(BaseModel):
+    """A shape drawn directly on the whole slide: its coordinates are Level-0 pixels, the master space."""
+
+    type: str
+    class_id: int | None = None
+    coordinates_level0: list[list[float]]
+    created_by: str | None = None
+    notes: str | None = None
+    unsure: bool = False
+    flagged: bool = False
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> "SlideAnnotationCreate":
+        validate_shape(self.type, self.coordinates_level0)
+        return self
+
+
 class GeometryAnnotationUpdate(BaseModel):
     class_id: int | None = None
     coordinates_patch_local: list[list[float]] | None = None
+    # Only for slide-level annotations (which have no patch-local coordinates).
+    coordinates_level0: list[list[float]] | None = None
     notes: str | None = None
     unsure: bool | None = None
     flagged: bool | None = None
@@ -39,7 +58,8 @@ class ImportAnnotationEntry(BaseModel):
     label: str | None = None
     unsure: bool = False
     flagged: bool = False
-    source_patch: dict
+    # Null for a slide-level annotation (drawn on the whole slide, in no particular patch).
+    source_patch: dict | None = None
     coordinates: list[list[float]]
 
 
@@ -66,7 +86,7 @@ class GeometryAnnotationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    patch_id: int
+    patch_id: int | None  # None: a slide-level annotation
     slide_id: int
     config_version_id: int
     class_id: int | None

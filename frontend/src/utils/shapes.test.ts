@@ -99,6 +99,14 @@ describe("isDrawnEnough", () => {
     expect(isDrawnEnough("freehand_line", [[0, 0], [5, 0], [10, 5]])).toBe(true);
   });
 
+  it("measures the minimum in screen pixels: a whole-slide view needs a bigger drag in slide units", () => {
+    const drag: Point[] = [[0, 0], [400, 0]];
+    expect(isDrawnEnough("line", drag)).toBe(true);
+    expect(isDrawnEnough("line", drag, 500)).toBe(false); // 500 units per screen pixel: 400 units is under a pixel
+    expect(isDrawnEnough("line", [[0, 0], [4000, 0]], 500)).toBe(true);
+    expect(isDrawnEnough("circle", [[0, 0], [2, 0]], 0.25)).toBe(true); // zoomed far in, a tiny drag in units is still big on screen
+  });
+
   it("needs three points for a closed outline", () => {
     expect(isDrawnEnough("polygon", [[0, 0], [1, 1]])).toBe(false);
     expect(isDrawnEnough("freehand", [[0, 0], [1, 1], [2, 0]])).toBe(true);

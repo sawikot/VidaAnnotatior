@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -12,6 +13,7 @@ from app.models.config_version import AnnotationClass, ProjectConfigVersion
 from app.models.patch import Patch
 from app.models.slide import Slide
 from app.schemas.annotation import (
+    SlideAnnotationCreate,
     GeometryAnnotationCreate,
     GeometryAnnotationOut,
     GeometryAnnotationUpdate,
@@ -29,6 +31,7 @@ def list_slide_annotations(
     slide: Slide = Depends(get_slide_or_404),
     db: Session = Depends(get_db),
     limit: int = Query(5000, ge=1, le=20000),
+    scope: Literal["all", "patch", "slide"] = Query("all", description="patch: drawn in a patch; slide: drawn on the whole slide"),
 ):
     """All geometry annotations for a slide, in Level-0 space -- used by the
     Full WSI Annotation Overview screen. Not bbox-filtered server-side (the
@@ -37,7 +40,62 @@ def list_slide_annotations(
     q = db.query(GeometryAnnotation).filter(GeometryAnnotation.slide_id == slide.id)
     if slide.active_config_version_id is not None:
         q = q.filter(GeometryAnnotation.config_version_id == slide.active_config_version_id)
+    if scope == "patch":
+        q = q.filter(GeometryAnnotation.patch_id.isnot(None))
+    elif scope == "slide":
+        q = q.filter(GeometryAnnotation.patch_id.is_(None))
     return q.order_by(GeometryAnnotation.id.asc()).limit(limit).all()
+
+
+def _require_inside_slide(slide: Slide, coords: list[list[float]]) -> None:
+    """Slide-level coordinates are Level-0 pixels of *this* slide; a point outside it is a client bug."""
+    if not slide.width_l0 or not slide.height_l0:
+        raise HTTPException(status_code=422, detail="Slide dimensions are not known; re-import the slide")
+    tolerance = 0.5
+    for x, y in coords:
+        if not (-tolerance <= x <= slide.width_l0 + tolerance and -tolerance <= y <= slide.height_l0 + tolerance):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Point ({x:g}, {y:g}) is outside the slide ({slide.width_l0} x {slide.height_l0} px)",
+            )
+
+
+@router.post("/slides/{slide_id}/annotations", response_model=GeometryAnnotationOut, status_code=201)
+def create_slide_annotation(
+    payload: SlideAnnotationCreate,
+    slide: Slide = Depends(get_slide_or_404),
+    db: Session = Depends(get_db),
+):
+    """An annotation drawn directly on the whole slide rather than in one patch.
+
+    Its Level-0 coordinates are the only ones stored ("store globally"); it belongs to no patch, so
+    it may cross many of them or lie where none was generated. Patch views show it by projecting
+    it through each patch's own origin and downsample.
+    """
+    if slide.project.project_type == "image":
+        raise HTTPException(status_code=409, detail="An image is annotated as a whole; use the image's patch.")
+    if slide.active_config_version_id is None:
+        raise HTTPException(status_code=422, detail="Slide has no active configuration version to annotate under")
+    _require_inside_slide(slide, payload.coordinates_level0)
+    _require_class_of_config(db, payload.class_id, slide.active_config_version_id)
+
+    annotation = GeometryAnnotation(
+        patch_id=None,
+        slide_id=slide.id,
+        config_version_id=slide.active_config_version_id,
+        class_id=payload.class_id,
+        type=payload.type,
+        coordinates_patch_local=[],
+        coordinates_level0=payload.coordinates_level0,
+        created_by=payload.created_by,
+        notes=payload.notes,
+        unsure=payload.unsure,
+        flagged=payload.flagged,
+    )
+    db.add(annotation)
+    db.commit()
+    db.refresh(annotation)
+    return annotation
 
 
 def _origin_for_patch(patch: Patch) -> PatchOrigin:
@@ -95,6 +153,40 @@ def import_annotations(
             validate_shape(entry.type, entry.coordinates)
         except ValueError:
             skipped_invalid += 1  # a malformed entry must not sink the rest of the file
+            continue
+
+        if entry.source_patch is None:
+            # A slide-level annotation: no patch to match, its Level-0 coordinates are used as they are.
+            try:
+                _require_inside_slide(slide, entry.coordinates)
+            except HTTPException:
+                skipped_invalid += 1
+                continue
+            class_obj = classes_by_name.get(entry.label.strip().lower()) if entry.label else None
+            if entry.label and class_obj is None:
+                skipped_no_class += 1
+                continue
+            if any(
+                existing.type == entry.type and _coords_close(existing.coordinates_level0, entry.coordinates)
+                for existing in existing_by_patch.get(None, [])
+            ):
+                skipped_duplicate += 1
+                continue
+            annotation = GeometryAnnotation(
+                patch_id=None,
+                slide_id=slide.id,
+                config_version_id=config.id,
+                class_id=class_obj.id if class_obj else None,
+                type=entry.type,
+                coordinates_patch_local=[],
+                coordinates_level0=entry.coordinates,
+                created_by=payload.created_by or "Imported",
+                unsure=entry.unsure,
+                flagged=entry.flagged,
+            )
+            db.add(annotation)
+            existing_by_patch[None].append(annotation)
+            imported += 1
             continue
 
         x = entry.source_patch.get("x")
@@ -221,6 +313,22 @@ def update_annotation(
     changes = payload.model_dump(exclude_unset=True)
     if changes.get("class_id") is not None:
         _require_class_of_config(db, changes["class_id"], annotation.config_version_id)
+
+    if annotation.patch_id is None:
+        # Slide-level: only Level-0 coordinates exist.
+        if changes.get("coordinates_patch_local") is not None:
+            raise HTTPException(status_code=422, detail="A slide-level annotation has no patch-local coordinates; send coordinates_level0")
+        if changes.get("coordinates_level0") is not None:
+            try:
+                validate_shape(annotation.type, changes["coordinates_level0"])
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            _require_inside_slide(db.get(Slide, annotation.slide_id), changes["coordinates_level0"])
+            annotation.coordinates_level0 = changes["coordinates_level0"]
+        changes.pop("coordinates_level0", None)
+        changes.pop("coordinates_patch_local", None)
+    elif "coordinates_level0" in changes:
+        raise HTTPException(status_code=422, detail="This annotation belongs to a patch: send coordinates_patch_local")
     if "coordinates_patch_local" in changes and changes["coordinates_patch_local"] is not None:
         try:
             validate_shape(annotation.type, changes["coordinates_patch_local"])  # the shape keeps its type
@@ -234,6 +342,7 @@ def update_annotation(
         )
         changes.pop("coordinates_patch_local")
 
+    changes.pop("coordinates_level0", None)
     for field, value in changes.items():
         setattr(annotation, field, value)
 

@@ -24,8 +24,8 @@ class WSIJSONExporter(Exporter):
         config = data.config
 
         annotations = []
-        for ann in data.annotations:
-            patch = data.patch_by_id[ann.patch_id]
+        for ann in data.everything():
+            patch = data.patch_by_id.get(ann.patch_id)  # None: drawn on the whole slide, in no patch
             entry = (
                 {
                     "annotation_id": f"ann_{ann.id:06d}",
@@ -33,14 +33,18 @@ class WSIJSONExporter(Exporter):
                     "label": data.class_name(ann),
                     "unsure": ann.unsure,
                     "flagged": ann.flagged,
-                    "source_patch": {
-                        "patch_id": patch.id,
-                        "x": patch.x,
-                        "y": patch.y,
-                        "width": patch.width_l0,
-                        "height": patch.height_l0,
-                        "level": patch.level,
-                    },
+                    "source_patch": (
+                        {
+                            "patch_id": patch.id,
+                            "x": patch.x,
+                            "y": patch.y,
+                            "width": patch.width_l0,
+                            "height": patch.height_l0,
+                            "level": patch.level,
+                        }
+                        if patch is not None
+                        else None
+                    ),
                     "coordinates": ann.coordinates_level0,
                 }
             )
@@ -91,6 +95,7 @@ class WSIJSONExporter(Exporter):
                     "status": p.status,
                     "label": p.patch_label,
                     "annotation_count": data.annotation_count(p),
+                    "slide_annotation_count": len(data.projections.get(p.id, [])),  # of those, drawn on the whole slide
                     "unsure": p.unsure,
                     "flagged": p.flagged,
                     "excluded": p.excluded,

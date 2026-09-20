@@ -235,8 +235,22 @@ export const updatePatch = (
 // ---- Annotations ----
 export const listPatchAnnotations = (patchId: number) =>
   request<GeometryAnnotation[]>(`/patches/${patchId}/annotations`);
-export const listSlideAnnotations = (slideId: number) =>
-  request<GeometryAnnotation[]>(`/slides/${slideId}/annotations`);
+/** "patch": drawn in a patch; "slide": drawn on the whole slide (WSI mode); "all" (default): both. */
+export const listSlideAnnotations = (slideId: number, scope: "all" | "patch" | "slide" = "all") =>
+  request<GeometryAnnotation[]>(`/slides/${slideId}/annotations${scope === "all" ? "" : `?scope=${scope}`}`);
+/** An annotation drawn directly on the whole slide: Level-0 pixel coordinates, belonging to no patch. */
+export const createSlideAnnotation = (
+  slideId: number,
+  payload: {
+    type: GeometryType;
+    class_id: number | null;
+    coordinates_level0: [number, number][];
+    created_by?: string;
+    notes?: string;
+    unsure?: boolean;
+    flagged?: boolean;
+  },
+) => request<GeometryAnnotation>(`/slides/${slideId}/annotations`, { method: "POST", body: JSON.stringify(payload) });
 export const createAnnotation = (
   patchId: number,
   payload: {
@@ -255,6 +269,8 @@ export const updateAnnotation = (
   payload: Partial<{
     class_id: number | null;
     coordinates_patch_local: [number, number][];
+    /** For a slide-level annotation (which has no patch-local coordinates). */
+    coordinates_level0: [number, number][];
     notes: string | null;
     unsure: boolean;
     flagged: boolean;
