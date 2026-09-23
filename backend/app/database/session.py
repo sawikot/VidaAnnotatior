@@ -58,11 +58,17 @@ def _add_missing_columns(bind=None) -> None:
     """
     from sqlalchemy import inspect, text
 
-    additions = {"projects": [("project_type", "VARCHAR(20) NOT NULL DEFAULT 'wsi'")]}
+    additions = {
+        "projects": [("project_type", "VARCHAR(20) NOT NULL DEFAULT 'wsi'")],
+        "slides": [("tissue_source", "VARCHAR(20) NOT NULL DEFAULT 'auto'"), ("tissue_regions", "JSON")],
+    }
     bind = bind or engine
     inspector = inspect(bind)
+    tables = set(inspector.get_table_names())
     with bind.begin() as conn:
         for table, columns in additions.items():
+            if table not in tables:
+                continue  # create_all makes it, with every column
             existing = {c["name"] for c in inspector.get_columns(table)}
             for name, ddl in columns:
                 if name not in existing:

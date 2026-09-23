@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SlideImportPathRequest(BaseModel):
@@ -14,11 +15,6 @@ class SlideImportPathRequest(BaseModel):
 
 class SlideActiveConfigRequest(BaseModel):
     config_version_id: int
-
-
-class SlideCreateDemo(BaseModel):
-    filename: str = "demo_slide.svs"
-    config_version_id: int | None = None
 
 
 class SlideOut(BaseModel):
@@ -44,6 +40,8 @@ class SlideOut(BaseModel):
     tissue_area_mm2: float | None
     tissue_coverage_pct: float | None
     tissue_mask_path: str | None
+    tissue_source: str = "auto"
+    image_version: str = "0"  # add as ?v= to tile/patch/thumbnail URLs so the browser may cache them
     active_config_version_id: int | None
 
     created_at: datetime
@@ -101,6 +99,31 @@ class DetectTissueResponse(BaseModel):
     tissue_area_mm2: float | None
     tissue_coverage_pct: float
     mask_url: str
+
+
+class TissueRegion(BaseModel):
+    """A hand-drawn area that adds tissue to the mask or removes it, in Level-0 pixels."""
+
+    mode: Literal["add", "remove"]
+    type: Literal["polygon", "freehand", "rectangle", "circle"]
+    coordinates: list[list[float]]
+
+
+class TissueRegionOut(TissueRegion):
+    id: int
+
+
+class TissueRegionsIn(BaseModel):
+    source: Literal["auto", "manual"]
+    regions: list[TissueRegion] = Field(default_factory=list, max_length=500)
+
+
+class TissueRegionsOut(BaseModel):
+    source: str
+    regions: list[TissueRegionOut]
+    tissue_area_mm2: float | None
+    tissue_coverage_pct: float | None
+    has_mask: bool
 
 
 class GeneratePatchesRequest(BaseModel):

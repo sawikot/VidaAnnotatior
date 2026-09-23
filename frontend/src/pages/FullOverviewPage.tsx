@@ -73,7 +73,7 @@ export function FullOverviewPage() {
 
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 relative">
-          <WsiViewer slideId={sid} className="w-full h-full" onViewportChange={setBbox}>
+          <WsiViewer slideId={sid} version={slide.image_version} className="w-full h-full" onViewportChange={setBbox}>
             {showMask && slide.tissue_mask_path && (
               <image
                 href={tissueMaskUrl(sid)}

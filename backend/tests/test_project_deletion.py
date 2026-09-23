@@ -31,7 +31,7 @@ def _seed_full_project(db):
     db.flush()
 
     slide = Slide(
-        project_id=project.id, filename="Patient_001.svs", source_type="demo",
+        project_id=project.id, filename="Patient_001.svs", source_type="upload",
         width_l0=10000, height_l0=10000, active_config_version_id=config.id,
     )
     db.add(slide)

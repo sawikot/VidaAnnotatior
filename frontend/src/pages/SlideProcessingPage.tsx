@@ -1,17 +1,28 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { MaterialIcon } from "../components/MaterialIcon";
 import { Button, Card } from "../components/primitives";
 import { WsiViewer, type ViewportBbox } from "../features/viewer/WsiViewer";
 import { PatchGridOverlay } from "../features/viewer/PatchGridOverlay";
 import { ImportAnnotationsModal } from "../features/annotations/ImportAnnotationsModal";
+import { ShapeLayer, type LayerShape } from "../features/annotations/ShapeLayer";
+import { HOTKEYS } from "../features/annotations/tools";
+import { TissueRegionPanel } from "../features/tissue/TissueRegionPanel";
+import { REGION_CLASSES, REGION_TOOLS, classIdOf } from "../features/tissue/regionTools";
+import { useTissueRegions } from "../features/tissue/useTissueRegions";
+import type { AnnotationTool } from "../stores/annotationStore";
 import { detectTissue, generatePatches, getConfig, getSlide, listConfigs, setSlideActiveConfig, tissueMaskUrl } from "../services/api";
 import { tissueParamsOf } from "../features/projects/configDraft";
-import type { ConfigVersion, Slide } from "../types/api";
+import type { ConfigVersion, Slide, TissueRegionMode, TissueRegionType } from "../types/api";
 import { useContextStore } from "../stores/contextStore";
 import { useUiStore } from "../stores/uiStore";
 
 type ViewMode = "wsi" | "mask" | "grid";
+
+function isTyping(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
+}
 
 import { useImageProjectRedirect } from "../features/images/useImageProjectRedirect";
 
@@ -37,6 +48,66 @@ export function SlideProcessingPage() {
   const [morphOpen, setMorphOpen] = useState(3);
   const [morphClose, setMorphClose] = useState(5);
   const [maskCacheBust, setMaskCacheBust] = useState(0);
+
+  // Hand-drawn tissue regions (Add / Remove), drawn on the slide in Level-0 pixels.
+  const [tool, setTool] = useState<AnnotationTool>("pan");
+  const [drawMode, setDrawMode] = useState<TissueRegionMode>("add");
+  const [selectedRegion, setSelectedRegion] = useState<number | null>(null);
+  const [scale, setScale] = useState(0.05);
+  const [spaceHeld, setSpaceHeld] = useState(false);
+  const gestureRef = useRef(false);
+  const tissue = useTissueRegions(sid, () => {
+    setMaskCacheBust((n) => n + 1);
+    setMode((m) => (m === "wsi" ? "mask" : m)); // show what the change did to the mask
+    refresh();
+  });
+  const regionShapes = useMemo<LayerShape[]>(
+    () =>
+      (tissue.data?.regions ?? []).map((r) => ({
+        id: r.id,
+        type: r.type,
+        points: r.coordinates,
+        class_id: classIdOf(r.mode),
+        unsure: false,
+        excluded: false,
+      })),
+    [tissue.data],
+  );
+  const effectiveTool = spaceHeld ? "pan" : tool;
+  const effectiveToolRef = useRef(effectiveTool);
+  effectiveToolRef.current = effectiveTool;
+  const blockPan = () => {
+    const t = effectiveToolRef.current;
+    return t !== "pan" && (t !== "select" || gestureRef.current);
+  };
+
+  // Keys: hold Space to pan, tool hotkeys, Ctrl+Z / Ctrl+Shift+Z for the regions.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (isTyping(e.target)) return;
+      if (e.key === " ") {
+        e.preventDefault();
+        setSpaceHeld(true);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) tissue.redo();
+        else tissue.undo();
+        return;
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const picked = HOTKEYS[e.key.toLowerCase()];
+      if (picked && REGION_TOOLS.some((t) => t.id === picked)) setTool(picked);
+    }
+    const onKeyUp = (e: KeyboardEvent) => e.key === " " && setSpaceHeld(false);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, [tissue]);
 
   useEffect(() => {
     refresh();
@@ -102,6 +173,7 @@ export function SlideProcessingPage() {
       setMaskCacheBust((n) => n + 1);
       setMode("mask");
       refresh();
+      tissue.reload(); // detection makes the mask start from its result again
     } catch (e) {
       pushToast(e instanceof Error ? e.message : "Tissue detection failed", "error");
     } finally {
@@ -238,7 +310,17 @@ export function SlideProcessingPage() {
         </div>
 
         <div className="flex-1 relative">
-          <WsiViewer slideId={sid} className="w-full h-full" onViewportChange={setBbox}>
+          <WsiViewer
+            slideId={sid}
+            version={slide.image_version}
+            className="w-full h-full"
+            keyboardNav={false}
+            blockPan={blockPan}
+            onViewportChange={(b, _zoom, s) => {
+              setBbox(b);
+              setScale(s);
+            }}
+          >
             {mode === "mask" && slide.tissue_mask_path && (
               <image
                 href={`${tissueMaskUrl(sid)}?v=${maskCacheBust}`}
@@ -252,11 +334,37 @@ export function SlideProcessingPage() {
               />
             )}
             {mode === "grid" && <PatchGridOverlay slideId={sid} bbox={bbox} refreshKey={gridRefresh} />}
+            {slide.width_l0 && slide.height_l0 && (
+              <ShapeLayer
+                width={slide.width_l0}
+                height={slide.height_l0}
+                scale={scale}
+                tool={effectiveTool}
+                shapes={regionShapes}
+                classes={REGION_CLASSES}
+                selectedId={selectedRegion}
+                onSelect={setSelectedRegion}
+                onShapeComplete={(type, points) => tissue.add({ mode: drawMode, type: type as TissueRegionType, coordinates: points })}
+                onShapeEdit={(id, points) => tissue.update(id, { coordinates: points })}
+                onDeleteSelected={() => {
+                  if (selectedRegion == null) return;
+                  tissue.remove(selectedRegion);
+                  setSelectedRegion(null);
+                }}
+                gestureRef={gestureRef}
+                resetKey={sid}
+              />
+            )}
           </WsiViewer>
+          <div className="absolute top-3 left-3 px-space-sm py-1 rounded bg-black/50 text-label-sm text-slate-300 pointer-events-none">
+            {effectiveTool === "pan" ? "Drag to move around \u00b7 scroll to zoom" : "Hold Space to move around \u00b7 scroll to zoom"}
+          </div>
           {!slide.tissue_mask_path && (
             <div className="absolute bottom-4 left-4 bg-[#0f172a]/90 backdrop-blur px-space-md py-space-sm rounded-lg text-body-sm text-amber-300 flex items-center gap-2">
               <MaterialIcon name="info" className="!text-[16px]" />
-              Run tissue detection before generating patch coordinates.
+              {slide.tissue_source === "manual"
+                ? "Draw the tissue areas (Add tissue) before generating patch coordinates."
+                : "Run tissue detection, or draw tissue areas, before generating patch coordinates."}
             </div>
           )}
         </div>
@@ -265,6 +373,10 @@ export function SlideProcessingPage() {
           <div className="flex items-center justify-between">
             <h2 className="font-headline-sm text-headline-sm">Segmentation Pipeline</h2>
             <span className="text-label-sm text-slate-500">HSV + Otsu</span>
+          </div>
+          <div className={`flex flex-col gap-space-md ${tissue.data?.source === "manual" ? "opacity-50" : ""}`}>
+          <div className="text-label-sm text-slate-500">
+            {tissue.data?.source === "manual" ? "Automatic detection (not used in Manual only mode)" : "Automatic detection"}
           </div>
           <SliderField
             label="Tissue Threshold (Otsu Sens.)"
@@ -277,6 +389,42 @@ export function SlideProcessingPage() {
           />
           <SliderField label="Morph Open (px)" value={morphOpen} min={0} max={15} step={1} onChange={setMorphOpen} display={String(morphOpen)} />
           <SliderField label="Morph Close (px)" value={morphClose} min={0} max={15} step={1} onChange={setMorphClose} display={String(morphClose)} />
+          </div>
+
+          {tissue.data && (
+            <TissueRegionPanel
+              source={tissue.data.source}
+              onSourceChange={tissue.setSource}
+              regions={tissue.data.regions}
+              drawMode={drawMode}
+              onDrawModeChange={setDrawMode}
+              tool={tool}
+              onToolChange={setTool}
+              selectedId={selectedRegion}
+              onSelect={(id) => {
+                setSelectedRegion(id);
+                setTool("select");
+              }}
+              onFlip={(id) => {
+                const r = tissue.data?.regions.find((x) => x.id === id);
+                if (r) tissue.update(id, { mode: r.mode === "add" ? "remove" : "add" });
+              }}
+              onDelete={(id) => {
+                tissue.remove(id);
+                setSelectedRegion(null);
+              }}
+              onClear={() => {
+                tissue.clear();
+                setSelectedRegion(null);
+              }}
+              canUndo={tissue.canUndo}
+              canRedo={tissue.canRedo}
+              onUndo={tissue.undo}
+              onRedo={tissue.redo}
+              saving={tissue.saving}
+              disabled={busy}
+            />
+          )}
 
           {config && (
             <div className="bg-[#0b1329] rounded p-space-sm flex flex-col gap-space-sm">

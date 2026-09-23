@@ -246,7 +246,7 @@ def test_classes_can_still_be_edited_in_place(imgproj):
 # ----------------------------------------------------------------- guards
 
 
-def test_tiling_forking_and_demo_slides_are_refused_for_image_projects(imgproj):
+def test_tiling_and_forking_are_refused_for_image_projects(imgproj):
     client, pid, _ = imgproj
     slide_id = add_images(client, pid, [("a.png", image_bytes())])["slides"][0]["id"]
     config_id = client.get(f"/api/projects/{pid}").json()["active_config_version_id"]
@@ -257,13 +257,11 @@ def test_tiling_forking_and_demo_slides_are_refused_for_image_projects(imgproj):
     assert client.post(f"/api/configs/{config_id}/fork", json={"new_version_label": "v2.0", "overrides": {}}).status_code == 409
     assert client.post(f"/api/projects/{pid}/configs", json={"version_label": "v9"}).status_code == 409
     assert client.put(f"/api/slides/{slide_id}/active-config", json={"config_version_id": config_id}).status_code == 409
-    assert client.post(f"/api/projects/{pid}/slides/demo", json={}).status_code == 422
     assert client.get(f"/api/slides/{slide_id}/patches").json()["total"] == patches_before  # the whole-image patch survived
 
 
 def test_wsi_project_behaviour_is_unchanged(env):  # noqa: F811
     client, pid, _ = env
-    assert client.post(f"/api/projects/{pid}/slides/demo", json={}).status_code == 201
     assert client.get(f"/api/projects/{pid}/images").status_code == 409
 
 

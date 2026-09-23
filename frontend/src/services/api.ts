@@ -12,6 +12,9 @@ import type {
   ProjectDetail,
   Slide,
   SlideBatchImportResult,
+  TissueRegion,
+  TissueRegions,
+  TissueSource,
   WsiFormats,
 } from "../types/api";
 
@@ -173,19 +176,49 @@ export function uploadSlides(
   return { promise, abort: () => xhr.abort() };
 }
 
-export const createDemoSlide = (projectId: number, filename?: string, configVersionId?: number) =>
-  request<Slide>(`/projects/${projectId}/slides/demo`, {
-    method: "POST",
-    body: JSON.stringify({ filename: filename ?? "demo_slide.svs", config_version_id: configVersionId }),
+// A slide's pixels never change, so image URLs carrying its `image_version` are cached by the browser for good
+// (the server says so only when the version matches -- an id reused after a delete gets a new one).
+const versionParam = (version?: string) => (version ? `&v=${encodeURIComponent(version)}` : "");
+export const thumbnailUrl = (slideId: number, maxSize = 512, version?: string) =>
+  `${API_BASE}/slides/${slideId}/thumbnail?max_size=${maxSize}${versionParam(version)}`;
+export const dynamicPatchUrl = (slideId: number, x: number, y: number, width: number, height: number, level = 0, version?: string) =>
+  `${API_BASE}/slides/${slideId}/patch?x=${x}&y=${y}&width=${width}&height=${height}&level=${level}${versionParam(version)}`;
+/**
+ * A patch preview for cards and thumbnails: the same area, read from the coarsest level of the slide's
+ * pyramid that still gives at least `minSide` pixels across -- far less to read and send than full size.
+ */
+export function patchPreviewUrl(
+  slide: Pick<Slide, "id" | "level_downsamples" | "image_version">,
+  patch: Pick<Patch, "x" | "y" | "width" | "height" | "width_l0" | "height_l0" | "level">,
+  minSide = 320,
+): string {
+  const downsamples = slide.level_downsamples ?? [];
+  let level = patch.level;
+  let width = patch.width;
+  let height = patch.height;
+  downsamples.forEach((ds, i) => {
+    const w = Math.round(patch.width_l0 / ds);
+    if (w >= minSide && w < width) {
+      level = i;
+      width = w;
+      height = Math.round(patch.height_l0 / ds);
+    }
   });
+  return dynamicPatchUrl(slide.id, patch.x, patch.y, width, height, level, slide.image_version);
+}
 
-export const thumbnailUrl = (slideId: number, maxSize = 512) => `${API_BASE}/slides/${slideId}/thumbnail?max_size=${maxSize}`;
-export const dynamicPatchUrl = (slideId: number, x: number, y: number, width: number, height: number, level = 0) =>
-  `${API_BASE}/slides/${slideId}/patch?x=${x}&y=${y}&width=${width}&height=${height}&level=${level}`;
-export const dziUrl = (slideId: number) => `${API_BASE}/slides/${slideId}/dzi.dzi`;
+/** OpenSeadragon repeats the descriptor's query string on every tile URL, so the version reaches the tiles too. */
+export const dziUrl = (slideId: number, version?: string) =>
+  `${API_BASE}/slides/${slideId}/dzi.dzi${version ? `?v=${encodeURIComponent(version)}` : ""}`;
 export const tissueMaskUrl = (slideId: number) => `${API_BASE}/slides/${slideId}/tissue-mask.png`;
 
 // ---- Processing ----
+export const getTissueRegions = (slideId: number) => request<TissueRegions>(`/slides/${slideId}/tissue-regions`);
+export const setTissueRegions = (slideId: number, source: TissueSource, regions: Omit<TissueRegion, "id">[]) =>
+  request<TissueRegions>(`/slides/${slideId}/tissue-regions`, {
+    method: "PUT",
+    body: JSON.stringify({ source, regions: regions.map(({ mode, type, coordinates }) => ({ mode, type, coordinates })) }),
+  });
 export const detectTissue = (
   slideId: number,
   params: { method?: string; otsu_sensitivity?: number; morph_open_px?: number; morph_close_px?: number; min_component_px?: number },
@@ -342,6 +375,3 @@ export const downloadProjectExport = (projectId: number, formatId: string, optio
 export function navigateDownload(url: string): void {
   window.location.assign(url);
 }
-
-// ---- Dev ----
-export const seedDemoProject = () => request<Project>("/dev/seed-demo", { method: "POST" });

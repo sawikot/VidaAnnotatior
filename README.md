@@ -26,7 +26,7 @@ Backend service modules (`backend/app/services/`):
 
 | Module | Responsibility |
 |---|---|
-| `wsi_reader.py` | `WSIReader` interface. `OpenSlideReader` (real .svs/.tif/.tiff/.ndpi) and `DemoWSIReader` (synthetic, no file needed) |
+| `wsi_reader.py` | `WSIReader` interface. `OpenSlideReader` (real .svs/.tif/.tiff/.ndpi) and `ImageReader` (plain images for image projects) |
 | `deepzoom_service.py` | Generates DZI tiles on the fly for the OpenSeadragon viewer — a *display* concern, unrelated to annotation patches |
 | `tissue_detector.py` | `TissueDetector` interface. `HSVOtsuDetector`: HSV→Otsu threshold→morphology→small-component removal |
 | `patch_generator.py` | Walks the Level-0 grid at the configured patch/stride size, keeps patches meeting the tissue threshold |
@@ -184,8 +184,7 @@ Open `http://localhost:5173`.
 
 ## Using the app
 
-1. **Create a project** (`/projects` → *New Project*, or *Seed Demo* for a synthetic project needing no
-   real WSI file). The wizard sets patch size, stride, target magnification, minimum tissue fraction,
+1. **Create a project** (`/projects` → *New Project*). The wizard sets patch size, stride, target magnification, minimum tissue fraction,
    tissue-detection parameters, diagnostic classes (name/color/hotkey), and QC settings — all versioned
    as a `ProjectConfigVersion`.
 2. **Add WSIs**: on the project dashboard, *Add WSI Slides*.
@@ -193,7 +192,6 @@ Open `http://localhost:5173`.
      A zip may hold many slides; every slide found is imported. Each slide is stored in its own directory.
    - **Server path** imports without uploading: a slide file, a folder of slides, or a `.zip` inside
      `WSI_WATCH_DIR`. Files are copied, the originals are never touched. Best for very large slides.
-   - **Demo** adds a synthetic slide with no real file.
    - Supported: `.svs .tif .tiff .ndpi .scn .bif .svslide .vms .vmu .mrxs` (whatever OpenSlide reads; the
      list is served by `GET /api/wsi-formats`). **Multi-file formats need their companions**: a `.mrxs` comes
      with a same-named folder (`Slide.mrxs` + `Slide/`), and `.vms`/`.vmu` with their tile files. Choose the
@@ -206,6 +204,14 @@ Open `http://localhost:5173`.
      reported, not unpacked.
 3. **Process**: open *Slide Processing* → *Re-run Detection* (HSV+Otsu tissue mask, tunable via sliders)
    → *Generate Coords* (walks the grid, keeps patches meeting the tissue threshold — coordinates only).
+   The mask can also be drawn by hand (*Manual regions*, with the rectangle, polygon, freehand and circle
+   tools): **Add tissue** areas count as tissue, **Remove tissue** areas never do (remove wins where they
+   overlap). *Mask starts from* picks the base: **Automatic detection** (detected tissue + added − removed)
+   or **Manual only** (just the added areas − removed; detection ignored). Every change rebuilds the mask at
+   once (shown in *Tissue Mask* view) and can be undone; *Generate Coords* then applies the usual minimum
+   tissue fraction to it. Regions are stored per slide in Level-0 pixels (`slides.tissue_regions`), are not
+   annotations and are not exported. The detector's own result is kept in
+   `data/uploads/<project>/_masks/<slide>_tissue_auto.png`, so regions can be edited without re-detecting.
 4. **Annotate**: open the *Workspace* → draw shapes with the tools below, assign a class,
    navigate with `A`/`D` or the on-screen buttons, `Space` jumps to the next unannotated patch. Every
    shape autosaves on completion; the save-state pill shows Saving/Saved/Error honestly (never a fake
@@ -225,7 +231,10 @@ Open `http://localhost:5173`.
    detected and skipped).
 8. **Delete a project**: from the project card's `⋮` menu, *Delete Project* requires typing the project's
    exact slug to confirm (the same pattern GitHub uses for deleting a repo) before it becomes clickable.
-   Deletion removes every DB row under the project *and* its files on disk (`data/uploads/<project_id>/`).
+   Deletion removes every DB row under the project *and* all of its files on disk (`data/uploads/<project_id>/`:
+   slide/image files and tissue masks). Files are removed after the rows are committed; if one is locked
+   (e.g. still open in another program on Windows) the leftover folder is removed at the next server start.
+   Originals in `WSI_WATCH_DIR` that were imported by *Server path* are never touched — only the app's copies.
 
 9. **Change a project's configuration after creating it**: *Config Versions* → **Edit** on any version
    (patch grid, tissue-detection defaults, diagnostic classes, tools, QC settings), or **Edit Details** on

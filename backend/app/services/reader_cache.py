@@ -12,7 +12,7 @@ from pathlib import Path
 
 from app.core.config import get_settings
 from app.models.slide import Slide
-from app.services.wsi_reader import DemoWSIReader, ImageReader, OpenSlideReader, WSIReader
+from app.services.wsi_reader import ImageReader, OpenSlideReader, WSIReader
 
 _lock = threading.Lock()
 _cache: dict[int, WSIReader] = {}
@@ -25,18 +25,15 @@ def get_reader_for_slide(slide: Slide) -> WSIReader:
         if reader is not None:
             return reader
 
-        if slide.source_type == "demo":
-            reader = DemoWSIReader(seed=slide.id)
-        else:
-            settings = get_settings()
-            if not slide.file_path:
-                raise FileNotFoundError(f"Slide {slide.id} has no file_path registered")
-            full_path = (settings.wsi_storage_dir / slide.file_path).resolve()
-            if not str(full_path).startswith(str(settings.wsi_storage_dir.resolve())):
-                raise PermissionError("Resolved slide path escapes the managed storage directory")
-            if not full_path.exists():
-                raise FileNotFoundError(f"Slide file not found: {full_path}")
-            reader = ImageReader(full_path) if slide.project.project_type == "image" else OpenSlideReader(full_path)
+        settings = get_settings()
+        if not slide.file_path:
+            raise FileNotFoundError(f"Slide {slide.id} has no file_path registered")
+        full_path = (settings.wsi_storage_dir / slide.file_path).resolve()
+        if not str(full_path).startswith(str(settings.wsi_storage_dir.resolve())):
+            raise PermissionError("Resolved slide path escapes the managed storage directory")
+        if not full_path.exists():
+            raise FileNotFoundError(f"Slide file not found: {full_path}")
+        reader = ImageReader(full_path) if slide.project.project_type == "image" else OpenSlideReader(full_path)
 
         if len(_cache) >= _MAX_OPEN:
             oldest_id = next(iter(_cache))

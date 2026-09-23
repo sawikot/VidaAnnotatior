@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MaterialIcon } from "../components/MaterialIcon";
 import { Button, Card, ConfirmDeleteModal, StatusPill } from "../components/primitives";
-import { deleteProject, listProjects, seedDemoProject } from "../services/api";
+import { deleteProject, listProjects } from "../services/api";
 import type { Project } from "../types/api";
 import { useUiStore } from "../stores/uiStore";
 
@@ -45,16 +45,6 @@ export function ProjectManagerPage() {
     });
   }, [projects, search, organFilter, statusFilter]);
 
-  async function handleSeedDemo() {
-    try {
-      await seedDemoProject();
-      pushToast("Demo project seeded", "success");
-      refresh();
-    } catch {
-      pushToast("Failed to seed demo project", "error");
-    }
-  }
-
   async function handleDeleteConfirmed() {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -90,9 +80,6 @@ export function ProjectManagerPage() {
             </p>
           </div>
           <div className="flex items-center gap-space-sm shrink-0">
-            <Button variant="ghost" icon="science" onClick={handleSeedDemo} title="Seed a synthetic demo project (no real WSI needed)">
-              Seed Demo
-            </Button>
             <Button variant="primary" icon="add_box" onClick={() => navigate("/projects/new")}>
               New Project
             </Button>
@@ -187,7 +174,7 @@ export function ProjectManagerPage() {
       {!loading && filtered.length === 0 && (
         <Card className="p-space-xl text-center text-on-surface-variant">
           {projects.length === 0
-            ? "No projects yet. Create one, or seed the synthetic demo project to explore the app."
+            ? "No projects yet. Create one to get started."
             : "No projects match your filters."}
         </Card>
       )}

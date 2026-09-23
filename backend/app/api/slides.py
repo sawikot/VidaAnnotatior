@@ -23,13 +23,13 @@ from app.schemas.slide import (
     SkippedItemOut,
     SlideActiveConfigRequest,
     SlideBatchImportResult,
-    SlideCreateDemo,
     SlideImportPathRequest,
     SlideOut,
     WsiFormatOut,
     WsiFormatsOut,
 )
 from app.services import reader_cache
+from app.services.tissue_mask import auto_mask_path
 from app.services.image_import import IMAGE_EXTENSIONS, ImageDiscovery, ImageItem, discover_images
 from app.services.deepzoom_service import DeepZoomAdapter, purge_slide_tiles, render_thumbnail_bytes, render_tile_bytes
 from app.services.multipart_stream import ReceivedFile, receive_multipart
@@ -434,32 +434,6 @@ def import_slides_by_path(
     )
 
 
-@router.post("/projects/{project_id}/slides/demo", response_model=SlideOut, status_code=201)
-def create_demo_slide(
-    payload: SlideCreateDemo,
-    project: Project = Depends(get_project_or_404),
-    db: Session = Depends(get_db),
-):
-    if project.project_type == "image":
-        raise HTTPException(status_code=422, detail="Demo slides are for WSI projects; add images to this project instead.")
-    slide = Slide(
-        project_id=project.id,
-        filename=payload.filename,
-        file_path=None,
-        source_type="demo",
-        format="demo",
-        status="imported",
-        active_config_version_id=payload.config_version_id or project.active_config_version_id,
-    )
-    db.add(slide)
-    db.commit()
-    db.refresh(slide)
-
-    _extract_and_store_metadata(db, slide)
-    db.refresh(slide)
-    return slide
-
-
 @router.get("/slides/{slide_id}", response_model=SlideOut)
 def get_slide(slide: Slide = Depends(get_slide_or_404)):
     return slide
@@ -515,17 +489,26 @@ def delete_slide(slide: Slide = Depends(get_slide_or_404), db: Session = Depends
         elif project_dir in primary.parents and primary.exists():
             primary.unlink()  # older layout: one flat file per slide
     if slide.tissue_mask_path:
-        mask_path = settings.wsi_storage_dir / slide.tissue_mask_path
-        if mask_path.exists():
-            mask_path.unlink()
+        (settings.wsi_storage_dir / slide.tissue_mask_path).unlink(missing_ok=True)
+    auto_mask_path(settings.wsi_storage_dir, slide).unlink(missing_ok=True)
     db.delete(slide)
     db.commit()
+
+
+def image_headers(slide: Slide, v: str | None) -> dict[str, str]:
+    """A slide's pixels never change, so an image asked for with the slide's current version (?v=) may
+    be kept by the browser indefinitely -- reopening a slide, or switching views, then costs nothing.
+    Without a matching version it must be checked again (the id may since belong to another slide)."""
+    if v is not None and v == slide.image_version:
+        return {"Cache-Control": "private, max-age=31536000, immutable"}
+    return {"Cache-Control": "no-cache"}
 
 
 @router.get("/slides/{slide_id}/thumbnail")
 def get_thumbnail(
     slide: Slide = Depends(get_slide_or_404),
     max_size: int = Query(512, ge=64, le=2048),
+    v: str | None = None,
 ):
     if slide.status == "error":
         raise HTTPException(status_code=422, detail=slide.error_message or "Slide failed to import")
@@ -534,7 +517,7 @@ def get_thumbnail(
         data = render_thumbnail_bytes(reader, slide.id, max_size)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return Response(content=data, media_type="image/jpeg")
+    return Response(content=data, media_type="image/jpeg", headers=image_headers(slide, v))
 
 
 @router.get("/slides/{slide_id}/patch")
@@ -545,6 +528,7 @@ def get_dynamic_patch(
     width: int = Query(..., gt=0, le=8192, description="Output width in pixels at `level`"),
     height: int = Query(..., gt=0, le=8192, description="Output height in pixels at `level`"),
     level: int = Query(0, ge=0),
+    v: str | None = None,
 ):
     """Dynamically reads a region from the original WSI via OpenSlide.read_region.
     Nothing returned here is ever persisted as a file -- canonical representation
@@ -568,19 +552,19 @@ def get_dynamic_patch(
     if slide.project.project_type == "image":
         # Plain images are annotated pixel-for-pixel; don't re-compress them.
         region.save(buf, format="PNG", compress_level=3)
-        return Response(content=buf.getvalue(), media_type="image/png")
+        return Response(content=buf.getvalue(), media_type="image/png", headers=image_headers(slide, v))
     region.save(buf, format="JPEG", quality=92)
-    return Response(content=buf.getvalue(), media_type="image/jpeg")
+    return Response(content=buf.getvalue(), media_type="image/jpeg", headers=image_headers(slide, v))
 
 
 @router.get("/slides/{slide_id}/dzi.dzi")
-def get_dzi_descriptor(slide: Slide = Depends(get_slide_or_404)):
+def get_dzi_descriptor(slide: Slide = Depends(get_slide_or_404), v: str | None = None):
     try:
         reader = reader_cache.get_reader_for_slide(slide)
         adapter = DeepZoomAdapter(reader)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return Response(content=adapter.get_dzi_xml(), media_type="application/xml")
+    return Response(content=adapter.get_dzi_xml(), media_type="application/xml", headers=image_headers(slide, v))
 
 
 @router.get("/slides/{slide_id}/dzi_files/{level}/{tile}")
@@ -588,6 +572,7 @@ def get_dzi_tile(
     tile: str,
     level: int,
     slide: Slide = Depends(get_slide_or_404),
+    v: str | None = None,
 ):
     match = re.match(r"^(\d+)_(\d+)\.(jpeg|jpg|png)$", tile)
     if not match:
@@ -601,4 +586,4 @@ def get_dzi_tile(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return Response(content=data, media_type="image/jpeg")
+    return Response(content=data, media_type="image/jpeg", headers=image_headers(slide, v))

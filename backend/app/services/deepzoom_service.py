@@ -12,9 +12,12 @@ from collections import OrderedDict
 
 from PIL import Image
 
+from app.core.config import get_settings
 from app.services.wsi_reader import WSIReader
 
-TILE_SIZE = 254
+# 510 + 1 px overlap on each side = 512 px tiles. Larger tiles mean far fewer requests per screen
+# (a browser runs only 6 at once to one server), which is what dominates how fast a view fills in.
+TILE_SIZE = 510
 TILE_OVERLAP = 1
 TILE_FORMAT = "jpeg"
 _DOWNSAMPLE_TOLERANCE = 1.01
@@ -23,7 +26,7 @@ _DOWNSAMPLE_TOLERANCE = 1.01
 class DeepZoomAdapter:
     """Minimal DZI generator that works directly against our WSIReader
     interface (rather than requiring an openslide.OpenSlide instance, so it
-    also works transparently over DemoWSIReader).
+    also works transparently over ImageReader).
     """
 
     def __init__(self, reader: WSIReader):
@@ -110,8 +113,11 @@ class DeepZoomAdapter:
 
 
 class _LRUTileCache:
-    def __init__(self, capacity: int):
-        self.capacity = capacity
+    """Encoded tiles and thumbnails, least recently used dropped first once `max_bytes` is exceeded."""
+
+    def __init__(self, max_bytes: int):
+        self.max_bytes = max_bytes
+        self._bytes = 0
         self._data: OrderedDict[tuple, bytes] = OrderedDict()
         self._lock = threading.Lock()
 
@@ -124,18 +130,23 @@ class _LRUTileCache:
 
     def put(self, key: tuple, value: bytes) -> None:
         with self._lock:
+            old = self._data.pop(key, None)
+            if old is not None:
+                self._bytes -= len(old)
             self._data[key] = value
-            self._data.move_to_end(key)
-            if len(self._data) > self.capacity:
-                self._data.popitem(last=False)
+            self._bytes += len(value)
+            while self._bytes > self.max_bytes and len(self._data) > 1:
+                _, dropped = self._data.popitem(last=False)
+                self._bytes -= len(dropped)
 
     def purge(self, slide_id: int) -> None:
         with self._lock:
             for key in [k for k in self._data if k[0] == slide_id]:
-                del self._data[key]
+                self._bytes -= len(self._data.pop(key))
 
 
-_tile_cache = _LRUTileCache(capacity=512)
+# About 256 MB: several thousand 512 px tiles -- every tile of a few slides' commonly viewed levels.
+_tile_cache = _LRUTileCache(max_bytes=get_settings().tile_cache_mb * 1024 * 1024)
 
 
 def purge_slide_tiles(slide_id: int) -> None:

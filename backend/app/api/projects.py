@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import shutil
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -15,7 +13,7 @@ from app.models.patch import Patch
 from app.models.project import Project
 from app.models.slide import Slide
 from app.schemas.project import ProjectCreate, ProjectDetailOut, ProjectOut, ProjectStats, ProjectUpdate
-from app.services import reader_cache
+from app.services import project_storage, reader_cache
 from app.services.deepzoom_service import purge_slide_tiles
 from app.services.config_versioning import compute_config_hash
 from app.services.slugify import slugify, unique_project_slug
@@ -44,6 +42,9 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db)) -> Pro
     )
     db.add(project)
     db.flush()
+    # SQLite can hand a deleted project's id to a new one; never let the new
+    # project inherit files a failed delete left behind under that id.
+    project_storage.remove_tree(project_storage.project_dir(get_settings().wsi_storage_dir, project.id))
 
     cfg_data = payload.config.model_dump(exclude={"annotation_classes"})
     config = ProjectConfigVersion(project_id=project.id, status="draft", **cfg_data)
@@ -130,13 +131,14 @@ def delete_project(project: Project = Depends(get_project_or_404), db: Session =
     if config_ids:
         db.query(ProjectConfigVersion).filter(ProjectConfigVersion.id.in_(config_ids)).delete(synchronize_session=False)
 
-    settings = get_settings()
-    project_dir = settings.wsi_storage_dir / str(project.id)
-    if project_dir.exists():
-        shutil.rmtree(project_dir, ignore_errors=True)
-
+    project_dir = project_storage.project_dir(get_settings().wsi_storage_dir, project.id)
     db.delete(project)
     db.commit()
+
+    # Only once the rows are gone: a failed commit must not leave a project
+    # whose files were already deleted. This removes every slide/image file and
+    # tissue mask the project stored (they all live in its directory).
+    project_storage.remove_tree(project_dir)
 
 
 def _to_detail(db: Session, project: Project) -> ProjectDetailOut:

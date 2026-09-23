@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { MaterialIcon } from "../components/MaterialIcon";
 import { Button, Card, StatusPill } from "../components/primitives";
-import { dynamicPatchUrl, getConfig, getSlide, listPatches } from "../services/api";
+import { getConfig, getSlide, listPatches, patchPreviewUrl } from "../services/api";
 import type { ConfigVersion, Patch, PatchStatus, Slide } from "../types/api";
 
 const PAGE_SIZE = 24;
@@ -130,7 +130,7 @@ export function PatchGalleryPage() {
       ) : (
         <div className={`grid ${DENSITY_COLS[density]} gap-space-md`}>
           {patches.map((p) => (
-            <PatchCard key={p.id} patch={p} slideId={sid} onOpen={() => navigate(`/projects/${pid}/slides/${sid}/workspace?patch=${p.id}`)} />
+            <PatchCard key={p.id} patch={p} slide={slide} onOpen={() => navigate(`/projects/${pid}/slides/${sid}/workspace?patch=${p.id}`)} />
           ))}
         </div>
       )}
@@ -152,7 +152,7 @@ export function PatchGalleryPage() {
   );
 }
 
-function PatchCard({ patch, slideId, onOpen }: { patch: Patch; slideId: number; onOpen: () => void }) {
+function PatchCard({ patch, slide, onOpen }: { patch: Patch; slide: Slide; onOpen: () => void }) {
   return (
     <div className="group relative flex flex-col bg-surface-container-lowest rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
       <div className="flex items-center justify-between px-space-sm py-1.5 bg-surface-container-high/60">
@@ -163,7 +163,7 @@ function PatchCard({ patch, slideId, onOpen }: { patch: Patch; slideId: number; 
       </div>
       <div className="relative aspect-square w-full bg-surface-dim overflow-hidden cursor-pointer" onClick={onOpen}>
         <img
-          src={dynamicPatchUrl(slideId, patch.x, patch.y, patch.width, patch.height, patch.level)}
+          src={patchPreviewUrl(slide, patch)}
           alt={`Patch ${patch.patch_index}`}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           loading="lazy"

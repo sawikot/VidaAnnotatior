@@ -13,6 +13,26 @@ export type PatchStatus = "unannotated" | "active" | "annotated" | "reviewed" | 
 export type GeometryType = "point" | "line" | "freehand_line" | "rectangle" | "circle" | "polygon" | "freehand";
 export type ConfigStatus = "draft" | "locked" | "experimental" | "deprecated";
 
+export type TissueSource = "auto" | "manual";
+export type TissueRegionMode = "add" | "remove";
+export type TissueRegionType = "rectangle" | "polygon" | "freehand" | "circle";
+
+/** A hand-drawn area that adds tissue to the slide's mask or removes it, in Level-0 pixels. */
+export interface TissueRegion {
+  id: number;
+  mode: TissueRegionMode;
+  type: TissueRegionType;
+  coordinates: [number, number][];
+}
+
+export interface TissueRegions {
+  source: TissueSource;
+  regions: TissueRegion[];
+  tissue_area_mm2: number | null;
+  tissue_coverage_pct: number | null;
+  has_mask: boolean;
+}
+
 export interface AnnotationClass {
   id: number;
   name: string;
@@ -91,7 +111,7 @@ export interface Slide {
   id: number;
   project_id: number;
   filename: string;
-  source_type: "upload" | "path" | "demo";
+  source_type: "upload" | "path";
   format: string | null;
   status: SlideStatus;
   error_message: string | null;
@@ -108,6 +128,10 @@ export interface Slide {
   tissue_area_mm2: number | null;
   tissue_coverage_pct: number | null;
   tissue_mask_path: string | null;
+  /** Where the tissue mask starts: automatic detection, or empty (only hand-drawn regions). */
+  tissue_source: TissueSource;
+  /** Pass as `version` to image URLs: lets the browser keep this slide's tiles and patch images. */
+  image_version: string;
   active_config_version_id: number | null;
 
   created_at: string;

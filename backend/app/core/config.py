@@ -28,8 +28,8 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
     ]
 
-    # In-memory LRU cache size (tile count) for dynamically generated DZI tiles.
-    tile_cache_size: int = 512
+    # Memory for the in-process cache of generated viewer tiles and thumbnails (MB).
+    tile_cache_mb: int = 256
 
     # Ceilings for one upload request / one unpacked archive. Uploaded bytes and
     # unpacked bytes are each capped by max_upload_bytes.

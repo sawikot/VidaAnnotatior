@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 
-import numpy as np
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -18,14 +17,17 @@ from app.schemas.slide import (
     DetectTissueResponse,
     GeneratePatchesRequest,
     GeneratePatchesResponse,
+    TissueRegionOut,
+    TissueRegionsIn,
+    TissueRegionsOut,
 )
 from app.services import reader_cache
+from app.services.geometry import validate_shape
 from app.services.patch_generator import generate_patch_grid
 from app.services.tissue_detector import get_detector
+from app.services.tissue_mask import DETECTION_MAX_SIZE, auto_mask_path, load_mask, rebuild_slide_mask, save_mask
 
 router = APIRouter(tags=["processing"])
-
-MASK_MAX_SIZE = 1024
 
 
 @router.post("/slides/{slide_id}/detect-tissue", response_model=DetectTissueResponse)
@@ -41,7 +43,7 @@ def detect_tissue(
     settings = get_settings()
     try:
         reader = reader_cache.get_reader_for_slide(slide)
-        thumbnail = reader.get_thumbnail(MASK_MAX_SIZE)
+        thumbnail = reader.get_thumbnail(DETECTION_MAX_SIZE)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -49,26 +51,11 @@ def detect_tissue(
     params = payload.model_dump(exclude={"method"})
     result = detector.detect(thumbnail, params)
 
-    mask_downsample = slide.width_l0 / result.thumbnail_size[0]
-
-    mask_img_dir = settings.wsi_storage_dir / str(slide.project_id) / "_masks"
-    mask_img_dir.mkdir(parents=True, exist_ok=True)
-    mask_path = mask_img_dir / f"{slide.id}_tissue_mask.png"
-    from PIL import Image
-
-    Image.fromarray((result.mask * 255).astype(np.uint8)).save(mask_path)
-
-    mpp_x = slide.mpp_x or 0.25
-    mpp_y = slide.mpp_y or 0.25
-    tissue_pixels_l0 = result.mask.sum() * (mask_downsample**2)
-    tissue_area_mm2 = tissue_pixels_l0 * (mpp_x * mpp_y) / 1_000_000
-
-    slide.tissue_mask_path = str(mask_path.relative_to(settings.wsi_storage_dir).as_posix())
-    slide.tissue_mask_downsample = mask_downsample
+    # The detector's own result is kept apart; the mask patches use is it plus any hand-drawn regions.
+    save_mask(auto_mask_path(settings.wsi_storage_dir, slide), result.mask)
     slide.tissue_params_used = {"method": payload.method, **params}
-    slide.tissue_area_mm2 = round(float(tissue_area_mm2), 4)
-    slide.tissue_coverage_pct = round(result.tissue_fraction * 100, 2)
-    slide.status = "tissue_detected"
+    slide.tissue_source = "auto"  # running detection means the mask starts from its result
+    rebuild_slide_mask(settings.wsi_storage_dir, slide)
     db.commit()
 
     return DetectTissueResponse(
@@ -87,6 +74,47 @@ def get_tissue_mask(slide: Slide = Depends(get_slide_or_404)):
     if not mask_path.exists():
         raise HTTPException(status_code=404, detail="Tissue mask file is missing on disk.")
     return Response(content=mask_path.read_bytes(), media_type="image/png")
+
+
+def _regions_out(slide: Slide) -> TissueRegionsOut:
+    return TissueRegionsOut(
+        source=slide.tissue_source or "auto",
+        regions=[TissueRegionOut(id=i + 1, **r) for i, r in enumerate(slide.tissue_regions or [])],
+        tissue_area_mm2=slide.tissue_area_mm2,
+        tissue_coverage_pct=slide.tissue_coverage_pct,
+        has_mask=slide.tissue_mask_path is not None,
+    )
+
+
+@router.get("/slides/{slide_id}/tissue-regions", response_model=TissueRegionsOut)
+def get_tissue_regions(slide: Slide = Depends(get_slide_or_404)):
+    return _regions_out(slide)
+
+
+@router.put("/slides/{slide_id}/tissue-regions", response_model=TissueRegionsOut)
+def set_tissue_regions(
+    payload: TissueRegionsIn,
+    slide: Slide = Depends(get_slide_or_404),
+    db: Session = Depends(get_db),
+):
+    """Replace the slide's hand-drawn tissue regions (and where its mask starts), then
+    rebuild the mask patches are generated from. Existing patches are kept until
+    Generate Coords is run again."""
+    forbid_for_image_project(slide.project, "Tissue regions")
+    if not slide.width_l0 or not slide.height_l0:
+        raise HTTPException(status_code=422, detail="Slide metadata is not available; re-import the slide.")
+    for i, region in enumerate(payload.regions, start=1):
+        try:
+            validate_shape(region.type, region.coordinates)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=f"Region {i}: {exc}") from exc
+
+    slide.tissue_source = payload.source
+    slide.tissue_regions = [r.model_dump() for r in payload.regions]
+    rebuild_slide_mask(get_settings().wsi_storage_dir, slide)
+    db.commit()
+    db.refresh(slide)
+    return _regions_out(slide)
 
 
 @router.post("/slides/{slide_id}/generate-patches", response_model=GeneratePatchesResponse)
@@ -111,11 +139,9 @@ def generate_patches(
 
     tissue_mask = None
     if slide.tissue_mask_path:
-        from PIL import Image
-
         mask_path = settings.wsi_storage_dir / slide.tissue_mask_path
         if mask_path.exists():
-            tissue_mask = np.array(Image.open(mask_path)) > 127
+            tissue_mask = load_mask(mask_path)
 
     candidates = generate_patch_grid(meta, config, tissue_mask, slide.tissue_mask_downsample)
     if not candidates:

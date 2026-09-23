@@ -5,7 +5,7 @@ import { Button, Modal } from "../../components/primitives";
 import { updateProject } from "../../services/api";
 import { useUiStore } from "../../stores/uiStore";
 import type { ProjectDetail } from "../../types/api";
-import { ORGANS } from "./constants";
+import { CancerTypeSelect } from "./CancerTypeSelect";
 
 interface Props {
   open: boolean;
@@ -47,7 +47,7 @@ export function EditProjectModal({ open, onClose, project, onSaved }: Props) {
     try {
       const updated = await updateProject(project.id, {
         name: name.trim(),
-        organ: organ || null,
+        organ: organ.trim() || null,
         team: team.trim() || null,
         description: description.trim() || null,
         status,
@@ -77,13 +77,8 @@ export function EditProjectModal({ open, onClose, project, onSaved }: Props) {
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
         <div className="grid grid-cols-2 gap-space-md">
-          <Field label="Primary organ">
-            <select className="input" value={organ} onChange={(e) => setOrgan(e.target.value)}>
-              <option value="">--</option>
-              {[...new Set([...ORGANS, ...(project.organ ? [project.organ] : [])])].map((o) => (
-                <option key={o}>{o}</option>
-              ))}
-            </select>
+          <Field label="Cancer type">
+            <CancerTypeSelect value={organ} onChange={setOrgan} allowEmpty />
           </Field>
           <Field label="Status">
             <select className="input" value={status} onChange={(e) => setStatus(e.target.value as ProjectDetail["status"])}>

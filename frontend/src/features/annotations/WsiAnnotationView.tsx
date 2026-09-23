@@ -339,6 +339,7 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
             <div className="absolute inset-0">
             <WsiViewer
               slideId={slide.id}
+              version={slide.image_version}
               className="w-full h-full"
               keyboardNav={false}
               blockPan={blockPan}

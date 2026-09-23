@@ -13,6 +13,8 @@ export interface ViewportBbox {
 
 interface Props {
   slideId: number;
+  /** The slide's `image_version`: with it the browser keeps the tiles, so reopening the slide is instant. */
+  version?: string;
   className?: string;
   showNavigator?: boolean;
   /** Custom zoom/fit/fullscreen control cluster (styled to match the app,
@@ -34,6 +36,7 @@ interface Props {
 
 export function WsiViewer({
   slideId,
+  version,
   className = "",
   showNavigator = true,
   showControls = true,
@@ -56,7 +59,7 @@ export function WsiViewer({
 
     const viewer = OpenSeadragon({
       element: containerRef.current,
-      tileSources: dziUrl(slideId),
+      tileSources: dziUrl(slideId, version),
       drawer: "canvas",
       showNavigator,
       navigatorPosition: "BOTTOM_LEFT",
@@ -120,7 +123,7 @@ export function WsiViewer({
       viewerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slideId]);
+  }, [slideId, version]);
 
   return (
     <div ref={containerRef} className={`relative bg-[#0f172a] ${className}`}>

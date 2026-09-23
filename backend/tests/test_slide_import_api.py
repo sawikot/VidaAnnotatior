@@ -277,6 +277,35 @@ def test_deleting_a_slide_removes_its_whole_directory(env):
     assert stored_files(settings, pid) == []
 
 
+def test_deleting_a_project_removes_all_of_its_files_and_only_its_files(env):
+    client, pid, settings = env
+    upload(client, pid, [("a.tif", SLIDE), ("b.tif", SLIDE)])
+    masks = settings.wsi_storage_dir / str(pid) / "_masks"
+    masks.mkdir()
+    (masks / "1_tissue_mask.png").write_bytes(b"mask")
+    other = client.post("/api/projects", json={"name": "Keep Me"}).json()["id"]
+    upload(client, other, [("c.tif", SLIDE)])
+    for sid in list(reader_cache._cache):  # the viewer had the slides open, as it would in real use
+        reader_cache._cache[sid].get_metadata()
+
+    assert client.delete(f"/api/projects/{pid}").status_code == 204
+
+    assert not (settings.wsi_storage_dir / str(pid)).exists()
+    assert len(stored_files(settings, other)) == 1
+
+
+def test_a_new_project_never_inherits_files_left_under_a_reused_id(env):
+    client, pid, settings = env
+    client.delete(f"/api/projects/{pid}")
+    leftover = settings.wsi_storage_dir / str(pid + 1) / "old-slide"
+    leftover.mkdir(parents=True)
+    (leftover / "old.svs").write_bytes(b"x")
+
+    new_id = client.post("/api/projects", json={"name": "Fresh"}).json()["id"]
+
+    assert stored_files(settings, new_id) == []
+
+
 # ------------------------------------------------------------------ path import
 
 

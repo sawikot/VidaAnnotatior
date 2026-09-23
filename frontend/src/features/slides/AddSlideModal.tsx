@@ -4,7 +4,6 @@ import { Button, Modal } from "../../components/primitives";
 import {
   ApiError,
   UploadAborted,
-  createDemoSlide,
   getWsiFormats,
   importSlideByPath,
   uploadSlides,
@@ -14,7 +13,7 @@ import { useUiStore } from "../../stores/uiStore";
 import type { ProjectType, SlideBatchImportResult, WsiFormats } from "../../types/api";
 import { IMAGE_EXTENSIONS, extensionOf, findProblems, formatBytes, mergeSelections, summarize, toUploadItem } from "./uploadSelection";
 
-type Tab = "upload" | "path" | "demo";
+type Tab = "upload" | "path";
 type Phase = "idle" | "uploading" | "processing" | "done";
 
 const MAX_LISTED = 40;
@@ -119,20 +118,6 @@ export function AddSlideModal({ open, onClose, projectId, projectType = "wsi", c
     }
   }
 
-  async function handleDemo() {
-    setPhase("processing");
-    try {
-      await createDemoSlide(projectId, undefined, configVersionId ?? undefined);
-      pushToast("Demo slide added", "success");
-      onImported();
-      reset();
-      onClose();
-    } catch (e) {
-      setPhase("idle");
-      pushToast(e instanceof Error ? e.message : "Failed to add demo slide", "error");
-    }
-  }
-
   const showResult = phase === "done" && result;
 
   return (
@@ -147,14 +132,14 @@ export function AddSlideModal({ open, onClose, projectId, projectType = "wsi", c
 
         {!showResult && (
           <div className="flex bg-surface-container-low rounded p-0.5">
-            {(isImage ? (["upload", "path"] as const) : (["upload", "path", "demo"] as const)).map((m) => (
+            {(["upload", "path"] as const).map((m) => (
               <button
                 key={m}
                 disabled={busy}
                 onClick={() => setTab(m)}
                 className={`flex-1 py-1.5 rounded text-label-md disabled:opacity-50 ${tab === m ? "bg-surface-container-lowest shadow-sm" : ""}`}
               >
-                {m === "upload" ? "Upload" : m === "path" ? "Server path" : "Demo"}
+                {m === "upload" ? "Upload" : "Server path"}
               </button>
             ))}
           </div>
@@ -195,18 +180,6 @@ export function AddSlideModal({ open, onClose, projectId, projectType = "wsi", c
             <input className="input font-mono" placeholder="C:/path/to/watch-dir/slides" value={path} onChange={(e) => setPath(e.target.value)} disabled={busy} />
             <Button variant="primary" disabled={busy || !path.trim()} onClick={handlePathImport}>
               {busy ? "Importing..." : "Import"}
-            </Button>
-          </div>
-        )}
-
-        {!showResult && tab === "demo" && (
-          <div className="flex flex-col gap-space-sm">
-            <p className="text-body-md text-on-surface-variant">
-              Adds a synthetic, procedurally generated slide -- no real WSI file needed. Useful for exercising the whole
-              pipeline (tissue detection, patches, annotation, export) without patient data.
-            </p>
-            <Button variant="primary" disabled={busy} onClick={handleDemo}>
-              {busy ? "Generating..." : "Add demo slide"}
             </Button>
           </div>
         )}

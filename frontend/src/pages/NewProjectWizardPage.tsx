@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { MaterialIcon } from "../components/MaterialIcon";
 import { Field, Toggle } from "../components/formControls";
 import { Button, Card } from "../components/primitives";
-import { MVP_TOOLS, ORGANS } from "../features/projects/constants";
+import { CancerTypeSelect } from "../features/projects/CancerTypeSelect";
+import { MVP_TOOLS } from "../features/projects/constants";
 import { createProject } from "../services/api";
 import type { ProjectType } from "../types/api";
 import { useUiStore } from "../stores/uiStore";
@@ -65,7 +66,7 @@ export function NewProjectWizardPage() {
 
   // Step 1
   const [name, setName] = useState("");
-  const [organ, setOrgan] = useState("Breast");
+  const [organ, setOrgan] = useState("Breast Cancer");
   const [description, setDescription] = useState("");
   const [team, setTeam] = useState("");
 
@@ -126,7 +127,7 @@ export function NewProjectWizardPage() {
       const project = await createProject({
         name,
         project_type: projectType,
-        organ,
+        organ: organ.trim() || null,
         description,
         team,
         config: isImage
@@ -231,12 +232,8 @@ export function NewProjectWizardPage() {
           <Field label="Project Name">
             <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Breast Cancer Annotation" />
           </Field>
-          <Field label="Primary Organ">
-            <select className="input" value={organ} onChange={(e) => setOrgan(e.target.value)}>
-              {ORGANS.map((o) => (
-                <option key={o}>{o}</option>
-              ))}
-            </select>
+          <Field label="Cancer Type">
+            <CancerTypeSelect value={organ} onChange={setOrgan} />
           </Field>
           <Field label="Researcher / Team">
             <input className="input" value={team} onChange={(e) => setTeam(e.target.value)} placeholder="Dr. Eliza Chen Lab" />

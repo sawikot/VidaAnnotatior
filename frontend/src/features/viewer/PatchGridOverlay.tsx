@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listPatches } from "../../services/api";
 import type { Patch } from "../../types/api";
 import type { ViewportBbox } from "./WsiViewer";
@@ -21,15 +21,44 @@ interface Props {
   refreshKey?: number;
 }
 
+const SETTLE_MS = 150;
+const LIMIT = 2000;
+
+/** Fetched area and whether everything in it came back (under the limit). */
+interface Fetched {
+  box: ViewportBbox;
+  complete: boolean;
+  key: string;
+}
+
+const contains = (outer: ViewportBbox, inner: ViewportBbox) =>
+  inner.x0 >= outer.x0 && inner.y0 >= outer.y0 && inner.x1 <= outer.x1 && inner.y1 <= outer.y1;
+
 export function PatchGridOverlay({ slideId, bbox, activePatchId, onPatchClick, refreshKey }: Props) {
   const [patches, setPatches] = useState<Patch[]>([]);
+  const fetched = useRef<Fetched | null>(null);
 
   useEffect(() => {
     if (!bbox) return;
-    const bboxStr = `${Math.floor(bbox.x0)},${Math.floor(bbox.y0)},${Math.ceil(bbox.x1)},${Math.ceil(bbox.y1)}`;
-    listPatches(slideId, { bbox: bboxStr, limit: 2000 })
-      .then((res) => setPatches(res.items))
-      .catch(() => {});
+    const key = `${slideId}:${refreshKey ?? 0}`;
+    const have = fetched.current;
+    // Still inside an area fetched in full, for the same slide and data: nothing new to show.
+    if (have && have.key === key && have.complete && contains(have.box, bbox)) return;
+
+    const timer = window.setTimeout(() => {
+      // Half a view of margin on every side, so small pans need no request at all.
+      const mx = (bbox.x1 - bbox.x0) / 2;
+      const my = (bbox.y1 - bbox.y0) / 2;
+      const box = { x0: bbox.x0 - mx, y0: bbox.y0 - my, x1: bbox.x1 + mx, y1: bbox.y1 + my };
+      const bboxStr = `${Math.floor(box.x0)},${Math.floor(box.y0)},${Math.ceil(box.x1)},${Math.ceil(box.y1)}`;
+      listPatches(slideId, { bbox: bboxStr, limit: LIMIT })
+        .then((res) => {
+          fetched.current = { box, complete: res.items.length < LIMIT, key };
+          setPatches(res.items);
+        })
+        .catch(() => {});
+    }, have && have.key === key ? SETTLE_MS : 0);
+    return () => window.clearTimeout(timer);
   }, [slideId, bbox?.x0, bbox?.y0, bbox?.x1, bbox?.y1, refreshKey]);
 
   const activePatch = patches.find((p) => p.id === activePatchId);

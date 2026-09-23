@@ -219,6 +219,25 @@ export function MainWorkspacePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patch?.id]);
 
+  // Fetch the next patch's image in the background while this one is annotated, so moving on
+  // (D, or Next) shows it at once: the browser keeps it, as it is asked for with the slide's version.
+  useEffect(() => {
+    if (!patch || isImage !== false || !slide || patch.slide_id !== sid) return;
+    let cancelled = false;
+    const version = slide.image_version;
+    nextPatch(sid, patch.patch_index, "next")
+      .then((next) => {
+        if (cancelled || !next) return;
+        const img = new Image();
+        img.src = dynamicPatchUrl(sid, next.x, next.y, next.width, next.height, next.level, version);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patch?.id, isImage, slide?.image_version, sid]);
+
   function refreshTotals() {
     listPatches(sid, { limit: 1 }).then((r) => setTotals((t) => ({ ...t, total: r.total })));
     listPatches(sid, { status: "annotated,reviewed", limit: 1 }).then((r) => setTotals((t) => ({ ...t, done: r.total })));
@@ -452,7 +471,7 @@ export function MainWorkspacePage() {
     );
   }
 
-  const imageUrl = dynamicPatchUrl(sid, patch.x, patch.y, patch.width, patch.height, patch.level);
+  const imageUrl = dynamicPatchUrl(sid, patch.x, patch.y, patch.width, patch.height, patch.level, slide.image_version);
   const switching = patch.slide_id !== sid; // the next image is still loading
   const prog = isImage ? progress(imagesLive) : totals;
   const noun = isImage ? "Image" : "Patch";
@@ -499,7 +518,7 @@ export function MainWorkspacePage() {
           ) : (
             <>
               <div className="h-44 relative border-b border-[#1e293b]">
-                <WsiViewer slideId={sid} className="w-full h-full" showNavigator={false} showControls={false} onViewportChange={setBbox}>
+                <WsiViewer slideId={sid} version={slide.image_version} className="w-full h-full" showNavigator={false} showControls={false} onViewportChange={setBbox}>
                   <PatchGridOverlay slideId={sid} bbox={bbox} activePatchId={patch.id} refreshKey={gridRefresh} onPatchClick={(p) => setPatch(p)} />
                 </WsiViewer>
               </div>

@@ -209,8 +209,7 @@ export function ProjectDashboardPage() {
 
         {filteredSlides.length === 0 ? (
           <div className="p-space-xl text-center text-on-surface-variant">
-            No slides yet. Click "Add WSI Slides" to import a .svs/.tif/.tiff/.ndpi file, or add a synthetic demo
-            slide.
+            No slides yet. Click "Add WSI Slides" to import a .svs/.tif/.tiff/.ndpi file.
           </div>
         ) : (
           <div className="overflow-x-auto">

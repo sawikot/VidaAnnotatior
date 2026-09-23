@@ -32,7 +32,7 @@ def _seed(db, with_patch=True):
     tumor = AnnotationClass(config_version_id=config.id, name="Tumor", color_hex="#dc2626", hotkey="1", order_index=0)
     stroma = AnnotationClass(config_version_id=config.id, name="Stroma", color_hex="#16a34a", hotkey="2", order_index=1)
     db.add_all([tumor, stroma])
-    slide = Slide(project_id=project.id, filename="s.svs", source_type="demo", active_config_version_id=config.id)
+    slide = Slide(project_id=project.id, filename="s.svs", source_type="upload", active_config_version_id=config.id)
     db.add(slide)
     db.flush()
     project.active_config_version_id = config.id

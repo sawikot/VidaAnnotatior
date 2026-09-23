@@ -43,7 +43,7 @@ def test_explicitly_locked_version_blocks_critical_edits_even_without_patches(db
 
 def test_locked_once_patches_exist(db):
     project, config = _seed(db)
-    slide = Slide(project_id=project.id, filename="Patient_001.svs", source_type="demo")
+    slide = Slide(project_id=project.id, filename="Patient_001.svs", source_type="upload")
     db.add(slide)
     db.flush()
     db.add(
