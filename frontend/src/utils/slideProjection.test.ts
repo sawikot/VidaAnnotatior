@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GeometryAnnotation, GeometryType } from "../types/api";
-import { level0ToLocal, projectSlideShapes, type PatchFrame } from "./slideProjection";
+import { level0ToLocal, localToLevel0, localToLocal, projectSlideShapes, type PatchFrame } from "./slideProjection";
 
 const frame = (over: Partial<PatchFrame> = {}): PatchFrame => ({ x: 1000, y: 2000, width: 512, height: 512, width_l0: 512, height_l0: 512, ...over });
 
@@ -59,5 +59,26 @@ describe("projectSlideShapes", () => {
 
   it("ignores annotations with no coordinates", () => {
     expect(projectSlideShapes([ann(1, "polygon", [])], frame())).toEqual([]);
+  });
+});
+
+describe("points between overlapping patches", () => {
+  // 2048 px patches read at 4x (footprint 8192 L0 px), stride half a patch: the second starts 4096 L0 px to the right.
+  const first = frame({ x: 0, y: 0, width: 2048, height: 2048, width_l0: 8192, height_l0: 8192 });
+  const second = frame({ x: 4096, y: 0, width: 2048, height: 2048, width_l0: 8192, height_l0: 8192 });
+
+  it("a patch pixel lands at origin + local * downsample on the slide", () => {
+    expect(localToLevel0(second, [100, 50])).toEqual([4096 + 400, 200]);
+  });
+
+  it("the shared half of the first patch is the start of the second", () => {
+    expect(localToLocal(first, second, [1024, 10])).toEqual([0, 10]);
+    expect(localToLocal(first, second, [1500, 700])).toEqual([476, 700]);
+  });
+
+  it("converting there and back gives the same point", () => {
+    const back = localToLocal(second, first, localToLocal(first, second, [1234.5, 99.25]));
+    expect(back[0]).toBeCloseTo(1234.5);
+    expect(back[1]).toBeCloseTo(99.25);
   });
 });

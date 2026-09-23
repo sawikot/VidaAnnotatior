@@ -12,6 +12,7 @@ import { PatchGridOverlay, PATCH_STATUS_COLORS } from "../features/viewer/PatchG
 import { WsiViewer, type ViewportBbox } from "../features/viewer/WsiViewer";
 import {
   createAnnotation,
+  createSlideAnnotation,
   deleteAnnotation,
   dynamicPatchUrl,
   getConfig,
@@ -19,6 +20,7 @@ import {
   getProject,
   getSlide,
   listImages,
+  listOverlappingAnnotations,
   listPatchAnnotations,
   listSlideAnnotations,
   listPatches,
@@ -30,11 +32,14 @@ import {
 import { useAnnotationStore } from "../stores/annotationStore";
 import { useContextStore } from "../stores/contextStore";
 import { useUiStore } from "../stores/uiStore";
-import type { ConfigVersion, GeometryAnnotation, GeometryType, ImageSummary, Patch, Slide } from "../types/api";
+import type { ConfigVersion, GeometryAnnotation, GeometryType, ImageSummary, OverlappingAnnotation, Patch, Slide } from "../types/api";
 import type { Point } from "../utils/coordinates";
-import { projectSlideShapes } from "../utils/slideProjection";
+import type { LayerShape } from "../features/annotations/ShapeLayer";
+import { level0ToLocal, localToLevel0, localToLocal, projectSlideShapes } from "../utils/slideProjection";
 
-type AnnotationFields = Partial<Pick<GeometryAnnotation, "class_id" | "unsure" | "flagged" | "notes" | "coordinates_patch_local">>;
+type AnnotationFields = Partial<
+  Pick<GeometryAnnotation, "class_id" | "unsure" | "flagged" | "notes" | "coordinates_patch_local" | "coordinates_level0">
+>;
 
 export function MainWorkspacePage() {
   const { projectId, slideId } = useParams();
@@ -57,6 +62,8 @@ export function MainWorkspacePage() {
   const [config, setConfig] = useState<ConfigVersion | null>(null);
   const [patch, setPatch] = useState<Patch | null>(null);
   const [annotations, setAnnotations] = useState<GeometryAnnotation[]>([]);
+  // Annotations drawn in overlapping patches (stride < patch size) that reach into this one.
+  const [borrowed, setBorrowed] = useState<OverlappingAnnotation[]>([]);
   const [selectedAnnId, setSelectedAnnId] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
   const [totals, setTotals] = useState({ total: 0, done: 0 });
@@ -209,11 +216,15 @@ export function MainWorkspacePage() {
     history.reset();
     if (pendingSelect.current === null) setSelectedAnnId(null);
     if (isImage !== true) {
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        next.set("patch", String(patch.id));
-        return next;
-      });
+      // Replace, not push: which patch is open is not a step of its own, so Back leaves the workspace.
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("patch", String(patch.id));
+          return next;
+        },
+        { replace: true },
+      );
       refreshTotals();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -238,13 +249,33 @@ export function MainWorkspacePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patch?.id, isImage, slide?.image_version, sid]);
 
+  useEffect(() => {
+    if (!patch || isImage !== false || patch.slide_id !== sid) {
+      setBorrowed([]);
+      return;
+    }
+    let cancelled = false;
+    listOverlappingAnnotations(patch.id)
+      .then((list) => !cancelled && setBorrowed(list))
+      .catch(() => !cancelled && setBorrowed([]));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patch?.id, isImage, mode]);
+
   function refreshTotals() {
     listPatches(sid, { limit: 1 }).then((r) => setTotals((t) => ({ ...t, total: r.total })));
     listPatches(sid, { status: "annotated,reviewed", limit: 1 }).then((r) => setTotals((t) => ({ ...t, done: r.total })));
   }
 
   const classes = config?.annotation_classes ?? [];
-  const selectedAnn = annotations.find((a) => a.id === selectedAnnId) ?? null;
+  const borrowedEntry = (id: number | null) => borrowed.find((o) => o.annotation.id === id) ?? null;
+  const slideLevel = (id: number | null) => slideAnnotations.find((a) => a.id === id) ?? null;
+  const selectedAnn =
+    annotations.find((a) => a.id === selectedAnnId) ?? borrowedEntry(selectedAnnId)?.annotation ?? slideLevel(selectedAnnId) ?? null;
+  const selectedIsSlideLevel = slideLevel(selectedAnnId) !== null;
+  const selectedOwner = borrowedEntry(selectedAnnId)?.owner ?? null;
 
   // The project's configuration decides which drawing tools are offered; Select is always there.
   const visibleTools = toolsFor(config?.enabled_tools);
@@ -336,7 +367,35 @@ export function MainWorkspacePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [areaEl]);
 
-  const onSlide = useMemo(() => (patch && !isImage ? projectSlideShapes(slideAnnotations, patch) : []), [slideAnnotations, patch, isImage]);
+  // Whole-slide annotations as they lie in this patch; edited here, they may be moved anywhere on the slide.
+  const onSlide = useMemo<LayerShape[]>(() => {
+    if (!patch || isImage || !slide?.width_l0 || !slide.height_l0) return [];
+    const sx = patch.width_l0 / patch.width;
+    const sy = patch.height_l0 / patch.height;
+    const bounds = { x0: -patch.x / sx, y0: -patch.y / sy, x1: (slide.width_l0 - patch.x) / sx, y1: (slide.height_l0 - patch.y) / sy };
+    return projectSlideShapes(slideAnnotations, patch).map((shape) => ({ ...shape, bounds }));
+  }, [slideAnnotations, patch, isImage, slide?.width_l0, slide?.height_l0]);
+
+  // Overlapping patches' annotations, in this patch's pixels. Each is kept inside its own patch when moved.
+  const borrowedShapes = useMemo<LayerShape[]>(() => {
+    if (!patch) return [];
+    const sx = patch.width_l0 / patch.width;
+    const sy = patch.height_l0 / patch.height;
+    return borrowed.map(({ annotation: a, owner }) => ({
+      id: a.id,
+      type: a.type,
+      points: (a.coordinates_level0 as [number, number][]).map((pt) => level0ToLocal(patch, pt)),
+      class_id: a.class_id,
+      unsure: a.unsure,
+      excluded: a.excluded,
+      bounds: {
+        x0: (owner.x - patch.x) / sx,
+        y0: (owner.y - patch.y) / sy,
+        x1: (owner.x + owner.width_l0 - patch.x) / sx,
+        y1: (owner.y + owner.height_l0 - patch.y) / sy,
+      },
+    }));
+  }, [borrowed, patch]);
 
   const patchOrigin = useMemo(() => {
     if (!patch) return null;
@@ -407,24 +466,92 @@ export function MainWorkspacePage() {
     }
   }
 
-  const handleShapeEdit = (id: number, points: Point[]) => editAnnotation(id, { coordinates_patch_local: points }, "edit shape");
+  /** Like editAnnotation, for an annotation of an overlapping patch; `fields` are in its owner's pixels. */
+  async function editBorrowed(id: number, fields: AnnotationFields, label: string) {
+    const entry = borrowedEntry(id);
+    if (!entry || patch?.slide_id !== sid) return;
+    const target = entry.annotation;
+    const before = Object.fromEntries(Object.keys(fields).map((key) => [key, target[key as keyof AnnotationFields]])) as AnnotationFields;
+    const replace = (updated: GeometryAnnotation) =>
+      setBorrowed((prev) => prev.map((o) => (o.annotation.id === id ? { ...o, annotation: updated } : o)));
+    const send = async (f: AnnotationFields) => replace(await updateAnnotation(id, f));
+
+    const shown = { ...target, ...fields };
+    if (fields.coordinates_patch_local) {
+      shown.coordinates_level0 = (fields.coordinates_patch_local as Point[]).map((pt) => localToLevel0(entry.owner, pt));
+    }
+    setSaveState("saving");
+    replace(shown);
+    try {
+      await send(fields);
+      setSaveState("saved");
+      history.push({ label, do: () => send(fields), undo: () => send(before) });
+    } catch (e) {
+      replace(target);
+      setSaveState("error");
+      pushToast(e instanceof Error ? e.message : "Failed to save the change", "error");
+    }
+  }
+
+  /** Like editAnnotation, for an annotation drawn on the whole slide (Level-0 coordinates only). */
+  async function editSlideLevel(id: number, fields: AnnotationFields, label: string) {
+    const target = slideLevel(id);
+    if (!target || patch?.slide_id !== sid) return;
+    const before = Object.fromEntries(Object.keys(fields).map((key) => [key, target[key as keyof AnnotationFields]])) as AnnotationFields;
+    const replace = (updated: GeometryAnnotation) => setSlideAnnotations((prev) => prev.map((a) => (a.id === id ? updated : a)));
+    const send = async (f: AnnotationFields) => replace(await updateAnnotation(id, f));
+
+    setSaveState("saving");
+    replace({ ...target, ...fields });
+    try {
+      await send(fields);
+      setSaveState("saved");
+      history.push({ label, do: () => send(fields), undo: () => send(before) });
+    } catch (e) {
+      replace(target);
+      setSaveState("error");
+      pushToast(e instanceof Error ? e.message : "Failed to save the change", "error");
+    }
+  }
+
+  const editAny = (id: number, fields: AnnotationFields, label: string) =>
+    borrowedEntry(id) ? editBorrowed(id, fields, label) : slideLevel(id) ? editSlideLevel(id, fields, label) : editAnnotation(id, fields, label);
+
+  const handleShapeEdit = (id: number, points: Point[]) => {
+    const entry = borrowedEntry(id);
+    if (entry && patch) {
+      // Drawn in this patch's pixels; stored in the pixels of the patch it belongs to.
+      editBorrowed(id, { coordinates_patch_local: points.map((pt) => localToLocal(patch, entry.owner, pt)) }, "edit shape");
+    } else if (slideLevel(id) && patch) {
+      editSlideLevel(id, { coordinates_level0: points.map((pt) => localToLevel0(patch, pt)) }, "edit shape");
+    } else {
+      editAnnotation(id, { coordinates_patch_local: points }, "edit shape");
+    }
+  };
 
   async function handleDeleteSelected() {
     if (!selectedAnnId) return;
-    const target = annotations.find((a) => a.id === selectedAnnId);
+    const onWholeSlide = slideLevel(selectedAnnId);
+    if (onWholeSlide) return deleteSlideLevel(onWholeSlide);
+    const entry = borrowedEntry(selectedAnnId); // an overlapping patch's annotation, deleted from that patch
+    const target = entry?.annotation ?? annotations.find((a) => a.id === selectedAnnId);
     const patchId = target?.patch_id; // the patch view only ever holds patch-drawn annotations
     if (!target || patchId == null) return;
+    const drop = (id: number) =>
+      entry ? setBorrowed((prev) => prev.filter((o) => o.annotation.id !== id)) : setAnnotations((prev) => prev.filter((a) => a.id !== id));
+    const add = (a: GeometryAnnotation) =>
+      entry ? setBorrowed((prev) => [...prev, { owner: entry.owner, annotation: a }]) : setAnnotations((prev) => [...prev, a]);
     setSaveState("saving");
     try {
       await deleteAnnotation(target.id);
-      setAnnotations((prev) => prev.filter((a) => a.id !== target.id));
+      drop(target.id);
       setSelectedAnnId(null);
       setSaveState("saved");
       history.push({
         label: "delete annotation",
         do: async () => {
           await deleteAnnotation(target.id);
-          setAnnotations((prev) => prev.filter((a) => a.id !== target.id));
+          drop(target.id);
         },
         undo: async () => {
           const recreated = await createAnnotation(patchId, {
@@ -433,10 +560,45 @@ export function MainWorkspacePage() {
             coordinates_patch_local: target.coordinates_patch_local,
             created_by: target.created_by ?? annotatorName,
           });
-          setAnnotations((prev) => [...prev, recreated]);
+          add(recreated);
         },
       });
       setGridRefresh((n) => n + 1);
+    } catch (e) {
+      setSaveState("error");
+      pushToast(e instanceof Error ? e.message : "Failed to delete annotation", "error");
+    }
+  }
+
+  async function deleteSlideLevel(target: GeometryAnnotation) {
+    const copy = {
+      type: target.type,
+      class_id: target.class_id,
+      coordinates_level0: target.coordinates_level0 as [number, number][],
+      created_by: target.created_by ?? annotatorName,
+      notes: target.notes ?? undefined,
+      unsure: target.unsure,
+      flagged: target.flagged,
+    };
+    let currentId = target.id; // undo recreates it with a new id; redo must delete that one
+    setSaveState("saving");
+    try {
+      await deleteAnnotation(target.id);
+      setSlideAnnotations((prev) => prev.filter((a) => a.id !== target.id));
+      setSelectedAnnId(null);
+      setSaveState("saved");
+      history.push({
+        label: "delete annotation",
+        do: async () => {
+          await deleteAnnotation(currentId);
+          setSlideAnnotations((prev) => prev.filter((a) => a.id !== currentId));
+        },
+        undo: async () => {
+          const recreated = await createSlideAnnotation(sid, copy);
+          currentId = recreated.id;
+          setSlideAnnotations((prev) => [...prev, recreated]);
+        },
+      });
     } catch (e) {
       setSaveState("error");
       pushToast(e instanceof Error ? e.message : "Failed to delete annotation", "error");
@@ -653,8 +815,7 @@ export function MainWorkspacePage() {
               tool={tool}
               zoom={effectiveZoom}
               annotations={annotations}
-              background={onSlide}
-              onBackgroundPress={showAnnotationOnSlide}
+              borrowed={[...onSlide, ...borrowedShapes]}
               classes={classes}
               selectedId={selectedAnnId}
               onSelect={setSelectedAnnId}
@@ -717,6 +878,38 @@ export function MainWorkspacePage() {
             </div>
           </div>
 
+          {borrowed.length > 0 && (
+            <div data-testid="from-overlapping-patches">
+              <div className="text-label-md text-on-surface-variant mb-1">From overlapping patches ({borrowed.length})</div>
+              <div className="flex flex-col gap-1">
+                {borrowed.map(({ annotation: a, owner }) => {
+                  const cls = classes.find((c) => c.id === a.class_id);
+                  return (
+                    <div
+                      key={a.id}
+                      onClick={() => {
+                        setTool("select");
+                        setSelectedAnnId(a.id);
+                      }}
+                      className={`flex items-center justify-between px-space-sm py-1.5 rounded bg-surface-container-lowest shadow-sm cursor-pointer ${
+                        selectedAnnId === a.id ? "ring-1 ring-primary" : ""
+                      }`}
+                    >
+                      <span className="flex items-center gap-1.5 text-label-md">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cls?.color_hex ?? "#94a3b8" }} />
+                        {cls?.name ?? "Unclassed"} #{a.id}
+                      </span>
+                      <span className="text-label-sm text-on-surface-variant">patch #{owner.patch_index}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-label-sm text-on-surface-variant mt-1">
+                Drawn in a neighbouring patch that shares this area. Edit them here; they stay in the patch they were drawn in.
+              </p>
+            </div>
+          )}
+
           {onSlide.length > 0 && (
             <div data-testid="from-the-slide">
               <div className="text-label-md text-on-surface-variant mb-1">From the whole slide ({onSlide.length})</div>
@@ -726,9 +919,13 @@ export function MainWorkspacePage() {
                   return (
                     <button
                       key={a.id}
-                      onClick={() => showAnnotationOnSlide(a.id)}
-                      title="Edit this on the whole slide"
-                      className="flex items-center justify-between px-space-sm py-1.5 rounded bg-surface-container-low text-left hover:bg-surface-container"
+                      onClick={() => {
+                        setTool("select");
+                        setSelectedAnnId(a.id);
+                      }}
+                      className={`flex items-center justify-between px-space-sm py-1.5 rounded bg-surface-container-low text-left hover:bg-surface-container ${
+                        selectedAnnId === a.id ? "ring-1 ring-primary" : ""
+                      }`}
                     >
                       <span className="flex items-center gap-1.5 text-label-md">
                         <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cls?.color_hex ?? "#94a3b8" }} />
@@ -739,7 +936,7 @@ export function MainWorkspacePage() {
                   );
                 })}
               </div>
-              <p className="text-label-sm text-on-surface-variant mt-1">Drawn on the whole slide; shown here as they lie in this patch. Press one to edit it there.</p>
+              <p className="text-label-sm text-on-surface-variant mt-1">Drawn on the whole slide; shown here as they lie in this patch. Edit them here or on the whole slide.</p>
             </div>
           )}
 
@@ -758,7 +955,7 @@ export function MainWorkspacePage() {
                 <select
                   className="input"
                   value={selectedAnn.class_id ?? ""}
-                  onChange={(e) => editAnnotation(selectedAnn.id, { class_id: e.target.value === "" ? null : Number(e.target.value) }, "change class")}
+                  onChange={(e) => editAny(selectedAnn.id, { class_id: e.target.value === "" ? null : Number(e.target.value) }, "change class")}
                 >
                   <option value="">Unclassified</option>
                   {classes.map((c) => (
@@ -768,15 +965,29 @@ export function MainWorkspacePage() {
                   ))}
                 </select>
               </label>
-              <Checkbox label="Unsure about this object" checked={selectedAnn.unsure} onChange={(v) => editAnnotation(selectedAnn.id, { unsure: v }, "mark unsure")} />
-              <Checkbox label="Flag this object" checked={selectedAnn.flagged} onChange={(v) => editAnnotation(selectedAnn.id, { flagged: v }, "flag object")} />
+              <Checkbox label="Unsure about this object" checked={selectedAnn.unsure} onChange={(v) => editAny(selectedAnn.id, { unsure: v }, "mark unsure")} />
+              <Checkbox label="Flag this object" checked={selectedAnn.flagged} onChange={(v) => editAny(selectedAnn.id, { flagged: v }, "flag object")} />
               <input
                 key={selectedAnn.id}
                 className="input"
                 placeholder="Note on this object..."
                 defaultValue={selectedAnn.notes ?? ""}
-                onBlur={(e) => e.target.value !== (selectedAnn.notes ?? "") && editAnnotation(selectedAnn.id, { notes: e.target.value || null }, "edit note")}
+                onBlur={(e) => e.target.value !== (selectedAnn.notes ?? "") && editAny(selectedAnn.id, { notes: e.target.value || null }, "edit note")}
               />
+              {selectedIsSlideLevel && (
+                <div className="flex items-center justify-between gap-space-sm text-label-sm text-on-surface-variant">
+                  <span>Drawn on the whole slide; changes are saved there.</span>
+                  <button className="text-primary hover:underline shrink-0" onClick={() => showAnnotationOnSlide(selectedAnn.id)}>
+                    Show on whole slide
+                  </button>
+                </div>
+              )}
+              {selectedOwner && (
+                <p className="text-label-sm text-on-surface-variant">
+                  Belongs to patch #{selectedOwner.patch_index}, which overlaps this one; changes are saved there. It can be moved
+                  anywhere within that patch.
+                </p>
+              )}
               <p className="text-label-sm text-on-surface-variant">
                 Drag the shape to move it, or its handles to reshape it. Double-click an outline to add a point, a point to remove it.
               </p>

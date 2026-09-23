@@ -194,3 +194,29 @@ def test_migration_adds_the_region_columns_to_an_older_database(tmp_path):
     with engine.connect() as conn:
         assert conn.execute(text("SELECT tissue_source, tissue_regions FROM slides")).one() == ("auto", None)
     assert {"tissue_source", "tissue_regions"} <= {c["name"] for c in inspect(engine).get_columns("slides")}
+
+
+def test_the_mask_outline_traces_edges_and_holes_in_slide_pixels():
+    from app.services.tissue_mask import mask_outline
+
+    mask = np.zeros((100, 150), dtype=bool)
+    mask[10:90, 10:140] = True  # a block ...
+    mask[40:60, 60:90] = False  # ... with a hole
+    rings = mask_outline(mask, W, H)  # mask pixel = 10.24 x 10.24 slide pixels
+    assert len(rings) == 2  # the outer edge and the hole's edge
+    xs = [x for ring in rings for x, _ in ring]
+    ys = [y for ring in rings for _, y in ring]
+    assert min(xs) == pytest.approx(10.5 * W / 150, abs=0.1) and max(xs) == pytest.approx(139.5 * W / 150, abs=0.1)
+    assert min(ys) == pytest.approx(10.5 * H / 100, abs=0.1) and max(ys) == pytest.approx(89.5 * H / 100, abs=0.1)
+    assert all(len(r) >= 3 for r in rings)
+    assert mask_outline(np.zeros((10, 10), dtype=bool), W, H) == []
+
+
+def test_outline_endpoint(slide_env):
+    client, sid, _, _ = slide_env
+    assert client.get(f"/api/slides/{sid}/tissue-mask/outline").status_code == 404  # nothing detected or drawn yet
+    put_regions(client, sid, "manual", [rect(100, 100, 700, 500)])
+    rings = client.get(f"/api/slides/{sid}/tissue-mask/outline").json()["rings"]
+    assert len(rings) == 1
+    xs = [x for x, _ in rings[0]]
+    assert min(xs) == pytest.approx(100, abs=3) and max(xs) == pytest.approx(700, abs=3)

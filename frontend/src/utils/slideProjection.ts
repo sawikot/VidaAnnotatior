@@ -20,6 +20,16 @@ export function level0ToLocal(frame: PatchFrame, [x, y]: Point): Point {
   return [(x - frame.x) / (frame.width_l0 / frame.width), (y - frame.y) / (frame.height_l0 / frame.height)];
 }
 
+/** global = origin + local * downsample: a point of a patch's pixels on the slide. */
+export function localToLevel0(frame: PatchFrame, [x, y]: Point): Point {
+  return [frame.x + x * (frame.width_l0 / frame.width), frame.y + y * (frame.height_l0 / frame.height)];
+}
+
+/** A point in one patch's pixels, in another patch's pixels (the two may overlap). */
+export function localToLocal(from: PatchFrame, to: PatchFrame, p: Point): Point {
+  return level0ToLocal(to, localToLevel0(from, p));
+}
+
 /**
  * Whole-slide annotations as they lie inside one patch, in that patch's pixels, for showing them there.
  * Nothing is clipped: the patch's drawing surface clips whatever sticks out. Shapes that cannot touch the

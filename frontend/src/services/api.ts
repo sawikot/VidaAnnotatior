@@ -4,6 +4,7 @@ import type {
   ConfigVersion,
   GeometryAnnotation,
   GeometryType,
+  OverlappingAnnotation,
   Patch,
   ImageList,
   PatchListResponse,
@@ -211,6 +212,8 @@ export function patchPreviewUrl(
 export const dziUrl = (slideId: number, version?: string) =>
   `${API_BASE}/slides/${slideId}/dzi.dzi${version ? `?v=${encodeURIComponent(version)}` : ""}`;
 export const tissueMaskUrl = (slideId: number) => `${API_BASE}/slides/${slideId}/tissue-mask.png`;
+/** The tissue mask's edges as closed rings in Level-0 pixels (outer edges and holes). */
+export const getTissueMaskOutline = (slideId: number) => request<{ rings: [number, number][][] }>(`/slides/${slideId}/tissue-mask/outline`);
 
 // ---- Processing ----
 export const getTissueRegions = (slideId: number) => request<TissueRegions>(`/slides/${slideId}/tissue-regions`);
@@ -268,6 +271,9 @@ export const updatePatch = (
 // ---- Annotations ----
 export const listPatchAnnotations = (patchId: number) =>
   request<GeometryAnnotation[]>(`/patches/${patchId}/annotations`);
+/** Annotations drawn in other patches that reach into this one (patches overlap when stride < size). */
+export const listOverlappingAnnotations = (patchId: number) =>
+  request<OverlappingAnnotation[]>(`/patches/${patchId}/overlapping-annotations`);
 /** "patch": drawn in a patch; "slide": drawn on the whole slide (WSI mode); "all" (default): both. */
 export const listSlideAnnotations = (slideId: number, scope: "all" | "patch" | "slide" = "all") =>
   request<GeometryAnnotation[]>(`/slides/${slideId}/annotations${scope === "all" ? "" : `?scope=${scope}`}`);

@@ -4,7 +4,8 @@ import { MaterialIcon } from "../components/MaterialIcon";
 import { Card } from "../components/primitives";
 import { WsiViewer, type ViewportBbox } from "../features/viewer/WsiViewer";
 import { PatchGridOverlay } from "../features/viewer/PatchGridOverlay";
-import { getConfig, getSlide, listSlideAnnotations, tissueMaskUrl } from "../services/api";
+import { getConfig, getSlide, listSlideAnnotations } from "../services/api";
+import { TissueMaskOutline } from "../features/tissue/TissueMaskOutline";
 import type { ConfigVersion, GeometryAnnotation, Slide } from "../types/api";
 import { circleGeometry, isLineShape, shapeArea } from "../utils/shapes";
 
@@ -75,16 +76,7 @@ export function FullOverviewPage() {
         <div className="flex-1 relative">
           <WsiViewer slideId={sid} version={slide.image_version} className="w-full h-full" onViewportChange={setBbox}>
             {showMask && slide.tissue_mask_path && (
-              <image
-                href={tissueMaskUrl(sid)}
-                x={0}
-                y={0}
-                width={slide.width_l0 ?? 0}
-                height={slide.height_l0 ?? 0}
-                opacity={0.4}
-                style={{ mixBlendMode: "screen" }}
-                preserveAspectRatio="none"
-              />
+              <TissueMaskOutline slideId={sid} refreshKey={slide.tissue_mask_path} />
             )}
             {showGrid && <PatchGridOverlay slideId={sid} bbox={bbox} />}
             {showAnnotations &&

@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { MaterialIcon } from "../components/MaterialIcon";
+import { Pagination } from "../components/Pagination";
 import { Button, Card, StatusPill } from "../components/primitives";
 import { AddSlideModal } from "../features/slides/AddSlideModal";
 import { getProject, listImages, thumbnailUrl } from "../services/api";
 import { useContextStore } from "../stores/contextStore";
 import type { ImageSummary, PatchStatus, ProjectDetail } from "../types/api";
+import { usePageParams } from "../utils/pagination";
 
-const PAGE_SIZE = 48;
 type FilterKey = "all" | PatchStatus | "flagged";
 
 /** Every image of an image project as a filterable thumbnail grid. */
@@ -21,7 +22,11 @@ export function ImageGalleryPage() {
   const [images, setImages] = useState<ImageSummary[] | null>(null);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [query, setQuery] = useState("");
-  const [page, setPage] = useState(0);
+  const { page, pageSize, setPage, setPageSize } = usePageParams(48);
+  // The page controls are at the bottom: start each new page at the top.
+  useEffect(() => {
+    window.scrollTo({ top: 0 }); // in braces: newer browsers return a Promise here, and an effect may only return a cleanup
+  }, [page, pageSize]);
   const [addOpen, setAddOpen] = useState(false);
 
   function load() {
@@ -53,8 +58,8 @@ export function ImageGalleryPage() {
 
   if (!project || !images) return <div className="p-space-xl text-center text-on-surface-variant">Loading...</div>;
 
-  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
-  const shown = visible.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const shownPage = Math.min(page, Math.max(0, Math.ceil(visible.length / pageSize) - 1)); // a page past the end shows the last
+  const shown = visible.slice(shownPage * pageSize, (shownPage + 1) * pageSize);
   const pills: { key: FilterKey; label: string }[] = [
     { key: "all", label: `All (${counts.all})` },
     { key: "unannotated", label: `To do (${counts.unannotated ?? 0})` },
@@ -152,19 +157,7 @@ export function ImageGalleryPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <span className="text-label-md text-on-surface-variant">
-          Page {page + 1} of {pageCount}
-        </span>
-        <div className="flex items-center gap-space-sm">
-          <Button variant="ghost" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
-            Previous
-          </Button>
-          <Button variant="ghost" disabled={page >= pageCount - 1} onClick={() => setPage((p) => p + 1)}>
-            Next
-          </Button>
-        </div>
-      </div>
+      <Pagination page={shownPage} pageSize={pageSize} total={visible.length} onPage={setPage} onPageSize={setPageSize} noun="images" />
 
       <AddSlideModal
         open={addOpen}

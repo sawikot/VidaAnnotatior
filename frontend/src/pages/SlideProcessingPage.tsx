@@ -11,7 +11,8 @@ import { TissueRegionPanel } from "../features/tissue/TissueRegionPanel";
 import { REGION_CLASSES, REGION_TOOLS, classIdOf } from "../features/tissue/regionTools";
 import { useTissueRegions } from "../features/tissue/useTissueRegions";
 import type { AnnotationTool } from "../stores/annotationStore";
-import { detectTissue, generatePatches, getConfig, getSlide, listConfigs, setSlideActiveConfig, tissueMaskUrl } from "../services/api";
+import { detectTissue, generatePatches, getConfig, getSlide, listConfigs, setSlideActiveConfig } from "../services/api";
+import { TissueMaskOutline } from "../features/tissue/TissueMaskOutline";
 import { tissueParamsOf } from "../features/projects/configDraft";
 import type { ConfigVersion, Slide, TissueRegionMode, TissueRegionType } from "../types/api";
 import { useContextStore } from "../stores/contextStore";
@@ -48,6 +49,9 @@ export function SlideProcessingPage() {
   const [morphOpen, setMorphOpen] = useState(3);
   const [morphClose, setMorphClose] = useState(5);
   const [maskCacheBust, setMaskCacheBust] = useState(0);
+  // How solid the mask and the hand-drawn regions are drawn (fill only; their borders always show).
+  const [maskOpacity, setMaskOpacity] = useStoredNumber("vp.maskOpacity", 0.2);
+  const [regionOpacity, setRegionOpacity] = useStoredNumber("vp.regionOpacity", 0.25);
 
   // Hand-drawn tissue regions (Add / Remove), drawn on the slide in Level-0 pixels.
   const [tool, setTool] = useState<AnnotationTool>("pan");
@@ -322,16 +326,7 @@ export function SlideProcessingPage() {
             }}
           >
             {mode === "mask" && slide.tissue_mask_path && (
-              <image
-                href={`${tissueMaskUrl(sid)}?v=${maskCacheBust}`}
-                x={0}
-                y={0}
-                width={slide.width_l0 ?? 0}
-                height={slide.height_l0 ?? 0}
-                opacity={0.55}
-                style={{ mixBlendMode: "screen" }}
-                preserveAspectRatio="none"
-              />
+              <TissueMaskOutline slideId={sid} refreshKey={maskCacheBust} opacity={maskOpacity} />
             )}
             {mode === "grid" && <PatchGridOverlay slideId={sid} bbox={bbox} refreshKey={gridRefresh} />}
             {slide.width_l0 && slide.height_l0 && (
@@ -353,6 +348,7 @@ export function SlideProcessingPage() {
                 }}
                 gestureRef={gestureRef}
                 resetKey={sid}
+                fillOpacity={regionOpacity}
               />
             )}
           </WsiViewer>
@@ -389,6 +385,32 @@ export function SlideProcessingPage() {
           />
           <SliderField label="Morph Open (px)" value={morphOpen} min={0} max={15} step={1} onChange={setMorphOpen} display={String(morphOpen)} />
           <SliderField label="Morph Close (px)" value={morphClose} min={0} max={15} step={1} onChange={setMorphClose} display={String(morphClose)} />
+          </div>
+
+          <div className="bg-[#0b1329] rounded p-space-sm flex flex-col gap-space-sm">
+            <div className="text-label-md text-slate-300">Mask display</div>
+            <SliderField
+              label="Tissue mask fill"
+              value={maskOpacity}
+              min={0}
+              max={1}
+              step={0.05}
+              onChange={(v) => {
+                setMaskOpacity(v);
+                setMode((m) => (m === "wsi" ? "mask" : m)); // the mask only shows in the Tissue Mask view
+              }}
+              display={`${Math.round(maskOpacity * 100)}%`}
+            />
+            <SliderField
+              label="Manual regions fill"
+              value={regionOpacity}
+              min={0}
+              max={1}
+              step={0.05}
+              onChange={setRegionOpacity}
+              display={`${Math.round(regionOpacity * 100)}%`}
+            />
+            <span className="text-label-sm text-slate-500">0% shows only the outlines; 100% is solid.</span>
           </div>
 
           {tissue.data && (
@@ -470,6 +492,27 @@ export function SlideProcessingPage() {
       />
     </div>
   );
+}
+
+/** A number kept in this browser (a display preference); falls back to `initial` if storage is unavailable. */
+function useStoredNumber(key: string, initial: number): [number, (v: number) => void] {
+  const [value, setValue] = useState(() => {
+    try {
+      const saved = Number(localStorage.getItem(key));
+      return localStorage.getItem(key) !== null && Number.isFinite(saved) ? saved : initial;
+    } catch {
+      return initial;
+    }
+  });
+  const set = (v: number) => {
+    setValue(v);
+    try {
+      localStorage.setItem(key, String(v));
+    } catch {
+      // private mode / storage blocked: the setting just isn't remembered
+    }
+  };
+  return [value, set];
 }
 
 function GridStat({ label, value }: { label: string; value: string | number }) {

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { MaterialIcon } from "../components/MaterialIcon";
-import { Button, Card, StatusPill } from "../components/primitives";
+import { Pagination } from "../components/Pagination";
+import { Card, StatusPill } from "../components/primitives";
+import { usePageParams } from "../utils/pagination";
 import { getConfig, getSlide, listPatches, patchPreviewUrl } from "../services/api";
 import type { ConfigVersion, Patch, PatchStatus, Slide } from "../types/api";
-
-const PAGE_SIZE = 24;
 
 const DENSITY_COLS: Record<string, string> = {
   compact: "grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8",
@@ -28,7 +28,7 @@ export function PatchGalleryPage() {
   const [config, setConfig] = useState<ConfigVersion | null>(null);
   const [patches, setPatches] = useState<Patch[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(0);
+  const { page, pageSize, setPage, setPageSize } = usePageParams(24);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [density, setDensity] = useState<"compact" | "standard" | "large">("standard");
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -41,14 +41,26 @@ export function PatchGalleryPage() {
   }, [sid]);
 
   useEffect(() => {
-    const params: Parameters<typeof listPatches>[1] = { limit: PAGE_SIZE, offset: page * PAGE_SIZE };
+    const params: Parameters<typeof listPatches>[1] = { limit: pageSize, offset: page * pageSize };
     if (filter === "flagged") params.flagged = true;
     else if (filter !== "all") params.status = filter;
     listPatches(sid, params).then((res) => {
       setPatches(res.items);
       setTotal(res.total);
     });
-  }, [sid, filter, page]);
+  }, [sid, filter, page, pageSize]);
+
+  // A page past the end (fewer patches than when the link was made): show the last one instead.
+  useEffect(() => {
+    const last = Math.max(0, Math.ceil(total / pageSize) - 1);
+    if (total > 0 && page > last) setPage(last);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [total, pageSize, page]);
+
+  // The page controls are at the bottom: start each new page at the top.
+  useEffect(() => {
+    window.scrollTo({ top: 0 }); // in braces: newer browsers return a Promise here, and an effect may only return a cleanup
+  }, [page, pageSize]);
 
   useEffect(() => {
     (async () => {
@@ -60,8 +72,6 @@ export function PatchGalleryPage() {
       setCounts(Object.fromEntries([...entries, ["flagged", flaggedTotal]]));
     })();
   }, [sid, patches.length]);
-
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const filterPills: { key: FilterKey; label: string }[] = useMemo(
     () => [
@@ -135,19 +145,7 @@ export function PatchGalleryPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <span className="text-label-md text-on-surface-variant">
-          Page {page + 1} of {pageCount}
-        </span>
-        <div className="flex items-center gap-space-sm">
-          <Button variant="ghost" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
-            Previous
-          </Button>
-          <Button variant="ghost" disabled={page >= pageCount - 1} onClick={() => setPage((p) => p + 1)}>
-            Next
-          </Button>
-        </div>
-      </div>
+      <Pagination page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={setPageSize} noun="patches" />
     </div>
   );
 }

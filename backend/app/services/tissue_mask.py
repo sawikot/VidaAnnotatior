@@ -159,3 +159,27 @@ def rebuild_slide_mask(storage_root: Path, slide: Slide) -> MaskStats | None:
         slide.status = "tissue_detected"
     # A slide that already has patches keeps them (and its status) until Generate Coords is run again.
     return stats
+
+
+def mask_outline(mask: np.ndarray, width_l0: int, height_l0: int, tolerance_px: float | None = None) -> list[list[list[float]]]:
+    """The mask's edges as closed rings in Level-0 pixels, for drawing it as a vector outline.
+
+    Every boundary is included -- outer edges and the edges of holes (and of islands inside holes) -- so a
+    single path filled with the even-odd rule reproduces the mask. Rings are simplified to within
+    ``tolerance_px`` mask pixels; by default that scales with how much finer the mask is than detection's
+    own resolution, since a detected mask enlarged for hand-drawn regions has staircase edges that many
+    pixels tall -- detail no view needs, and most of the points otherwise.
+    """
+    h, w = mask.shape
+    if tolerance_px is None:
+        tolerance_px = max(0.75, max(w, h) / DETECTION_MAX_SIZE)
+    scale = np.array([width_l0 / w, height_l0 / h])
+    contours, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    rings = []
+    for contour in contours:
+        simplified = cv2.approxPolyDP(contour, tolerance_px, True) if tolerance_px > 0 else contour
+        if len(simplified) < 3:
+            continue
+        # Pixel centres of the boundary pixels, scaled to the slide.
+        rings.append(np.round((simplified[:, 0, :] + 0.5) * scale, 1).tolist())
+    return rings

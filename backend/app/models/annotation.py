@@ -36,4 +36,11 @@ class GeometryAnnotation(Base, TimestampMixin):
     excluded: Mapped[bool] = mapped_column(Boolean, default=False)
 
     patch: Mapped["Patch | None"] = relationship("Patch", back_populates="geometry_annotations")
+
+    @property
+    def patch_bounds_l0(self) -> list[int] | None:
+        """[x0, y0, x1, y1] of the patch it was drawn in, in Level-0 pixels; None on the whole slide.
+        A patch's annotation must stay inside it, wherever it is edited."""
+        p = self.patch
+        return None if p is None else [p.x, p.y, p.x + p.width_l0, p.y + p.height_l0]
     annotation_class: Mapped["AnnotationClass | None"] = relationship("AnnotationClass")

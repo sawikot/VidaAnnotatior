@@ -20,6 +20,9 @@ export interface LayerShape {
   class_id: number | null;
   unsure: boolean;
   excluded: boolean;
+  /** Where moves and reshapes must keep it, in this layer's units. Default: the whole layer. A shape that
+   * belongs to an overlapping patch is kept inside that patch, which can reach past this one's edge. */
+  bounds?: { x0: number; y0: number; x1: number; y1: number };
 }
 
 interface Props {
@@ -45,6 +48,8 @@ interface Props {
   gestureRef?: React.MutableRefObject<boolean>;
   /** Anything that changes when in-progress drawing should be abandoned (another image, another patch). */
   resetKey?: unknown;
+  /** How solid area shapes are filled (0 = outline only, 1 = solid). Default 0.25. */
+  fillOpacity?: number;
 }
 
 const FREEHAND_MIN_DIST = 4; // screen px
@@ -60,6 +65,8 @@ interface EditState {
   start: Point;
   original: Point[];
   preview: Point[];
+  /** The box the shape must stay in: edits are worked out relative to its corner. */
+  frame: { x0: number; y0: number; w: number; h: number };
 }
 
 function isTyping(target: EventTarget | null): boolean {
@@ -88,6 +95,7 @@ export function ShapeLayer({
   onDeleteSelected,
   gestureRef,
   resetKey,
+  fillOpacity,
 }: Props) {
   const rootRef = useRef<SVGGElement>(null);
   const [drawPoints, setDrawPoints] = useState<Point[]>([]);
@@ -159,7 +167,9 @@ export function ShapeLayer({
     e.stopPropagation(); // a press on a shape or its handle is not a press on the background
     onSelect(shape.id);
     setGesture(true);
-    setEdit({ id: shape.id, type: shape.type, handle, start: localPoint(e), original: shape.points, preview: shape.points });
+    const b = shape.bounds ?? { x0: 0, y0: 0, x1: width, y1: height };
+    const frame = { x0: b.x0, y0: b.y0, w: b.x1 - b.x0, h: b.y1 - b.y0 };
+    setEdit({ id: shape.id, type: shape.type, handle, start: localPoint(e), original: shape.points, preview: shape.points, frame });
     trackPointer();
   }
 
@@ -167,10 +177,13 @@ export function ShapeLayer({
     if (edit) {
       const raw = localPoint(e);
       let preview: Point[];
+      const { x0, y0, w, h } = edit.frame;
+      const into = ([x, y]: Point): Point => [x - x0, y - y0];
+      const back = ([x, y]: Point): Point => [x + x0, y + y0];
       if (edit.handle) {
-        preview = dragHandle(edit.type, edit.original, edit.handle, raw, width, height);
+        preview = dragHandle(edit.type, edit.original.map(into), edit.handle, into(raw), w, h).map(back);
       } else {
-        const [dx, dy] = clampTranslation(edit.type, edit.original, raw[0] - edit.start[0], raw[1] - edit.start[1], width, height);
+        const [dx, dy] = clampTranslation(edit.type, edit.original.map(into), raw[0] - edit.start[0], raw[1] - edit.start[1], w, h);
         preview = translatePoints(edit.original, dx, dy);
       }
       setEdit({ ...edit, preview });
@@ -341,6 +354,7 @@ export function ShapeLayer({
           selected={shape.id === selectedId}
           interactive={tool === "select"}
           px={px}
+          fill={fillOpacity}
           onBeginEdit={(e, handle) => beginEdit(e, shape, handle)}
         />
       ))}
@@ -404,6 +418,7 @@ function ShapeView({
   selected,
   interactive,
   muted = false,
+  fill,
   px,
   onBeginEdit,
   onPress,
@@ -415,6 +430,8 @@ function ShapeView({
   interactive: boolean;
   /** Context from the other view: faint, dashed, never edited here. */
   muted?: boolean;
+  /** Fill opacity of an ordinary shape; default 0.25. */
+  fill?: number;
   px: (n: number) => number;
   onBeginEdit?: (e: React.PointerEvent, handle: Handle | null) => void;
   onPress?: () => void;
@@ -422,7 +439,7 @@ function ShapeView({
   const { type, points } = shape;
   const strokeWidth = px(selected ? 3 : 2);
   const dashed = muted ? `${px(5)} ${px(4)}` : type === "freehand" || type === "freehand_line" ? `${px(4)} ${px(2)}` : shape.unsure ? `${px(3)} ${px(3)}` : undefined;
-  const fillOpacity = muted ? 0.08 : shape.excluded ? 0.06 : 0.25;
+  const fillOpacity = muted ? 0.08 : shape.excluded ? 0.06 : (fill ?? 0.25);
   const opacity = muted ? 0.75 : shape.excluded ? 0.4 : 1;
   const wrapper = {
     "data-shape": shape.id,

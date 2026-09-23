@@ -168,6 +168,24 @@ export interface PatchListResponse {
   items: Patch[];
 }
 
+/** Where the patch an annotation belongs to lies on the slide. */
+export interface OwnerPatch {
+  id: number;
+  patch_index: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  width_l0: number;
+  height_l0: number;
+}
+
+/** An annotation drawn in another (overlapping) patch that reaches into the one on screen. */
+export interface OverlappingAnnotation {
+  annotation: GeometryAnnotation;
+  owner: OwnerPatch;
+}
+
 export interface GeometryAnnotation {
   id: number;
   /** null: drawn on the whole slide (WSI mode); its coordinates_level0 are then the only coordinates that exist. */
@@ -178,6 +196,8 @@ export interface GeometryAnnotation {
   type: GeometryType;
   coordinates_patch_local: [number, number][];
   coordinates_level0: [number, number][];
+  /** The patch it was drawn in, on the slide: [x0, y0, x1, y1]; null when drawn on the whole slide. */
+  patch_bounds_l0?: [number, number, number, number] | null;
   created_by: string | null;
   notes: string | null;
   unsure: boolean;

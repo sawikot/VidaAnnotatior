@@ -82,6 +82,21 @@ class ImportAnnotationsResponse(BaseModel):
     skipped_invalid_shape: int = 0
 
 
+class OwnerPatchOut(BaseModel):
+    """Where the patch an annotation belongs to lies on the slide."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    patch_index: int
+    x: int
+    y: int
+    width: int
+    height: int
+    width_l0: int
+    height_l0: int
+
+
 class GeometryAnnotationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -93,6 +108,7 @@ class GeometryAnnotationOut(BaseModel):
     type: str
     coordinates_patch_local: list
     coordinates_level0: list
+    patch_bounds_l0: list[int] | None = None  # the owning patch on the slide: [x0, y0, x1, y1]
     created_by: str | None
     notes: str | None
     unsure: bool
@@ -100,3 +116,11 @@ class GeometryAnnotationOut(BaseModel):
     excluded: bool
     created_at: datetime
     updated_at: datetime
+
+
+class OverlappingAnnotationOut(BaseModel):
+    """An annotation drawn in another patch that reaches into this one (patches overlap when the
+    stride is smaller than the patch), with the patch it belongs to."""
+
+    annotation: GeometryAnnotationOut
+    owner: OwnerPatchOut

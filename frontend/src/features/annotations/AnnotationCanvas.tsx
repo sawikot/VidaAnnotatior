@@ -10,6 +10,8 @@ interface Props {
   tool: AnnotationTool;
   zoom: number;
   annotations: GeometryAnnotation[];
+  /** Annotations of overlapping patches, already in this patch's pixels (with `bounds`): shown and edited like its own. */
+  borrowed?: LayerShape[];
   /** Annotations drawn on the whole slide, already projected into this patch's pixels: shown faintly, edited in WSI mode. */
   background?: LayerShape[];
   onBackgroundPress?: (id: number) => void;
@@ -30,6 +32,7 @@ export function AnnotationCanvas({
   tool,
   zoom,
   annotations,
+  borrowed = [],
   background,
   onBackgroundPress,
   classes,
@@ -39,14 +42,17 @@ export function AnnotationCanvas({
   onShapeEdit,
   onDeleteSelected,
 }: Props) {
-  const shapes: LayerShape[] = annotations.map((a) => ({
-    id: a.id,
-    type: a.type,
-    points: a.coordinates_patch_local as Point[],
-    class_id: a.class_id,
-    unsure: a.unsure,
-    excluded: a.excluded,
-  }));
+  const shapes: LayerShape[] = [
+    ...borrowed,
+    ...annotations.map((a) => ({
+      id: a.id,
+      type: a.type,
+      points: a.coordinates_patch_local as Point[],
+      class_id: a.class_id,
+      unsure: a.unsure,
+      excluded: a.excluded,
+    })),
+  ];
 
   return (
     <div className="relative inline-block outline-none">

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
@@ -25,7 +26,7 @@ from app.services import reader_cache
 from app.services.geometry import validate_shape
 from app.services.patch_generator import generate_patch_grid
 from app.services.tissue_detector import get_detector
-from app.services.tissue_mask import DETECTION_MAX_SIZE, auto_mask_path, load_mask, rebuild_slide_mask, save_mask
+from app.services.tissue_mask import DETECTION_MAX_SIZE, auto_mask_path, load_mask, mask_outline, rebuild_slide_mask, save_mask
 
 router = APIRouter(tags=["processing"])
 
@@ -115,6 +116,20 @@ def set_tissue_regions(
     db.commit()
     db.refresh(slide)
     return _regions_out(slide)
+
+
+@router.get("/slides/{slide_id}/tissue-mask/outline")
+def get_tissue_mask_outline(slide: Slide = Depends(get_slide_or_404)):
+    """The slide's tissue mask as outline rings in Level-0 pixels (see ``mask_outline``), so a viewer can
+    draw it as a crisp filled outline at any zoom instead of stretching the mask image."""
+    if not slide.tissue_mask_path:
+        raise HTTPException(status_code=404, detail="Tissue has not been detected for this slide yet.")
+    mask_path = get_settings().wsi_storage_dir / slide.tissue_mask_path
+    if not mask_path.exists():
+        raise HTTPException(status_code=404, detail="Tissue mask file is missing on disk.")
+    # Encoded directly: tens of thousands of points through the generic response encoder take seconds.
+    rings = mask_outline(load_mask(mask_path), slide.width_l0, slide.height_l0)
+    return Response(content=json.dumps({"rings": rings}, separators=(",", ":")), media_type="application/json")
 
 
 @router.post("/slides/{slide_id}/generate-patches", response_model=GeneratePatchesResponse)

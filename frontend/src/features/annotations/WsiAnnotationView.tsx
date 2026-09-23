@@ -1,8 +1,8 @@
 import OpenSeadragon from "openseadragon";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MaterialIcon } from "../../components/MaterialIcon";
 import { IconButton } from "../../components/primitives";
 import {
+  createAnnotation,
   createSlideAnnotation,
   deleteAnnotation,
   listSlideAnnotations,
@@ -71,7 +71,6 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
   const [showPatchDrawn, setShowPatchDrawn] = useState(true);
   const [showGrid, setShowGrid] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [peek, setPeek] = useState<GeometryAnnotation | null>(null); // a patch-drawn annotation that was clicked
   const [bbox, setBbox] = useState<ViewportBbox | null>(null);
   const [scale, setScale] = useState(0.05);
   const [spaceHeld, setSpaceHeld] = useState(false);
@@ -108,9 +107,18 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
     idToKey.current.set(id, key);
   };
 
-  const shapes = useMemo(() => slideAnnotations.map(toLevel0Shape), [slideAnnotations]);
-  const background = useMemo(() => (showPatchDrawn ? patchDrawn.map(toLevel0Shape) : []), [patchDrawn, showPatchDrawn]);
-  const selected = slideAnnotations.find((a) => a.id === selectedId) ?? null;
+  const shapes = useMemo(() => {
+    const own = slideAnnotations.map(toLevel0Shape);
+    if (!showPatchDrawn) return own;
+    const inPatches = patchDrawn.map((a) => {
+      const b = a.patch_bounds_l0;
+      return { ...toLevel0Shape(a), bounds: b ? { x0: b[0], y0: b[1], x1: b[2], y1: b[3] } : undefined };
+    });
+    return [...inPatches, ...own];
+  }, [slideAnnotations, patchDrawn, showPatchDrawn]);
+  const isPatchDrawn = (id: number | null) => patchDrawn.some((a) => a.id === id);
+  const selected = slideAnnotations.find((a) => a.id === selectedId) ?? patchDrawn.find((a) => a.id === selectedId) ?? null;
+  const selectedInPatch = selected != null && selected.patch_id != null;
 
   useEffect(() => {
     setTool("pan"); // start on the safe tool: a stray drag must move the view, not draw
@@ -190,55 +198,63 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
 
   /** Change an existing annotation: it shows at once, saves, and can be undone. */
   async function editAnnotation(id: number, fields: Fields, label: string) {
-    const target = slideAnnotations.find((a) => a.id === id);
+    const inPatch = isPatchDrawn(id);
+    const setList = inPatch ? setPatchDrawn : setSlideAnnotations;
+    const target = (inPatch ? patchDrawn : slideAnnotations).find((a) => a.id === id);
     if (!target) return;
     const key = keyOf(id);
     const before = Object.fromEntries(Object.keys(fields).map((k) => [k, target[k as keyof Fields]])) as Fields;
     const send = async (f: Fields) => {
       const updated = await updateAnnotation(idOf(key), f);
-      setSlideAnnotations((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+      setList((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
     };
-    setSlideAnnotations((prev) => prev.map((a) => (a.id === id ? { ...a, ...fields } : a)));
+    setList((prev) => prev.map((a) => (a.id === id ? { ...a, ...fields } : a)));
     setSaveState("saving");
     try {
       await send(fields);
       setSaveState("saved");
       history.push({ label, do: () => send(fields), undo: () => send(before) });
     } catch (e) {
-      setSlideAnnotations((prev) => prev.map((a) => (a.id === id ? target : a))); // put back what the server still has
+      setList((prev) => prev.map((a) => (a.id === id ? target : a))); // put back what the server still has
       setSaveState("error");
       pushToast(e instanceof Error ? e.message : "Failed to save the change", "error");
     }
   }
 
   async function deleteSelected() {
-    const target = slideAnnotations.find((a) => a.id === selectedId);
+    const target = selected;
     if (!target) return;
+    const patchId = target.patch_id;
+    const setList = patchId != null ? setPatchDrawn : setSlideAnnotations;
     const key = keyOf(target.id);
-    const copy = {
+    const common = {
       type: target.type,
       class_id: target.class_id,
-      coordinates_level0: target.coordinates_level0 as Point[],
       created_by: target.created_by ?? annotatorName,
       notes: target.notes ?? undefined,
       unsure: target.unsure,
       flagged: target.flagged,
     };
+    // Undo puts it back where it was: in its patch (in that patch's pixels), or on the whole slide.
+    const recreate = () =>
+      patchId != null
+        ? createAnnotation(patchId, { ...common, coordinates_patch_local: target.coordinates_patch_local as Point[] })
+        : createSlideAnnotation(slide.id, { ...common, coordinates_level0: target.coordinates_level0 as Point[] });
     await guarded("delete annotation", async () => {
       await deleteAnnotation(target.id);
-      setSlideAnnotations((prev) => prev.filter((a) => a.id !== target.id));
+      setList((prev) => prev.filter((a) => a.id !== target.id));
       setSelectedId(null);
       history.push({
         label: "delete annotation",
         do: async () => {
           const id = idOf(key);
           await deleteAnnotation(id);
-          setSlideAnnotations((prev) => prev.filter((a) => a.id !== id));
+          setList((prev) => prev.filter((a) => a.id !== id));
         },
         undo: async () => {
-          const again = await createSlideAnnotation(slide.id, copy);
+          const again = await recreate();
           rebind(key, again.id);
-          setSlideAnnotations((prev) => [...prev, again]);
+          setList((prev) => [...prev, again]);
         },
       });
     });
@@ -275,11 +291,6 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
   }, [tools, classes]);
 
   const saveLabel = { idle: "", saving: "Saving...", saved: "Saved", error: "Error saving" }[saveState];
-  const pressBackground = (id: number) => {
-    const found = patchDrawn.find((a) => a.id === id) ?? null;
-    setPeek(found);
-    setSelectedId(null);
-  };
 
   if (!width || !height) {
     return <div className="p-space-xl text-center text-slate-400 bg-[#0a0f1d] h-[calc(100vh-3.5rem)]">This slide has no known size yet; re-import it.</div>;
@@ -359,14 +370,9 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
                 scale={scale}
                 tool={effectiveTool}
                 shapes={shapes}
-                background={background}
-                onBackgroundPress={pressBackground}
                 classes={classes}
                 selectedId={selectedId}
-                onSelect={(id) => {
-                  setSelectedId(id);
-                  if (id !== null) setPeek(null);
-                }}
+                onSelect={setSelectedId}
                 onShapeComplete={createShape}
                 onShapeEdit={(id, points) => editAnnotation(id, { coordinates_level0: points }, "edit shape")}
                 onDeleteSelected={deleteSelected}
@@ -399,7 +405,6 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
                     onClick={() => {
                       setTool("select");
                       setSelectedId(a.id);
-                      setPeek(null);
                       const b = shapeBounds(a.type, a.coordinates_level0 as Point[]);
                       fitRect(b.minX, b.minY, Math.max(b.maxX - b.minX, 200), Math.max(b.maxY - b.minY, 200));
                     }}
@@ -420,6 +425,37 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
               )}
             </div>
           </div>
+
+          {showPatchDrawn && patchDrawn.length > 0 && (
+            <div>
+              <div className="text-label-md text-on-surface-variant mb-1">Drawn in patches ({patchDrawn.length})</div>
+              <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">
+                {patchDrawn.map((a) => {
+                  const cls = classes.find((c) => c.id === a.class_id);
+                  return (
+                    <div
+                      key={a.id}
+                      onClick={() => {
+                        setTool("select");
+                        setSelectedId(a.id);
+                        const b = shapeBounds(a.type, a.coordinates_level0 as Point[]);
+                        fitRect(b.minX, b.minY, Math.max(b.maxX - b.minX, 200), Math.max(b.maxY - b.minY, 200));
+                      }}
+                      className={`flex items-center justify-between px-space-sm py-1.5 rounded bg-surface-container-lowest shadow-sm cursor-pointer ${
+                        selectedId === a.id ? "ring-1 ring-primary" : ""
+                      }`}
+                    >
+                      <span className="flex items-center gap-1.5 text-label-md">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cls?.color_hex ?? "#94a3b8" }} />
+                        {cls?.name ?? "Unclassed"} #{a.id}
+                      </span>
+                      <span className="text-label-sm text-on-surface-variant capitalize">{a.type.replace("_", " ")}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {selected && (
             <div className="rounded-lg bg-surface-container-low p-space-sm flex flex-col gap-space-sm" data-testid="selected-object">
@@ -461,29 +497,23 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
                 defaultValue={selected.notes ?? ""}
                 onBlur={(e) => e.target.value !== (selected.notes ?? "") && editAnnotation(selected.id, { notes: e.target.value || null }, "edit note")}
               />
+              {selectedInPatch && (
+                <div className="flex items-center justify-between gap-space-sm text-label-sm text-on-surface-variant">
+                  <span>Drawn in patch {selected.patch_id}; it stays inside that patch.</span>
+                  <button
+                    className="text-primary hover:underline shrink-0"
+                    onClick={() => selected.patch_id != null && onOpenPatch(selected.patch_id, selected.id)}
+                  >
+                    Open in patch view
+                  </button>
+                </div>
+              )}
               <p className="text-label-sm text-on-surface-variant">
                 Drag the shape to move it, or its handles to reshape it. Double-click an outline to add a point, a point to remove it.
               </p>
             </div>
           )}
 
-          {peek && (
-            <div className="rounded-lg bg-surface-container-low p-space-sm flex flex-col gap-space-sm" data-testid="patch-drawn-object">
-              <div className="text-label-md font-headline-sm capitalize">
-                {peek.type.replace("_", " ")} #{peek.id} · drawn in a patch
-              </div>
-              <p className="text-body-sm text-on-surface-variant">
-                This one belongs to patch #{peek.patch_id}, so it is edited there, at full detail.
-              </p>
-              <button
-                className="h-8 rounded bg-primary text-on-primary text-label-md flex items-center justify-center gap-1"
-                onClick={() => peek.patch_id != null && onOpenPatch(peek.patch_id, peek.id)}
-              >
-                <MaterialIcon name="open_in_new" className="!text-[16px]" />
-                Open in patch view
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </div>

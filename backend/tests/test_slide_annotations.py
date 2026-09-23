@@ -187,8 +187,14 @@ def test_editing_uses_the_coordinate_space_the_annotation_lives_in(grid):
     assert client.put(f"/api/annotations/{ann['id']}", json={"coordinates_level0": [[0, 0], [99999, 5]]}).status_code == 422
     assert client.put(f"/api/annotations/{ann['id']}", json={"coordinates_level0": [[0, 0]]}).status_code == 422  # a line needs 2 points
 
-    own = client.post(f"/api/patches/{patches[0]['id']}/annotations", json={"type": "point", "coordinates_patch_local": [[5, 5]]}).json()
-    assert client.put(f"/api/annotations/{own['id']}", json={"coordinates_level0": [[1, 1]]}).status_code == 422
+    # A patch's annotation may be edited in Level-0 pixels too (on the whole slide), but only within its patch.
+    p0 = patches[0]
+    own = client.post(f"/api/patches/{p0['id']}/annotations", json={"type": "point", "coordinates_patch_local": [[5, 5]]}).json()
+    inside = [[p0["x"] + 1, p0["y"] + 1]]
+    res = client.put(f"/api/annotations/{own['id']}", json={"coordinates_level0": inside})
+    assert res.status_code == 200 and res.json()["patch_id"] == p0["id"] and res.json()["coordinates_level0"] == inside
+    outside = [[p0["x"] + p0["width_l0"] + 50, p0["y"]]]
+    assert client.put(f"/api/annotations/{own['id']}", json={"coordinates_level0": outside}).status_code == 422
 
     assert client.delete(f"/api/annotations/{ann['id']}").status_code == 204
     assert client.get(f"/api/slides/{slide_id}/annotations?scope=slide").json() == []

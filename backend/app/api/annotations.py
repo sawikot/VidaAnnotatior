@@ -4,7 +4,7 @@ from collections import defaultdict
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_patch_or_404, get_slide_or_404
 from app.database.session import get_db
@@ -19,8 +19,10 @@ from app.schemas.annotation import (
     GeometryAnnotationUpdate,
     ImportAnnotationsRequest,
     ImportAnnotationsResponse,
+    OverlappingAnnotationOut,
+    OwnerPatchOut,
 )
-from app.services.geometry import validate_shape
+from app.services.geometry import circle_center_radius, polygon_bounds, validate_shape
 from app.services.coordinate_transform import PatchOrigin, polygon_level0_to_patch_local, polygon_patch_local_to_level0
 
 router = APIRouter(tags=["annotations"])
@@ -37,7 +39,7 @@ def list_slide_annotations(
     Full WSI Annotation Overview screen. Not bbox-filtered server-side (the
     stitched overlay needs the whole slide's annotations to render correctly
     even when panned out), but capped by `limit` as a safety valve."""
-    q = db.query(GeometryAnnotation).filter(GeometryAnnotation.slide_id == slide.id)
+    q = db.query(GeometryAnnotation).options(joinedload(GeometryAnnotation.patch)).filter(GeometryAnnotation.slide_id == slide.id)
     if slide.active_config_version_id is not None:
         q = q.filter(GeometryAnnotation.config_version_id == slide.active_config_version_id)
     if scope == "patch":
@@ -253,6 +255,58 @@ def list_patch_annotations(patch: Patch = Depends(get_patch_or_404), db: Session
     )
 
 
+def _shape_bounds(shape_type: str, coords: list[list[float]]) -> tuple[float, float, float, float]:
+    if shape_type == "circle":
+        (cx, cy), r = circle_center_radius(coords)
+        return cx - r, cy - r, cx + r, cy + r
+    return polygon_bounds(coords)
+
+
+@router.get("/patches/{patch_id}/overlapping-annotations", response_model=list[OverlappingAnnotationOut])
+def list_overlapping_annotations(patch: Patch = Depends(get_patch_or_404), db: Session = Depends(get_db)):
+    """Annotations drawn in *other* patches of the same grid that reach into this patch.
+
+    With a stride smaller than the patch size, neighbouring patches share area, so an object drawn in
+    one is also (partly) in the next. Each stays owned by the patch it was drawn in; this lists them
+    with that patch, so a client can show them here and send edits in the owner's coordinates."""
+    x0, y0 = patch.x, patch.y
+    x1, y1 = patch.x + patch.width_l0, patch.y + patch.height_l0
+    owners = (
+        db.query(Patch)
+        .filter(
+            Patch.slide_id == patch.slide_id,
+            Patch.config_version_id == patch.config_version_id,
+            Patch.id != patch.id,
+            Patch.x < x1,
+            Patch.x + Patch.width_l0 > x0,
+            Patch.y < y1,
+            Patch.y + Patch.height_l0 > y0,
+        )
+        .all()
+    )
+    if not owners:
+        return []
+    by_id = {p.id: p for p in owners}
+    annotations = (
+        db.query(GeometryAnnotation)
+        .filter(GeometryAnnotation.patch_id.in_(list(by_id)))
+        .order_by(GeometryAnnotation.created_at.asc())
+        .all()
+    )
+    out = []
+    for a in annotations:
+        if not a.coordinates_level0:
+            continue
+        bx0, by0, bx1, by1 = _shape_bounds(a.type, a.coordinates_level0)
+        if bx0 < x1 and bx1 > x0 and by0 < y1 and by1 > y0:  # reaches into this patch
+            out.append(
+                OverlappingAnnotationOut(
+                    annotation=GeometryAnnotationOut.model_validate(a), owner=OwnerPatchOut.model_validate(by_id[a.patch_id])
+                )
+            )
+    return out
+
+
 def _require_class_of_config(db: Session, class_id: int | None, config_version_id: int) -> None:
     """A shape may only carry a class of the config version it was drawn under: a class from
     another version (or another project) would export under a name the file doesn't declare."""
@@ -327,8 +381,18 @@ def update_annotation(
             annotation.coordinates_level0 = changes["coordinates_level0"]
         changes.pop("coordinates_level0", None)
         changes.pop("coordinates_patch_local", None)
-    elif "coordinates_level0" in changes:
-        raise HTTPException(status_code=422, detail="This annotation belongs to a patch: send coordinates_patch_local")
+    elif changes.get("coordinates_level0") is not None and changes.get("coordinates_patch_local") is None:
+        # Edited on the whole slide: stored, as always, in the pixels of the patch it belongs to.
+        patch = db.get(Patch, annotation.patch_id)
+        x0, y0, x1, y1 = patch.x, patch.y, patch.x + patch.width_l0, patch.y + patch.height_l0
+        tol = 0.5
+        for x, y in changes["coordinates_level0"]:
+            if not (x0 - tol <= x <= x1 + tol and y0 - tol <= y <= y1 + tol):
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Point ({x:g}, {y:g}) is outside the patch this annotation belongs to ({x0}, {y0} - {x1}, {y1})",
+                )
+        changes["coordinates_patch_local"] = polygon_level0_to_patch_local(_origin_for_patch(patch), changes["coordinates_level0"])
     if "coordinates_patch_local" in changes and changes["coordinates_patch_local"] is not None:
         try:
             validate_shape(annotation.type, changes["coordinates_patch_local"])  # the shape keeps its type
