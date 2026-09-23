@@ -55,7 +55,7 @@ export function AnnotationCanvas({
         alt="Patch"
         width={patchWidth * zoom}
         height={patchHeight * zoom}
-        className="block select-none"
+        className="block select-none max-w-none" // never capped to the container: it must match the drawing layer exactly
         style={{ imageRendering: zoom >= 3 ? "pixelated" : "auto" }}
         draggable={false}
       />

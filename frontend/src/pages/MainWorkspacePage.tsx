@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { MaterialIcon } from "../components/MaterialIcon";
 import { IconButton } from "../components/primitives";
@@ -258,11 +258,83 @@ export function MainWorkspacePage() {
     if (!activeClassId && classes.length) setActiveClassId(classes[0].id);
   }, [classes.length]);
 
-  // Images are shown fitted to the window (small crops are enlarged); `zoom` is a multiplier on that.
+  // Every patch opens fitted to the window, whatever its size (a 2048 px patch shrinks to fit, a small
+  // crop is enlarged); `zoom` is a multiplier on that fit. Out to half the fit, in to 4 (images: 8)
+  // screen pixels per patch pixel.
   const fitZoom =
-    isImage && patch && area.w > 0 ? Math.max(0.05, Math.min(8, (area.w - 48) / patch.width, (area.h - 48) / patch.height)) : 1;
+    patch && area.w > 0 ? Math.max(0.02, Math.min(8, (area.w - 48) / patch.width, (area.h - 48) / patch.height)) : 1;
   const effectiveZoom = fitZoom * zoom;
-  const maxZoom = isImage ? 8 : 4;
+  const MIN_ZOOM = 0.5;
+  const maxZoom = Math.max(1, (isImage ? 8 : 4) / fitZoom);
+  const clampZoom = (z: number) => Math.min(maxZoom, Math.max(MIN_ZOOM, z));
+
+  // Zoom about a point: the patch pixel under the cursor stays under the cursor. The scroll position
+  // is corrected after the new size is laid out.
+  const canvasWrapRef = useRef<HTMLDivElement>(null);
+  const zoomAnchor = useRef<{ px: number; py: number; clientX: number; clientY: number } | null>(null);
+  const zoomRef = useRef({ zoom, effectiveZoom, clampZoom });
+  zoomRef.current = { zoom, effectiveZoom, clampZoom };
+
+  function zoomAt(factor: number, clientX?: number, clientY?: number) {
+    const { zoom: z, effectiveZoom: ez, clampZoom: clamp } = zoomRef.current;
+    const next = clamp(z * factor);
+    if (next === z) return;
+    const box = canvasWrapRef.current?.getBoundingClientRect();
+    const area = areaEl?.getBoundingClientRect();
+    if (box && area) {
+      const cx = clientX ?? area.left + area.width / 2; // buttons zoom about the middle of the view
+      const cy = clientY ?? area.top + area.height / 2;
+      zoomAnchor.current = { px: (cx - box.left) / ez, py: (cy - box.top) / ez, clientX: cx, clientY: cy };
+    }
+    setZoom(next);
+  }
+
+  useLayoutEffect(() => {
+    const anchor = zoomAnchor.current;
+    const box = canvasWrapRef.current?.getBoundingClientRect();
+    zoomAnchor.current = null;
+    if (!anchor || !box || !areaEl) return;
+    areaEl.scrollLeft += box.left + anchor.px * effectiveZoom - anchor.clientX;
+    areaEl.scrollTop += box.top + anchor.py * effectiveZoom - anchor.clientY;
+  }, [effectiveZoom, areaEl]);
+
+  // Mouse: the wheel zooms about the cursor; dragging with the middle button moves the patch around.
+  useEffect(() => {
+    if (!areaEl) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY; // lines -> pixels
+      zoomAt(Math.exp(-delta * 0.0015), e.clientX, e.clientY);
+    };
+    let drag: { x: number; y: number } | null = null;
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 1) return;
+      e.preventDefault(); // no autoscroll cursor
+      drag = { x: e.clientX, y: e.clientY };
+      areaEl.style.cursor = "grabbing";
+    };
+    const onMove = (e: MouseEvent) => {
+      if (!drag) return;
+      areaEl.scrollLeft -= e.clientX - drag.x;
+      areaEl.scrollTop -= e.clientY - drag.y;
+      drag = { x: e.clientX, y: e.clientY };
+    };
+    const onUp = () => {
+      drag = null;
+      areaEl.style.cursor = "";
+    };
+    areaEl.addEventListener("wheel", onWheel, { passive: false });
+    areaEl.addEventListener("mousedown", onDown);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      areaEl.removeEventListener("wheel", onWheel);
+      areaEl.removeEventListener("mousedown", onDown);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [areaEl]);
 
   const onSlide = useMemo(() => (patch && !isImage ? projectSlideShapes(slideAnnotations, patch) : []), [slideAnnotations, patch, isImage]);
 
@@ -558,15 +630,18 @@ export function MainWorkspacePage() {
               </button>
             ))}
             <div className="w-px h-6 bg-slate-700 mx-1" />
-            <IconButton icon="zoom_in" onClick={() => setZoom((z) => Math.min(maxZoom, z * 1.25))} />
-            <IconButton icon="zoom_out" onClick={() => setZoom((z) => Math.max(0.5, z / 1.25))} />
-            <button onClick={() => setZoom(1)} className="text-label-md text-slate-300 px-space-sm">
+            <IconButton icon="zoom_in" onClick={() => zoomAt(1.25)} title="Zoom in (mouse wheel)" />
+            <IconButton icon="zoom_out" onClick={() => zoomAt(1 / 1.25)} title="Zoom out (mouse wheel)" />
+            <button onClick={() => setZoom(1)} className="text-label-md text-slate-300 px-space-sm" title="Show the whole patch">
               Fit
             </button>
+            <span className="font-mono text-label-sm text-slate-400 w-12 text-right" title="Screen pixels per patch pixel">
+              {Math.round(effectiveZoom * 100)}%
+            </span>
           </div>
 
-          <div ref={setAreaEl} className="relative flex-1 min-h-0 overflow-auto flex p-space-lg">
-            <div className="m-auto">
+          <div ref={setAreaEl} className="relative flex-1 min-h-0 overflow-auto flex p-space-lg" style={{ scrollbarGutter: "stable both-edges" }}>
+            <div ref={canvasWrapRef} className="m-auto shrink-0">
             {switching ? (
               <span className="text-slate-500">Loading image...</span>
             ) : (
