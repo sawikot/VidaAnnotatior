@@ -36,6 +36,7 @@ ANNOTATOR_WRITES = {
     ("PUT", "/annotations/{annotation_id}"),
     ("DELETE", "/annotations/{annotation_id}"),
     ("PUT", "/slides/{slide_id}/active-grid"),
+    ("POST", "/slides/{slide_id}/patches/label"),
 }
 
 # Routes that touch no single project: reading the list (filtered to the user's projects) and the

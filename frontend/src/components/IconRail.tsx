@@ -22,7 +22,10 @@ export function IconRail() {
         {navItemsFor(projectType, manage).map((item) => (
           <NavIconLink key={item.key} item={item} projectId={projectId} slideId={slideId} />
         ))}
-        {admin && (
+      </div>
+      {/* App-wide, not per project: the administrator's user management sits apart, at the bottom. */}
+      {admin && (
+        <div className="flex flex-col items-center w-full">
           <NavLink
             to="/admin/users"
             title="Users"
@@ -34,22 +37,8 @@ export function IconRail() {
           >
             <MaterialIcon name="group" />
           </NavLink>
-        )}
-      </div>
-      <div className="flex flex-col items-center gap-space-sm w-full">
-        <button
-          className="w-10 h-10 rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white flex items-center justify-center"
-          title="Documentation"
-        >
-          <MaterialIcon name="menu_book" />
-        </button>
-        <button
-          className="w-10 h-10 rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white flex items-center justify-center"
-          title="System Settings"
-        >
-          <MaterialIcon name="settings" />
-        </button>
-      </div>
+        </div>
+      )}
     </aside>
   );
 }

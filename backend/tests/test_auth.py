@@ -188,5 +188,9 @@ def test_annotators_annotate_and_review_under_their_own_name(api, tmp_path, monk
 
     reviewed = annotator.put(f"/api/patches/{patch['id']}", json={"status": "reviewed", "reviewed_by": "Dr. Nobody"}).json()
     assert reviewed["status"] == "reviewed" and reviewed["reviewed_by"] == "Ann"
+    undone = annotator.put(f"/api/patches/{patch['id']}", json={"status": "annotated"}).json()
+    assert undone["status"] == "annotated" and undone["reviewed_by"] is None and undone["reviewed_at"] is None  # validation taken back
     assert annotator.get(f"/api/projects/{pid}/export/patch_csv").status_code == 200  # members export
+    batch = annotator.post(f"/api/slides/{sid}/patches/label", json={"patch_ids": [patch["id"]], "label": "Mixed"})
+    assert batch.status_code == 200  # labelling many patches is annotation work too
     assert annotator.delete(f"/api/annotations/{res.json()['id']}").status_code == 204

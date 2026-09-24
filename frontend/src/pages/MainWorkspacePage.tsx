@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAuthStore } from "../stores/authStore";
+import { OTHER_PATCH_LABELS } from "../features/patches/labels";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { MaterialIcon } from "../components/MaterialIcon";
 import { IconButton } from "../components/primitives";
@@ -667,10 +668,7 @@ export function MainWorkspacePage() {
       if ("patch_label" in fields) setAnnotations(await listPatchAnnotations(patch.id));
       setSaveState("saved");
       setGridRefresh((n) => n + 1);
-      if (advance && isImage) {
-        const target = neighbour(imagesLive, sid, "next");
-        if (target) navigate(`/projects/${pid}/slides/${target.slide_id}/workspace`);
-      }
+      if (advance) goToPatch("next"); // Skip / Validate: on to the next patch (or image)
     } catch {
       setSaveState("error");
     }
@@ -883,8 +881,11 @@ export function MainWorkspacePage() {
                   {c.name}
                 </option>
               ))}
-              <option value="Mixed">Mixed</option>
-              <option value="Artifact / Background">Artifact / Background</option>
+              {OTHER_PATCH_LABELS.map((l) => (
+                <option key={l} value={l}>
+                  {l}
+                </option>
+              ))}
             </select>
             <div className="text-label-sm text-on-surface-variant mt-1">
               A class fills the whole {noun.toLowerCase()} with that class; Mixed and Artifact are labels only.
@@ -1055,19 +1056,40 @@ export function MainWorkspacePage() {
             <Checkbox label={isImage ? "Exclude from Model Training (Blur/Artifact)" : "Exclude from Model Training (Blur/Fold)"} checked={patch.excluded} onChange={(v) => persistPatchFields({ excluded: v })} />
           </div>
 
-          <div className="flex items-center gap-space-sm mt-auto pt-space-sm border-t border-outline-variant">
-            <button
-              className="flex-1 h-8 rounded bg-surface-container-high text-label-md"
-              onClick={() => persistPatchFields({ status: "skipped" }, true)}
-            >
-              Skip
-            </button>
-            <button
-              className="flex-1 h-8 rounded bg-primary-container text-on-primary-container text-label-md"
-              onClick={() => persistPatchFields({ status: "reviewed", reviewed_by: annotatorName }, true)}
-            >
-              Validate
-            </button>
+          <div className="flex flex-col gap-space-sm mt-auto pt-space-sm border-t border-outline-variant">
+            {(patch.status === "reviewed" || patch.status === "skipped") && (
+              <div className="flex items-center justify-between gap-space-sm text-label-md" data-testid="review-state">
+                <span className={`flex items-center gap-1 ${patch.status === "reviewed" ? "text-emerald-700" : "text-on-surface-variant"}`}>
+                  <MaterialIcon name={patch.status === "reviewed" ? "verified" : "skip_next"} className="!text-[16px]" />
+                  {patch.status === "reviewed" ? `Validated${patch.reviewed_by ? ` by ${patch.reviewed_by}` : ""}` : "Skipped"}
+                </span>
+                <button
+                  className="text-primary hover:underline"
+                  title={patch.status === "reviewed" ? "Take the validation back" : "Put it back in the queue"}
+                  onClick={() => persistPatchFields({ status: annotations.length || patch.patch_label ? "annotated" : "unannotated" })}
+                >
+                  Undo
+                </button>
+              </div>
+            )}
+            <div className="flex items-center gap-space-sm">
+              <button
+                className="flex-1 h-8 rounded bg-surface-container-high text-label-md disabled:opacity-50"
+                disabled={patch.status === "skipped"}
+                title={`Mark this ${noun.toLowerCase()} skipped and go to the next one`}
+                onClick={() => persistPatchFields({ status: "skipped" }, true)}
+              >
+                Skip
+              </button>
+              <button
+                className="flex-1 h-8 rounded bg-primary-container text-on-primary-container text-label-md disabled:opacity-50"
+                disabled={patch.status === "reviewed"}
+                title={`Mark this ${noun.toLowerCase()} checked and correct, and go to the next one`}
+                onClick={() => persistPatchFields({ status: "reviewed", reviewed_by: annotatorName }, true)}
+              >
+                Validate
+              </button>
+            </div>
           </div>
         </div>
       </div>

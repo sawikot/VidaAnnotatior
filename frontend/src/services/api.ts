@@ -254,8 +254,29 @@ export const listImages = (projectId: number, params: { status?: string; limit?:
 // ---- Patches ----
 export const listPatches = (
   slideId: number,
-  params: { bbox?: string; status?: string; flagged?: boolean; limit?: number; offset?: number } = {},
+  params: {
+    bbox?: string;
+    status?: string;
+    flagged?: boolean;
+    /** A patch label (any case); "-" for patches with none. */
+    label?: string;
+    sort?: PatchSort;
+    limit?: number;
+    offset?: number;
+  } = {},
 ) => request<PatchListResponse>(`/slides/${slideId}/patches${qs(params)}`);
+
+export type PatchSort = "index" | "tissue_desc" | "tissue_asc";
+/** The label filter's value for patches that have no label. */
+export const NO_LABEL = "-";
+
+/** How many patches carry each label (null: no label), in the slide's current patch size. */
+export const getPatchLabelCounts = (slideId: number) =>
+  request<{ label: string | null; count: number }[]>(`/slides/${slideId}/patches/label-counts`);
+
+/** The same label for many patches of one slide at once (null removes it); as setting it on each one. */
+export const labelPatches = (slideId: number, patchIds: number[], label: string | null) =>
+  request<{ updated: number }>(`/slides/${slideId}/patches/label`, { method: "POST", body: JSON.stringify({ patch_ids: patchIds, label }) });
 export const nextPatch = (
   slideId: number,
   currentIndex: number,

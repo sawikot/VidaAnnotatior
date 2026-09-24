@@ -55,18 +55,7 @@ export function TopHeader() {
 
       <div className="flex-1" />
 
-      <div className="hidden 2xl:flex items-center gap-1.5 px-space-sm py-1 rounded-full bg-emerald-950/40 border border-emerald-800 text-emerald-300 text-label-sm font-mono shrink-0">
-        <MaterialIcon name="check_circle" className="!text-[14px]" />
-        Dynamic Coordinate Engine: Active
-      </div>
 
-      <div className="hidden lg:block w-52 shrink-0">
-        <input
-          type="text"
-          placeholder="Search slides & coords..."
-          className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-space-sm py-1.5 text-body-md text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-container"
-        />
-      </div>
 
       <button
         className="w-8 h-8 rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white flex items-center justify-center shrink-0"

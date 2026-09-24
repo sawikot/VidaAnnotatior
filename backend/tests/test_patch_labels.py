@@ -152,3 +152,39 @@ def test_labels_reach_a_custom_export_grid_through_their_fills(slide):
     inside = [r for r in table if int(r["level0_x"]) < 512 and int(r["level0_y"]) < 512]
     assert len(table) == 4 and len(inside) == 4  # the four 256 px patches inside the labelled 512 one
     assert all(r["class"] == "Tumor" and r["class_source"] == "drawn" and float(r["coverage"]) == 1.0 for r in table)
+
+
+def test_the_gallery_labels_many_patches_at_once_and_filters_and_sorts_by_label(slide):
+    client, pid, sid, config_id = slide
+    classes = setup_classes(client, pid)
+    generate(client, sid, config_id, BIG)
+    ps = sorted(patches(client, sid), key=lambda p: p["patch_index"])
+    ids = [p["id"] for p in ps[:3]]
+
+    res = client.post(f"/api/slides/{sid}/patches/label", json={"patch_ids": ids, "label": "tumor"})
+    assert res.status_code == 200 and res.json() == {"updated": 3}
+    assert all(len(fills(client, i)) == 1 for i in ids)  # exactly as labelling each one: filled
+    assert fills(client, ids[0])[0]["class_id"] == classes["Tumor"]["id"]
+
+    client.post(f"/api/slides/{sid}/patches/label", json={"patch_ids": [ps[3]["id"]], "label": "Mixed"})
+    counts = {c["label"]: c["count"] for c in client.get(f"/api/slides/{sid}/patches/label-counts").json()}
+    assert counts == {"Tumor": 3, "Mixed": 1, None: 2}
+
+    listed = client.get(f"/api/slides/{sid}/patches", params={"label": "TUMOR"}).json()
+    assert listed["total"] == 3 and {p["id"] for p in listed["items"]} == set(ids)
+    assert client.get(f"/api/slides/{sid}/patches", params={"label": "-"}).json()["total"] == 2
+
+    client.post(f"/api/slides/{sid}/patches/label", json={"patch_ids": ids[:1], "label": None})  # remove
+    assert fills(client, ids[0]) == [] and client.get(f"/api/patches/{ids[0]}").json()["patch_label"] is None
+
+    fractions = [p["tissue_fraction"] for p in client.get(f"/api/slides/{sid}/patches", params={"sort": "tissue_desc"}).json()["items"]]
+    assert fractions == sorted(fractions, reverse=True)
+    assert client.get(f"/api/slides/{sid}/patches", params={"sort": "nonsense"}).status_code == 422
+
+
+def test_batch_labels_only_touch_the_slides_own_patches(slide):
+    client, pid, sid, config_id = slide
+    setup_classes(client, pid)
+    generate(client, sid, config_id, BIG)
+    assert client.post(f"/api/slides/{sid}/patches/label", json={"patch_ids": [999999], "label": "Tumor"}).status_code == 422
+    assert client.post(f"/api/slides/{sid}/patches/label", json={"patch_ids": [], "label": "Tumor"}).status_code == 422
