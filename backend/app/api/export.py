@@ -33,11 +33,21 @@ def _safe_stem(name: str, fallback: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("._") or fallback
 
 
-def _options(patches: str, content: str, image_format: str, masks: bool, combine: bool | None, grid: str | None = None) -> ExportOptions:
+def _options(
+    patches: str, content: str, image_format: str, masks: bool, combine: bool | None, grid: str | None = None, classify: dict | None = None
+) -> ExportOptions:
     try:
-        return parse_options(patches, content, image_format, masks, combine, grid)
+        return parse_options(patches, content, image_format, masks, combine, grid, **(classify or {}))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def classification_params(
+    min_coverage: float = Query(0.9, description="patch_classification: share of a patch a drawn class must cover (0.5-1)"),
+    unlabeled: str = Query("skip", description="patch_classification: skip | folder (patches with no clear class)"),
+    other_labels: bool = Query(True, description="patch_classification: folders for labels that are not a class (Mixed, Artifact)"),
+) -> dict:
+    return {"min_coverage": min_coverage, "unlabeled": unlabeled, "other_labels": other_labels}
 
 
 def _suffix(options: ExportOptions) -> str:
@@ -101,6 +111,7 @@ def export_slide(
     image_format: str = Query("jpg", description="jpg | png"),
     masks: bool = Query(False, description="with content=images: also write label masks"),
     grid: str | None = Query(None, description="export in another patch grid, e.g. 512x512_s512x512_m20_t0.5 (see /slides/{id}/grids)"),
+    classify: dict = Depends(classification_params),
     slide: Slide = Depends(get_slide_or_404),
     db: Session = Depends(get_db),
 ):
@@ -108,7 +119,7 @@ def export_slide(
         exporter = get_exporter(format_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    options = _options(patches, content, image_format, masks, None, grid)
+    options = _options(patches, content, image_format, masks, None, grid, classify)
     if not _ready(db, slide, options):
         raise HTTPException(status_code=422, detail="This slide has no patch grid yet; generate one, or choose a custom grid.")
 
@@ -146,6 +157,7 @@ def export_project(
     masks: bool = Query(False),
     combine: bool | None = Query(None, description="one combined file for dataset-level formats (COCO, CSV)"),
     grid: str | None = Query(None, description="export in another patch grid, e.g. 512x512_s512x512_m20_t0.5 (see /slides/{id}/grids)"),
+    classify: dict = Depends(classification_params),
     project: Project = Depends(get_project_or_404),
     db: Session = Depends(get_db),
 ):
@@ -164,7 +176,7 @@ def export_project(
         exporter = get_exporter(format_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    options = _options(patches, content, image_format, masks, combine, grid)
+    options = _options(patches, content, image_format, masks, combine, grid, classify)
 
     slides = sorted(project.slides, key=lambda s: s.id)
     ready = [s for s in slides if _ready(db, s, options)]
@@ -252,9 +264,15 @@ class ExportSummaryOut(BaseModel):
 _BYTES_PER_PIXEL = {"jpg": 0.3, "png": 1.8}
 
 
-def _summary_out(db: Session, slides: list[Slide], options: ExportOptions, image_format: str) -> ExportSummaryOut:
+def _summary_out(db: Session, slides: list[Slide], options: ExportOptions, image_format: str, format_id: str | None = None) -> ExportSummaryOut:
+    exporter = None
+    if format_id:
+        try:
+            exporter = get_exporter(format_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
     try:
-        total = summarize(db, [s for s in slides if _ready(db, s, options)], options)
+        total = summarize(db, [s for s in slides if _ready(db, s, options)], options, exporter)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return ExportSummaryOut(
@@ -272,11 +290,13 @@ def export_slide_summary(
     patches: str = Query("annotated"),
     image_format: str = Query("jpg"),
     grid: str | None = Query(None),
+    format: str | None = Query(None, description="the export format, when it decides which patches get images"),
+    classify: dict = Depends(classification_params),
     slide: Slide = Depends(get_slide_or_404),
     db: Session = Depends(get_db),
 ):
     """What an export with these options would cover -- counts only, nothing is rendered."""
-    return _summary_out(db, [slide], _options(patches, "annotations", image_format, False, None, grid), image_format)
+    return _summary_out(db, [slide], _options(patches, "annotations", image_format, False, None, grid, classify), image_format, format)
 
 
 @router.get("/projects/{project_id}/export-summary", response_model=ExportSummaryOut)
@@ -284,9 +304,12 @@ def export_project_summary(
     patches: str = Query("annotated"),
     image_format: str = Query("jpg"),
     grid: str | None = Query(None),
+    format: str | None = Query(None),
+    classify: dict = Depends(classification_params),
     project: Project = Depends(get_project_or_404),
     db: Session = Depends(get_db),
 ):
     return _summary_out(
-        db, sorted(project.slides, key=lambda s: s.id), _options(patches, "annotations", image_format, False, None, grid), image_format
+        db, sorted(project.slides, key=lambda s: s.id),
+        _options(patches, "annotations", image_format, False, None, grid, classify), image_format, format,
     )

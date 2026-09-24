@@ -5,6 +5,8 @@ import { gridKey, gridProblem } from "./gridKey";
 export type PatchScope = "annotated" | "all" | "empty" | "reviewed";
 export type ExportContent = "annotations" | "images";
 export type ImageFormat = "jpg" | "png";
+/** Patch classification: what happens to patches with no clear class. */
+export type UnlabeledMode = "skip" | "folder";
 
 export interface ExportOptions {
   patches: PatchScope;
@@ -15,6 +17,11 @@ export interface ExportOptions {
   combine: boolean | null;
   /** Export in this patch grid instead of the one each slide was annotated in; null: as annotated. */
   grid: GridSpec | null;
+  /** Patch classification: share of a patch a drawn class must cover to name it (0.5-1). */
+  minCoverage: number;
+  unlabeled: UnlabeledMode;
+  /** Patch classification: folders for labels that are not a class (Mixed, Artifact / Background). */
+  otherLabels: boolean;
 }
 
 export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
@@ -24,7 +31,19 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   masks: false,
   combine: null,
   grid: null,
+  minCoverage: 0.9,
+  unlabeled: "skip",
+  otherLabels: true,
 };
+
+export const CLASSIFICATION_FORMAT = "patch_classification";
+
+/** The patch-classification choices that differ from the defaults (other formats ignore them). */
+function addClassification(o: ExportOptions, params: URLSearchParams) {
+  if (o.minCoverage !== DEFAULT_EXPORT_OPTIONS.minCoverage) params.set("min_coverage", String(o.minCoverage));
+  if (o.unlabeled !== DEFAULT_EXPORT_OPTIONS.unlabeled) params.set("unlabeled", o.unlabeled);
+  if (o.otherLabels !== DEFAULT_EXPORT_OPTIONS.otherLabels) params.set("other_labels", String(o.otherLabels));
+}
 
 export interface ExportSummary {
   slides: number;
@@ -36,7 +55,7 @@ export interface ExportSummary {
 }
 
 /** Formats that are datasets rather than per-slide coordinate files, so they can be combined. */
-const COMBINABLE_FORMATS = new Set(["coco", "patch_csv", "stats_csv"]);
+const COMBINABLE_FORMATS = new Set(["coco", "patch_csv", "stats_csv", CLASSIFICATION_FORMAT]);
 
 /** Masks only exist alongside images; keep the options consistent whatever was clicked last. */
 export function normalizeOptions(o: ExportOptions): ExportOptions {
@@ -55,16 +74,24 @@ export function optionsQuery(o: ExportOptions, opts: { project?: boolean } = {})
   }
   if (opts.project && n.combine !== null) params.set("combine", String(n.combine));
   if (n.grid && !gridProblem(n.grid)) params.set("grid", gridKey(n.grid));
+  addClassification(n, params);
   const text = params.toString();
   return text ? `?${text}` : "";
 }
 
-/** Query for the counts endpoint (it only needs the scope and the image format for the size estimate). */
-export function summaryQuery(o: ExportOptions): string {
+/**
+ * Query for the counts endpoint (it only needs the scope and the image format for the size estimate --
+ * and, for patch classification, which patches get a class and so an image).
+ */
+export function summaryQuery(o: ExportOptions, format?: string): string {
   const params = new URLSearchParams();
   if (o.patches !== DEFAULT_EXPORT_OPTIONS.patches) params.set("patches", o.patches);
   if (o.content === "images" && o.imageFormat !== DEFAULT_EXPORT_OPTIONS.imageFormat) params.set("image_format", o.imageFormat);
   if (o.grid && !gridProblem(o.grid)) params.set("grid", gridKey(o.grid));
+  if (format === CLASSIFICATION_FORMAT) {
+    params.set("format", format);
+    addClassification(o, params);
+  }
   const text = params.toString();
   return text ? `?${text}` : "";
 }

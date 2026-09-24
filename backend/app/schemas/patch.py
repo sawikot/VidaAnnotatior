@@ -22,6 +22,7 @@ class PatchOut(BaseModel):
     tissue_fraction: float
     status: str
     patch_label: str | None
+    label_class_id: int | None = None  # set when the label is one of the project's classes
     unsure: bool
     flagged: bool
     excluded: bool

@@ -6,12 +6,15 @@ from __future__ import annotations
 from .base import ExportData, Exporter, dumps_with_line_items, load_export_data
 from .coco import COCOExporter
 from .geojson import GeoJSONExporter
-from .tables import PatchCSVExporter, StatsCSVExporter
+from .tables import PatchClassificationExporter, PatchCSVExporter, StatsCSVExporter
 from .wsi_json import WSIJSONExporter
 
 REGISTRY: dict[str, Exporter] = {
     e.format_id: e
-    for e in (WSIJSONExporter(), GeoJSONExporter(), COCOExporter(), PatchCSVExporter(), StatsCSVExporter())
+    for e in (
+        WSIJSONExporter(), GeoJSONExporter(), COCOExporter(), PatchCSVExporter(), StatsCSVExporter(),
+        PatchClassificationExporter(),
+    )
 }
 
 

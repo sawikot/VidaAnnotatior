@@ -90,8 +90,8 @@ def rows(text):
 # ---------------------------------------------------------------- registry
 
 
-def test_all_five_formats_are_registered_and_none_is_a_stub(db):
-    assert set(REGISTRY) == {"wsi_json", "geojson", "coco", "patch_csv", "stats_csv"}
+def test_all_formats_are_registered_and_none_is_a_stub(db):
+    assert set(REGISTRY) == {"wsi_json", "geojson", "coco", "patch_csv", "stats_csv", "patch_classification"}
     s = seed(db)
     for fmt in REGISTRY:
         get_exporter(fmt).export(db, s["slide"])  # must not raise NotImplementedError

@@ -22,6 +22,7 @@ from app.schemas.annotation import (
     OverlappingAnnotationOut,
     OwnerPatchOut,
 )
+from app.services.patch_labels import on_fill_class_changed, on_fill_deleted
 from app.services.geometry import circle_center_radius, polygon_bounds, validate_shape
 from app.services.coordinate_transform import PatchOrigin, polygon_level0_to_patch_local, polygon_patch_local_to_level0
 
@@ -370,6 +371,7 @@ def update_annotation(
     changes = payload.model_dump(exclude_unset=True)
     if changes.get("class_id") is not None:
         _require_class_of_config(db, changes["class_id"], annotation.config_version_id)
+    before = (annotation.coordinates_patch_local, annotation.coordinates_level0)
 
     if annotation.patch_id is None:
         # Slide-level: only Level-0 coordinates exist.
@@ -410,8 +412,12 @@ def update_annotation(
         changes.pop("coordinates_patch_local")
 
     changes.pop("coordinates_level0", None)
+    if annotation.whole_patch and (annotation.coordinates_patch_local, annotation.coordinates_level0) != before:
+        annotation.whole_patch = False  # reshaped: an ordinary shape now (the label stays)
     for field, value in changes.items():
         setattr(annotation, field, value)
+    if annotation.whole_patch and "class_id" in changes:
+        on_fill_class_changed(db, annotation)  # a patch label's fill got another class: so does the label
 
     db.commit()
     db.refresh(annotation)
@@ -423,5 +429,6 @@ def delete_annotation(annotation_id: int, db: Session = Depends(get_db)):
     annotation = db.get(GeometryAnnotation, annotation_id)
     if annotation is None:
         raise HTTPException(status_code=404, detail=f"Annotation {annotation_id} not found")
+    on_fill_deleted(db, annotation)  # a patch label's fill: the patch loses the label
     db.delete(annotation)
     db.commit()

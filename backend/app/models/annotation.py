@@ -34,6 +34,8 @@ class GeometryAnnotation(Base, TimestampMixin):
     unsure: Mapped[bool] = mapped_column(Boolean, default=False)
     flagged: Mapped[bool] = mapped_column(Boolean, default=False)
     excluded: Mapped[bool] = mapped_column(Boolean, default=False)
+    # The rectangle a patch label fills its patch with (services/patch_labels.py); linked to the label.
+    whole_patch: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     patch: Mapped["Patch | None"] = relationship("Patch", back_populates="geometry_annotations")
 

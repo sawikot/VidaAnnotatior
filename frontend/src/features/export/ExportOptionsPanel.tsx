@@ -4,6 +4,7 @@ import { formatBytes } from "../slides/uploadSelection";
 import { GridForm } from "../grids/GridForm";
 import type { GridSpec } from "../../types/api";
 import {
+  CLASSIFICATION_FORMAT,
   isCombinable,
   type ExportOptions,
   type ExportSummary,
@@ -83,6 +84,43 @@ export function ExportOptionsPanel({ options, onChange, format, scope, isImagePr
           <Hint>Statistics count only the shapes on the selected {plural}; the slide-level totals still describe the whole grid.</Hint>
         )}
       </div>
+
+      {format === CLASSIFICATION_FORMAT && (
+        <div data-testid="classification-options">
+          <div className="text-label-md text-on-surface-variant mb-space-sm">Class of each {patch}</div>
+          <p className="text-body-sm text-on-surface-variant max-w-3xl mb-space-sm">
+            A {patch} with a {patch === "image" ? "Image" : "Patch"} Label takes that label. Otherwise it takes the drawn class covering at
+            least this share of it:
+          </p>
+          <div className="flex items-center gap-space-md max-w-md">
+            <input
+              type="range"
+              min={50}
+              max={100}
+              step={5}
+              value={Math.round(options.minCoverage * 100)}
+              onChange={(e) => set({ minCoverage: Number(e.target.value) / 100 })}
+              aria-label="Minimum class coverage"
+              className="flex-1"
+            />
+            <span className="font-mono text-body-md w-12 text-right">{Math.round(options.minCoverage * 100)}%</span>
+          </div>
+          <div className="mt-space-md text-label-md text-on-surface-variant mb-space-sm">{patch === "image" ? "Images" : "Patches"} with no clear class</div>
+          <div role="radiogroup" aria-label="Patches with no clear class" className="grid sm:grid-cols-2 gap-space-sm">
+            <OptionCard selected={options.unlabeled === "skip"} onSelect={() => set({ unlabeled: "skip" })} title="Leave them out" body="Only classified patches reach the dataset" />
+            <OptionCard
+              selected={options.unlabeled === "folder"}
+              onSelect={() => set({ unlabeled: "folder" })}
+              title="Put them in unlabeled"
+              body="An unlabeled folder, for review or semi-supervised training"
+            />
+          </div>
+          <label className="mt-space-md flex items-center gap-space-sm text-body-md cursor-pointer">
+            <input type="checkbox" className="w-4 h-4" checked={options.otherLabels} onChange={(e) => set({ otherLabels: e.target.checked })} />
+            Include Mixed and Artifact / Background labels, each in its own folder
+          </label>
+        </div>
+      )}
 
       <div>
         <div className="text-label-md text-on-surface-variant mb-space-sm">What to export</div>

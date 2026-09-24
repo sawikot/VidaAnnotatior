@@ -121,6 +121,7 @@ def sync_annotation_classes(db: Session, config: ProjectConfigVersion, items: li
         c.name
         for c in removed
         if db.query(GeometryAnnotation.id).filter(GeometryAnnotation.class_id == c.id).first() is not None
+        or db.query(Patch.id).filter(Patch.label_class_id == c.id).first() is not None
     ]
     if in_use:
         raise ClassSyncError(
@@ -135,6 +136,8 @@ def sync_annotation_classes(db: Session, config: ProjectConfigVersion, items: li
         hotkey = item.hotkey.strip() if item.hotkey and item.hotkey.strip() else None
         if item.id is not None:
             cls = existing[item.id]
+            if cls.name != name:  # the patch labels that are this class follow the rename
+                db.query(Patch).filter(Patch.label_class_id == cls.id).update({Patch.patch_label: name}, synchronize_session=False)
             cls.name, cls.color_hex, cls.hotkey, cls.order_index = name, item.color_hex, hotkey, position
         else:
             db.add(

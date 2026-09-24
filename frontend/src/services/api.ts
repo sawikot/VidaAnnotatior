@@ -346,8 +346,8 @@ export const exportProjectUrl = (projectId: number, formatId: string, options?: 
   `${API_BASE}/projects/${projectId}/export/${formatId}${options ? optionsQuery(options, { project: true }) : ""}`;
 
 /** What an export with these options would cover (counts only; nothing is rendered). */
-export const getExportSummary = (scope: "slide" | "project", id: number, options: ExportOptions) =>
-  request<ExportSummary>(`/${scope === "slide" ? "slides" : "projects"}/${id}/export-summary${summaryQuery(options)}`);
+export const getExportSummary = (scope: "slide" | "project", id: number, options: ExportOptions, format?: string) =>
+  request<ExportSummary>(`/${scope === "slide" ? "slides" : "projects"}/${id}/export-summary${summaryQuery(options, format)}`);
 
 /**
  * Downloads an export through fetch and resolves with its file name. Going through fetch rather than

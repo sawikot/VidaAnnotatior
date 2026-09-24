@@ -48,11 +48,19 @@ export const EXPORT_FORMATS: ExportFormat[] = [
     space: "px² and mm²",
     note: "One row per class (including classes with no annotations): counts, summed and mean area in px² and mm², share of annotated and tissue area. Areas are summed per annotation, so overlapping shapes count twice.",
   },
+  {
+    id: "patch_classification",
+    name: "Patch Classification",
+    desc: "One class per patch, in class folders",
+    ext: ".csv",
+    space: "Class folders",
+    note: "labels.csv with one row per patch that has a class; with images, a ZIP of images/<class>/<name> ready for an image-folder dataset loader. The class is the patch's Patch Label, otherwise the drawn class covering at least the chosen share of the patch.",
+  },
 ];
 
 /** In an image project the dataset-level formats come back as one merged file for the whole
  * project (what a training pipeline wants); the per-image coordinate formats stay zipped. */
-const MERGED_IN_IMAGE_PROJECTS = new Set(["coco", "patch_csv", "stats_csv"]);
+const MERGED_IN_IMAGE_PROJECTS = new Set(["coco", "patch_csv", "stats_csv", "patch_classification"]);
 
 export function isMergedExport(projectType: string | undefined, formatId: string): boolean {
   return projectType === "image" && MERGED_IN_IMAGE_PROJECTS.has(formatId);

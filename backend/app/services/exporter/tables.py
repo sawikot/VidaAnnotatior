@@ -8,10 +8,12 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.models.slide import Slide
-from app.services.geometry import AREA_TYPES, LINE_TYPES, line_length, polygon_area, shape_area
+from app.services.geometry import AREA_TYPES, LINE_TYPES, line_length, shape_area
 
-from .base import Exporter, load_export_data
+from .base import ExportData, Exporter, load_export_data
+from .classify import class_areas, classify_all, folder_name
 from .options import ExportOptions
+from .patch_images import unique_names
 
 _FORMULA_STARTS = ("=", "+", "-", "@", "\t", "\r")
 
@@ -79,17 +81,7 @@ class PatchCSVExporter(Exporter):
         for p in data.patches:
             anns = per_patch.get(p.id, [])
             pieces = data.projections.get(p.id, [])  # slide-level annotations reaching this patch
-            area_by_class: dict[str, float] = defaultdict(float)
-            for a in anns:
-                name = data.class_name(a)
-                if name:
-                    area_by_class[name] += shape_area(a.type, a.coordinates_level0)
-            scale = (p.width_l0 / p.width) * (p.height_l0 / p.height)  # patch px^2 -> Level-0 px^2
-            for piece in pieces:
-                name = data.class_name(piece.annotation)
-                if name and piece.is_area:
-                    local_area = sum(shape_area(piece.type, part) if piece.type == "circle" else polygon_area(part) for part in piece.parts)
-                    area_by_class[name] += local_area * scale
+            area_by_class = class_areas(data, p)
             dominant = max(area_by_class.items(), key=lambda kv: (kv[1], kv[0]))[0] if area_by_class else None
             rows.append([
                 slide.filename, p.id, p.patch_index, p.x, p.y, p.width_l0, p.height_l0,
@@ -186,6 +178,50 @@ class StatsCSVExporter(Exporter):
                 round(area_mm2 / tissue_mm2 * 100, 3) if area_mm2 is not None and tissue_mm2 else None,
                 sum(1 for a in anns if a.unsure), sum(1 for a in anns if a.flagged),
                 len(active), annotated, reviewed, excluded, tissue_mm2, slide.mpp_x, slide.mpp_y,
+            ])  # fmt: skip
+        return to_csv(self.HEADER, rows)
+
+    def merge(self, results: list[str]) -> str:
+        return merge_csv(results, self.HEADER)
+
+
+class PatchClassificationExporter(Exporter):
+    """A patch-classification dataset: with images, ``images/<class>/<name>`` plus this ``labels.csv``.
+
+    One row per patch that has a class (see classify.py): its Patch Label, else the drawn class
+    covering at least ``min_coverage`` of it. Patches with no clear class are left out, or listed
+    as ``unlabeled`` on request. ``file`` is the image's path inside the ZIP."""
+
+    format_id = "patch_classification"
+    content_type = "text/csv; charset=utf-8"
+    file_extension = "csv"
+    mergeable = True
+    bundle_name = "labels.csv"
+
+    HEADER = [
+        "file", "class", "class_source", "coverage", "slide", "patch_id", "patch_index", "level0_x", "level0_y",
+        "width_level0", "height_level0", "read_level", "width_px", "height_px", "patch_label",
+    ]  # fmt: skip
+
+    def image_folders(self, data: ExportData, options: ExportOptions) -> dict[int, str]:
+        return {pid: folder_name(cls.name) for pid, cls in classify_all(data, options).items()}
+
+    def export(self, db: Session, slide: Slide, options: ExportOptions | None = None) -> str:
+        options = options or ExportOptions()
+        data = load_export_data(db, slide, options)
+        classes = classify_all(data, options)
+        names = options.image_names
+        if not names:  # the CSV on its own: the names the images would have
+            local = unique_names([(slide, p) for p in data.patches if p.id in classes], options.image_ext)
+            names = {pid: f"{folder_name(classes[pid].name)}/{n}" for pid, n in local.items()}
+        rows = []
+        for p in data.patches:
+            cls = classes.get(p.id)
+            if cls is None:
+                continue
+            rows.append([
+                f"images/{names.get(p.id, '')}", cls.name, cls.source, cls.coverage, slide.filename, p.id, p.patch_index,
+                p.x, p.y, p.width_l0, p.height_l0, p.level, p.width, p.height, p.patch_label,
             ])  # fmt: skip
         return to_csv(self.HEADER, rows)
 

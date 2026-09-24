@@ -202,6 +202,8 @@ export interface Patch {
   tissue_fraction: number;
   status: PatchStatus;
   patch_label: string | null;
+  /** Set when the label is one of the project's classes (the label then fills the patch). */
+  label_class_id?: number | null;
   unsure: boolean;
   flagged: boolean;
   excluded: boolean;
@@ -247,6 +249,8 @@ export interface GeometryAnnotation {
   coordinates_level0: [number, number][];
   /** The patch it was drawn in, on the slide: [x0, y0, x1, y1]; null when drawn on the whole slide. */
   patch_bounds_l0?: [number, number, number, number] | null;
+  /** The rectangle a Patch Label fills its patch with; linked to the label (see backend services/patch_labels.py). */
+  whole_patch?: boolean;
   created_by: string | null;
   notes: string | null;
   unsure: boolean;

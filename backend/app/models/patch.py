@@ -41,6 +41,9 @@ class Patch(Base, TimestampMixin):
 
     status: Mapped[str] = mapped_column(String(20), default="unannotated")
     patch_label: Mapped[str | None] = mapped_column(String(100), default=None)  # patch-level classification
+    # The class the label is, when it is one of the project's classes (see services/patch_labels.py):
+    # kept by id so renaming the class renames the label. None for "Mixed" and the like.
+    label_class_id: Mapped[int | None] = mapped_column(ForeignKey("annotation_classes.id"), default=None)
     unsure: Mapped[bool] = mapped_column(Boolean, default=False)
     flagged: Mapped[bool] = mapped_column(Boolean, default=False)
     excluded: Mapped[bool] = mapped_column(Boolean, default=False)

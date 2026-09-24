@@ -109,6 +109,7 @@ class GeometryAnnotationOut(BaseModel):
     coordinates_patch_local: list
     coordinates_level0: list
     patch_bounds_l0: list[int] | None = None  # the owning patch on the slide: [x0, y0, x1, y1]
+    whole_patch: bool = False  # the fill of a patch label
     created_by: str | None
     notes: str | None
     unsure: bool

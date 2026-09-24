@@ -42,6 +42,11 @@ type AnnotationFields = Partial<
   Pick<GeometryAnnotation, "class_id" | "unsure" | "flagged" | "notes" | "coordinates_patch_local" | "coordinates_level0">
 >;
 
+/** Patch-label fills first, so they are drawn beneath -- and picked after -- the shapes inside them. */
+function underFills(list: GeometryAnnotation[]): GeometryAnnotation[] {
+  return list.some((a) => a.whole_patch) ? [...list.filter((a) => a.whole_patch), ...list.filter((a) => !a.whole_patch)] : list;
+}
+
 export function MainWorkspacePage() {
   const { projectId, slideId } = useParams();
   const pid = Number(projectId);
@@ -474,6 +479,7 @@ export function MainWorkspacePage() {
     replace({ ...target, ...fields });
     try {
       await send(fields);
+      if (target.whole_patch) syncPatchLabel();
       setSaveState("saved");
       history.push({ label, do: () => send(fields), undo: () => send(before) });
     } catch (e) {
@@ -562,6 +568,7 @@ export function MainWorkspacePage() {
     try {
       await deleteAnnotation(target.id);
       drop(target.id);
+      if (target.whole_patch && !entry) syncPatchLabel();
       setSelectedAnnId(null);
       setSaveState("saved");
       history.push({
@@ -641,12 +648,22 @@ export function MainWorkspacePage() {
     setPatch(target);
   }
 
+  /** A Patch Label's whole-patch shape was edited or deleted, which changes the label: show the new one. */
+  function syncPatchLabel() {
+    if (!patch) return;
+    const id = patch.id;
+    getPatch(id)
+      .then((fresh) => setPatch((p) => (p && p.id === id ? fresh : p)))
+      .catch(() => undefined);
+  }
+
   async function persistPatchFields(fields: Partial<Patch>, advance = false) {
     if (!patch || patch.slide_id !== sid) return;
     setSaveState("saving");
     try {
       const updated = await updatePatch(patch.id, fields as never);
       setPatch(updated);
+      if ("patch_label" in fields) setAnnotations(await listPatchAnnotations(patch.id));
       setSaveState("saved");
       setGridRefresh((n) => n + 1);
       if (advance && isImage) {
@@ -834,7 +851,7 @@ export function MainWorkspacePage() {
               patchHeight={patch.height}
               tool={tool}
               zoom={effectiveZoom}
-              annotations={annotations}
+              annotations={underFills(annotations)}
               borrowed={[...onSlide, ...borrowedShapes]}
               classes={classes}
               selectedId={selectedAnnId}
@@ -868,6 +885,9 @@ export function MainWorkspacePage() {
               <option value="Mixed">Mixed</option>
               <option value="Artifact / Background">Artifact / Background</option>
             </select>
+            <div className="text-label-sm text-on-surface-variant mt-1">
+              A class fills the whole {noun.toLowerCase()} with that class; Mixed and Artifact are labels only.
+            </div>
           </div>
 
           <div>
@@ -890,7 +910,9 @@ export function MainWorkspacePage() {
                       <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cls?.color_hex ?? "#94a3b8" }} />
                       {cls?.name ?? "Unclassed"} #{a.id}
                     </span>
-                    <span className="text-label-sm text-on-surface-variant capitalize">{a.type.replace("_", " ")}</span>
+                    <span className="text-label-sm text-on-surface-variant capitalize">
+                      {a.whole_patch ? `whole ${noun.toLowerCase()} (label)` : a.type.replace("_", " ")}
+                    </span>
                   </div>
                 );
               })}

@@ -52,6 +52,16 @@ class ExportData:
     # Per patch, the part of each slide-level annotation lying inside it, in that patch's pixels.
     projections: dict[int, list[Projected]] = field(default_factory=dict)
 
+    _own: dict[int, list[GeometryAnnotation]] | None = field(default=None, init=False, repr=False)
+
+    def own_annotations(self, patch_id: int) -> list[GeometryAnnotation]:
+        """The annotations drawn in this patch of the grid."""
+        if self._own is None:
+            self._own = {}
+            for a in self.all_annotations:
+                self._own.setdefault(a.patch_id, []).append(a)
+        return self._own.get(patch_id, [])
+
     def annotation_count(self, patch: Patch) -> int:
         return self.counts.get(patch.id, 0)
 
@@ -69,10 +79,11 @@ def _in_scope(patch: Patch, n_annotations: int, scope: str) -> bool:
         return True  # excluded patches too: the registries list them, flagged
     if patch.excluded:
         return False
+    labelled = bool(getattr(patch, "patch_label", None))  # a Patch Label annotates the patch too
     if scope == "annotated":
-        return n_annotations > 0
+        return n_annotations > 0 or labelled
     if scope == "empty":
-        return n_annotations == 0
+        return n_annotations == 0 and not labelled
     if scope == "reviewed":
         return patch.status == "reviewed"
     raise ValueError(f"unknown patch scope '{scope}'")
@@ -228,6 +239,13 @@ class Exporter(ABC):
     # Dataset-level formats (COCO, the CSV tables) can be combined across slides into
     # one document; per-slide coordinate formats (GeoJSON, WSI JSON) cannot.
     mergeable: bool = False
+    # In a ZIP with images: the name of the one annotation file, at the top (None: annotations/<slide>_<format>).
+    bundle_name: str | None = None
+
+    def image_folders(self, data: ExportData, options: ExportOptions) -> dict[int, str] | None:
+        """With images: patch id -> folder under images/ for the patches that get one. None (the
+        default): every patch in scope, straight in images/."""
+        return None
 
     def merge(self, results: list[Any]) -> Any:
         """Combine several slides' ``export()`` results into one document."""

@@ -80,15 +80,16 @@ def columns(engine):
 
 
 def test_the_column_becomes_nullable_and_every_row_survives_unchanged(old_db):
+    old = ", ".join(columns(old_db))  # the rebuilt table may add newer columns; the old ones must match
     with old_db.connect() as conn:
-        before = conn.exec_driver_sql("SELECT * FROM geometry_annotations ORDER BY id").fetchall()
+        before = conn.exec_driver_sql(f"SELECT {old} FROM geometry_annotations ORDER BY id").fetchall()
     assert columns(old_db)["patch_id"][3] == 1  # NOT NULL
 
     _allow_slide_level_annotations(old_db)
 
     assert columns(old_db)["patch_id"][3] == 0  # nullable now
     with old_db.connect() as conn:
-        after = conn.exec_driver_sql("SELECT * FROM geometry_annotations ORDER BY id").fetchall()
+        after = conn.exec_driver_sql(f"SELECT {old} FROM geometry_annotations ORDER BY id").fetchall()
     assert after == before and len(after) == 3  # ids, JSON, flags, timestamps, notes: identical
 
 

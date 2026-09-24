@@ -60,6 +60,7 @@ export function ExportPage() {
   const [summary, setSummary] = useState<ExportSummary | null>(null);
   const [defaultGrid, setDefaultGrid] = useState<GridSpec | null>(null);
   const gridParam = options.grid ? gridKey(options.grid) : ""; // re-fetch counts and preview when it changes
+  const classParam = `${options.minCoverage}|${options.unlabeled}|${options.otherLabels}`; // likewise, for patch classification
 
   const setOptions = (next: ExportOptions) => setOptionsState(normalizeOptions(next));
   const images = options.content === "images";
@@ -80,13 +81,13 @@ export function ExportPage() {
     if (!slide) return;
     let stale = false;
     setSummary(null);
-    getExportSummary(scope, scope === "slide" ? sid : slide.project_id, options)
+    getExportSummary(scope, scope === "slide" ? sid : slide.project_id, options, format)
       .then((s) => !stale && setSummary(s))
       .catch(() => undefined);
     return () => {
       stale = true;
     };
-  }, [slide?.id, scope, options.patches, options.imageFormat, options.content, gridParam]);
+  }, [slide?.id, scope, format, options.patches, options.imageFormat, options.content, gridParam, classParam]);
 
   // The preview always shows the annotation file (images can't be shown as text).
   useEffect(() => {
@@ -106,7 +107,7 @@ export function ExportPage() {
     return () => {
       stale = true;
     };
-  }, [sid, format, scope, options.patches, gridParam]);
+  }, [sid, format, scope, options.patches, gridParam, classParam]);
 
   const problem = exportProblem(summary, options);
 

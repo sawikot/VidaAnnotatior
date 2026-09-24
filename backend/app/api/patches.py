@@ -8,6 +8,7 @@ from app.api.deps import get_patch_or_404, get_slide_or_404
 from app.database.session import get_db
 from app.models.patch import Patch
 from app.models.slide import Slide
+from app.services.patch_labels import set_patch_label
 from app.services.patch_grid import active_grid_filter
 from app.schemas.patch import PatchListResponse, PatchOut, PatchUpdate
 
@@ -95,6 +96,9 @@ def update_patch(
     db: Session = Depends(get_db),
 ):
     changes = payload.model_dump(exclude_unset=True)
+    if "patch_label" in changes:
+        # A class label also annotates the whole patch with that class (services/patch_labels.py).
+        set_patch_label(db, patch, changes.pop("patch_label"), created_by=changes.get("reviewed_by"))
     for field, value in changes.items():
         setattr(patch, field, value)
     if "reviewed_by" in changes and changes["reviewed_by"]:

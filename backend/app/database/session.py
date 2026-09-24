@@ -48,6 +48,7 @@ def init_db() -> None:
     _add_missing_columns()
     _backfill_grid_keys()
     _merge_config_versions()
+    _link_patch_labels()
     _upgrade_enabled_tools()
     _allow_slide_level_annotations()
 
@@ -67,7 +68,8 @@ def _add_missing_columns(bind=None) -> None:
             ("tissue_regions", "JSON"),
             ("active_grid_key", "VARCHAR(80)"),
         ],
-        "patches": [("grid_key", "VARCHAR(80)")],
+        "patches": [("grid_key", "VARCHAR(80)"), ("label_class_id", "INTEGER REFERENCES annotation_classes(id)")],
+        "geometry_annotations": [("whole_patch", "BOOLEAN NOT NULL DEFAULT 0")],
     }
     bind = bind or engine
     inspector = inspect(bind)
@@ -211,6 +213,24 @@ def _merge_config_versions(bind=None) -> None:
                 db.flush()
             keep.parent_version_id = None
         db.commit()
+
+
+def _link_patch_labels(bind=None) -> None:
+    """Patch labels set before labels were linked to classes: link each one that names a class of its
+    configuration (so renaming the class renames it). Only fills blanks; safe on every startup."""
+    from sqlalchemy import text
+
+    bind = bind or engine
+    with bind.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE patches SET label_class_id = ("
+                " SELECT c.id FROM annotation_classes c"
+                " WHERE c.config_version_id = patches.config_version_id AND lower(trim(c.name)) = lower(trim(patches.patch_label))"
+                " LIMIT 1)"
+                " WHERE label_class_id IS NULL AND patch_label IS NOT NULL"
+            )
+        )
 
 
 LEGACY_TOOLS = ["polygon", "rectangle", "point", "freehand"]
