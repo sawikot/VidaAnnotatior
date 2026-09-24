@@ -13,6 +13,29 @@ export type PatchStatus = "unannotated" | "active" | "annotated" | "reviewed" | 
 export type GeometryType = "point" | "line" | "freehand_line" | "rectangle" | "circle" | "polygon" | "freehand";
 export type ConfigStatus = "draft" | "locked" | "experimental" | "deprecated";
 
+/** A patch grid: the patch size, stride, magnification and tissue threshold patches are cut with. */
+export interface GridSpec {
+  patch_width: number;
+  patch_height: number;
+  stride_x: number;
+  stride_y: number;
+  target_magnification: number | null;
+  min_tissue_fraction: number;
+  include_edge_patches: boolean;
+  allow_partial_patches: boolean;
+}
+
+/** A grid a slide has (or its configuration's own grid, which it may not have generated yet). */
+export interface PatchGrid {
+  key: string;
+  label: string;
+  spec: GridSpec;
+  patch_count: number;
+  annotated_patch_count: number;
+  active: boolean;
+  is_default: boolean;
+}
+
 export type TissueSource = "auto" | "manual";
 export type TissueRegionMode = "add" | "remove";
 export type TissueRegionType = "rectangle" | "polygon" | "freehand" | "circle";
@@ -132,6 +155,8 @@ export interface Slide {
   tissue_source: TissueSource;
   /** Pass as `version` to image URLs: lets the browser keep this slide's tiles and patch images. */
   image_version: string;
+  /** The patch grid shown and exported (see PatchGrid); null before any patches exist. */
+  active_grid_key: string | null;
   active_config_version_id: number | null;
 
   created_at: string;

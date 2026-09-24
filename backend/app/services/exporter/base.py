@@ -6,6 +6,9 @@ included:
 
 * only the slide's **active** config version (older versions' patches and
   annotations stay in the database but are not mixed in),
+* the patches of the slide's **active grid** -- or of a custom grid cut on the fly
+  (``ExportOptions.grid``). Annotations drawn in another grid (or on the whole slide) are cut
+  into the exported grid's patches, so every grid carries every annotation,
 * never annotations on patches flagged "Exclude from training",
 * only the patches selected by ``ExportOptions.patch_scope`` (see ``options.py``).
 """
@@ -23,6 +26,8 @@ from app.models.config_version import AnnotationClass, ProjectConfigVersion
 from app.models.patch import Patch
 from app.models.slide import Slide
 
+from app.services.patch_generator import generate_patch_grid
+from app.services.patch_grid import GridSpec, active_grid_filter
 from app.services.projection import Projected, project_slide_annotations
 
 from .options import ExportOptions
@@ -40,8 +45,9 @@ class ExportData:
     classes: dict[int, AnnotationClass]
     grid: list[Patch] = field(default_factory=list)  # every patch of the active version
     counts: dict[int, int] = field(default_factory=dict)  # annotations per patch: its own plus slide-level ones reaching it
-    # Drawn directly on the whole slide (no patch), in Level-0 pixels. Always part of the slide's own
-    # export, whatever patch scope was chosen: the scope selects patches, and these belong to none.
+    # Not owned by a patch of this grid: drawn on the whole slide, or in another grid of the slide.
+    # In Level-0 pixels; always part of the slide's own export, whatever patch scope was chosen (the
+    # scope selects patches, and these belong to none of them). They reach patches via `projections`.
     slide_annotations: list[GeometryAnnotation] = field(default_factory=list)
     # Per patch, the part of each slide-level annotation lying inside it, in that patch's pixels.
     projections: dict[int, list[Projected]] = field(default_factory=dict)
@@ -72,28 +78,109 @@ def _in_scope(patch: Patch, n_annotations: int, scope: str) -> bool:
     raise ValueError(f"unknown patch scope '{scope}'")
 
 
+@dataclass
+class VirtualPatch:
+    """A patch of a grid cut only for an export (never stored). Has what exporters read of a Patch."""
+
+    id: int
+    slide_id: int
+    patch_index: int
+    x: int
+    y: int
+    level: int
+    width: int
+    height: int
+    width_l0: int
+    height_l0: int
+    tissue_fraction: float
+    grid_key: str
+    status: str = "unannotated"
+    patch_label: str | None = None
+    unsure: bool = False
+    flagged: bool = False
+    excluded: bool = False
+    notes: str | None = None
+    reviewed_by: str | None = None
+    reviewed_at: None = None
+
+
+# Ids of VirtualPatch: a range no stored patch reaches, unique across slides (COCO image ids, and the
+# id * 1e9 + image id annotation ids, must not collide when slides are combined into one file).
+VIRTUAL_ID_BASE = 500_000_000
+MAX_VIRTUAL_PER_SLIDE = 100_000
+
+
+def _custom_grid(slide: Slide, spec: GridSpec) -> list[VirtualPatch]:
+    from app.core.config import get_settings
+    from app.services import reader_cache
+    from app.services.tissue_mask import load_mask
+
+    meta = reader_cache.get_reader_for_slide(slide).get_metadata()
+    mask = None
+    if slide.tissue_mask_path:
+        path = get_settings().wsi_storage_dir / slide.tissue_mask_path
+        if path.exists():
+            mask = load_mask(path)
+    kept = [c for c in generate_patch_grid(meta, spec, mask, slide.tissue_mask_downsample) if c.kept]
+    if len(kept) > MAX_VIRTUAL_PER_SLIDE:
+        raise ValueError(
+            f"That grid cuts {len(kept):,} patches from {slide.filename}; at most {MAX_VIRTUAL_PER_SLIDE:,} per slide. "
+            "Use a larger patch or stride."
+        )
+    return [
+        VirtualPatch(
+            id=VIRTUAL_ID_BASE + slide.id * MAX_VIRTUAL_PER_SLIDE + i,
+            slide_id=slide.id,
+            patch_index=i,
+            x=c.x,
+            y=c.y,
+            level=c.level,
+            width=c.width,
+            height=c.height,
+            width_l0=c.width_l0,
+            height_l0=c.height_l0,
+            tissue_fraction=c.tissue_fraction,
+            grid_key=spec.key,
+        )
+        for i, c in enumerate(kept)
+    ]
+
+
 def load_export_data(db: Session, slide: Slide, options: ExportOptions | None = None) -> ExportData:
     options = options or ExportOptions()
     config = db.get(ProjectConfigVersion, slide.active_config_version_id) if slide.active_config_version_id else None
 
-    patch_query = db.query(Patch).filter(Patch.slide_id == slide.id)
     ann_query = db.query(GeometryAnnotation).filter(GeometryAnnotation.slide_id == slide.id)
     if config is not None:
-        patch_query = patch_query.filter(Patch.config_version_id == config.id)
         ann_query = ann_query.filter(GeometryAnnotation.config_version_id == config.id)
-
-    grid = patch_query.order_by(Patch.patch_index.asc(), Patch.id.asc()).all()
-    patch_by_id = {p.id: p for p in grid}
     stored = ann_query.order_by(GeometryAnnotation.id.asc()).all()
+
+    if options.grid is not None:
+        grid: list = _custom_grid(slide, options.grid)
+    else:
+        grid = active_grid_filter(db.query(Patch).filter(Patch.slide_id == slide.id), slide).order_by(Patch.patch_index.asc(), Patch.id.asc()).all()
+    patch_by_id = {p.id: p for p in grid}
     all_annotations = [a for a in stored if a.patch_id in patch_by_id]
-    slide_annotations = [a for a in stored if a.patch_id is None]
+
+    # Everything this grid does not own: slide-level annotations, and those drawn in another grid --
+    # unless the patch they were drawn in is excluded from training. Their own patches are kept in
+    # patch_by_id too, so coordinate formats still name the patch each was drawn in.
+    loose = [a for a in stored if a.patch_id not in patch_by_id]
+    owner_ids = {a.patch_id for a in loose if a.patch_id is not None}
+    owners = {p.id: p for p in db.query(Patch).filter(Patch.id.in_(owner_ids))} if owner_ids else {}
+    slide_annotations = [a for a in loose if a.patch_id is None or not owners.get(a.patch_id, None) or not owners[a.patch_id].excluded]
     projections = project_slide_annotations(slide_annotations, grid)
+    lookup = {**owners, **patch_by_id}
 
     counts: dict[int, int] = {}
     for a in all_annotations:
         counts[a.patch_id] = counts.get(a.patch_id, 0) + 1
     for patch_id, pieces in projections.items():
         counts[patch_id] = counts.get(patch_id, 0) + len(pieces)
+
+    if options.grid is not None:
+        for p in grid:  # a grid cut for this export has no review state: annotated or not
+            p.status = "annotated" if counts.get(p.id, 0) else "unannotated"
 
     patches = [p for p in grid if _in_scope(p, counts.get(p.id, 0), options.patch_scope)]
     in_scope_ids = {p.id for p in patches if not p.excluded}
@@ -108,7 +195,7 @@ def load_export_data(db: Session, slide: Slide, options: ExportOptions | None = 
     if missing:
         classes.update({c.id: c for c in db.query(AnnotationClass).filter(AnnotationClass.id.in_(missing))})
 
-    return ExportData(slide, config, patches, annotations, all_annotations, patch_by_id, classes, grid, counts, slide_annotations, projections)
+    return ExportData(slide, config, patches, annotations, all_annotations, lookup, classes, grid, counts, slide_annotations, projections)
 
 
 def dumps_with_line_items(doc: dict[str, Any], big_keys: tuple[str, ...]) -> str:

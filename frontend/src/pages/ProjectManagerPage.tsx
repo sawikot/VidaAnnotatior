@@ -188,7 +188,7 @@ export function ProjectManagerPage() {
               menuOpen={openMenuId === p.id}
               onToggleMenu={() => setOpenMenuId(openMenuId === p.id ? null : p.id)}
               onOpen={() => navigate(`/projects/${p.id}`)}
-              onOpenVersions={() => navigate(`/projects/${p.id}/versions`)}
+              onOpenVersions={() => navigate(`/projects/${p.id}/settings`)}
               onDelete={() => {
                 setOpenMenuId(null);
                 setDeleteTarget(p);
@@ -347,7 +347,7 @@ function ProjectCard({
           {menuOpen && (
             <div className="absolute right-0 top-9 z-20 w-44 bg-surface-container-lowest rounded shadow-lg border border-outline-variant py-1">
               <MenuItem icon="grid_view" label="Dashboard" onClick={onOpen} />
-              <MenuItem icon="account_tree" label="Config Versions" onClick={onOpenVersions} />
+              <MenuItem icon="settings" label="Settings" onClick={onOpenVersions} />
               <MenuItem icon="file_download" label="Export (pick a slide)" onClick={onOpen} />
               <div className="h-px bg-outline-variant my-1" />
               <MenuItem icon="delete" label="Delete Project" onClick={onDelete} destructive />

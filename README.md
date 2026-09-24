@@ -236,19 +236,35 @@ Open `http://localhost:5173`.
    (e.g. still open in another program on Windows) the leftover folder is removed at the next server start.
    Originals in `WSI_WATCH_DIR` that were imported by *Server path* are never touched — only the app's copies.
 
-9. **Change a project's configuration after creating it**: *Config Versions* → **Edit** on any version
-   (patch grid, tissue-detection defaults, diagnostic classes, tools, QC settings), or **Edit Details** on
-   the dashboard for the project's name/organ/team/description (the project ID is fixed).
-   - Classes, tools, QC settings and tissue defaults are always editable in place. Renaming or recoloring a
-     class keeps every annotation attached to it; removing a class that annotations still use is refused.
-   - Patch size, stride, magnification and minimum tissue define where every patch and annotation sits, so
-     they are editable in place **only** while a version has no generated patches and isn't locked. Otherwise
-     the editor tells you which fields you changed and saves everything as a **new version** instead; the
-     original version and its annotations are left exactly as they were.
-   - To run an existing slide on another version, choose it in **Config version** on *Slide Processing* and
-     press *Generate Coords*. Each slide shows only the patches/annotations of its active version, exports
-     contain only that version, and switching back restores the earlier set untouched. *Use for new slides*
-     sets which version newly added slides start on.
+9. **Project settings**: *Settings* (sidebar, dashboard, or the project card's `⋮` menu) shows and edits
+   everything in one place — project details (name, cancer type, team, description) and the configuration:
+   patch grid, tissue-detection defaults, diagnostic classes, tools and QC settings. Changes save in place.
+   - Renaming or recoloring a class keeps every annotation attached to it; removing a class that annotations
+     still use is refused.
+   - Changing the **patch grid** (size, stride, magnification, minimum tissue) never moves existing patches:
+     every patch records the grid it was cut with, so slides keep the grid they have and the new values are
+     used the next time *Generate Coords* runs. Only a **locked** version keeps its grid fixed (editing it
+     then saves a new version). Tissue method and coordinate system are fixed once patches exist.
+   - *Version history* lists every configuration version with its grid and usage; *Use for new slides*,
+     *Lock* and *Save a copy as a new version* live there. A slide can be switched to another version on
+     *Slide Processing*. (The old `/versions` address redirects here.)
+
+10. **Several patch sizes on one slide**: a slide can hold any number of **patch grids** under the same
+    configuration (so the same classes). In the workspace — or the *Patch grid* card on Slide Processing —
+    the patch-size selector switches between them, and *+ New patch size…* cuts another grid from the tissue
+    mask (size presets, overlap none/50 %, magnification, minimum tissue) and switches to it. **Annotations
+    are shared across grids**: every annotation is also stored in Level-0 pixels, so whatever size you work
+    in shows everything drawn so far (shapes from other grids appear under *From overlapping patches* and can
+    be edited; each stays owned by the patch it was drawn in). Switching opens the patch at the same spot.
+    Regenerating a grid updates it in place: patches at the same place keep their ids, status and
+    annotations, and annotated patches that no longer meet the threshold are kept.
+
+11. **Export in any patch grid**: the Export screen's *Patch grid* option is *As annotated* (each slide's
+    active grid; annotations drawn in other grids or on the whole slide are cut into it) or *Custom grid*
+    (patch size, stride, magnification, minimum tissue, edge patches). A custom grid is cut from each slide's
+    tissue mask **at download time** and every annotation is cut into it — nothing is stored. It applies to
+    every format, patch images and masks included (`?grid=<key>` on the export endpoints, e.g.
+    `512x512_s256x256_m20_t0.5`; see `GET /api/slides/{id}/grids`).
 
 ## Database
 

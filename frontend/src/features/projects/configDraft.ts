@@ -1,10 +1,9 @@
 import type { ClassSyncItem } from "../../services/api";
 import type { ConfigVersion } from "../../types/api";
 
-/** Fields that define patch geometry. Mirrors CRITICAL_FIELDS in
- * backend/app/services/config_versioning.py, restricted to the ones the edit
- * form exposes. Changing any of these on a version that has patches (or is
- * locked) must become a new version -- never an in-place overwrite. */
+/** Fields that define the patch grid. Mirrors GRID_FIELDS in backend/app/services/config_versioning.py,
+ * restricted to the ones the edit form exposes. They can be changed in place (existing patches keep the
+ * grid they were cut with), except on a locked version, where changing them becomes a new version. */
 export const CRITICAL_FIELDS = [
   "patch_width",
   "patch_height",
@@ -175,3 +174,12 @@ export function suggestVersionLabel(existing: string[]): string {
   while (taken.has(`v${n}.0`)) n += 1;
   return `v${n}.0`;
 }
+
+/** "2048 px, stride 1024, 40x, tissue >= 4%" -- the grid a configuration cuts patches with. */
+export function gridSummary(c: ConfigVersion): string {
+  const size = c.patch_width === c.patch_height ? `${c.patch_width}` : `${c.patch_width}x${c.patch_height}`;
+  const stride = c.stride_x === c.stride_y ? `${c.stride_x}` : `${c.stride_x}x${c.stride_y}`;
+  const mag = c.target_magnification ? `${c.target_magnification}x` : "default magnification";
+  return `${size} px, stride ${stride}, ${mag}, tissue >= ${Math.round(c.min_tissue_fraction * 100)}%`;
+}
+

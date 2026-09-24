@@ -8,18 +8,16 @@ from app.api.deps import get_patch_or_404, get_slide_or_404
 from app.database.session import get_db
 from app.models.patch import Patch
 from app.models.slide import Slide
+from app.services.patch_grid import active_grid_filter
 from app.schemas.patch import PatchListResponse, PatchOut, PatchUpdate
 
 router = APIRouter(tags=["patches"])
 
 
 def _slide_patches(db: Session, slide: Slide):
-    """A slide's patches for its *active* config version only -- older
-    versions' patches stay in the DB (with their annotations) but are not shown."""
-    q = db.query(Patch).filter(Patch.slide_id == slide.id)
-    if slide.active_config_version_id is not None:
-        q = q.filter(Patch.config_version_id == slide.active_config_version_id)
-    return q
+    """A slide's patches in its *active* config version and grid only -- its other grids' patches stay in
+    the DB (with their annotations, which every grid shows) but are not listed."""
+    return active_grid_filter(db.query(Patch).filter(Patch.slide_id == slide.id), slide)
 
 
 @router.get("/slides/{slide_id}/patches", response_model=PatchListResponse)

@@ -46,6 +46,7 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     _add_missing_columns()
+    _backfill_grid_keys()
     _upgrade_enabled_tools()
     _allow_slide_level_annotations()
 
@@ -60,7 +61,12 @@ def _add_missing_columns(bind=None) -> None:
 
     additions = {
         "projects": [("project_type", "VARCHAR(20) NOT NULL DEFAULT 'wsi'")],
-        "slides": [("tissue_source", "VARCHAR(20) NOT NULL DEFAULT 'auto'"), ("tissue_regions", "JSON")],
+        "slides": [
+            ("tissue_source", "VARCHAR(20) NOT NULL DEFAULT 'auto'"),
+            ("tissue_regions", "JSON"),
+            ("active_grid_key", "VARCHAR(80)"),
+        ],
+        "patches": [("grid_key", "VARCHAR(80)")],
     }
     bind = bind or engine
     inspector = inspect(bind)
@@ -73,6 +79,36 @@ def _add_missing_columns(bind=None) -> None:
             for name, ddl in columns:
                 if name not in existing:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+
+
+def _backfill_grid_keys(bind=None) -> None:
+    """Patches made before grids existed were cut with their config version's own settings: give
+    them that grid's key, and put each slide on the grid of its active version. Only fills blanks,
+    so it is safe to run on every startup."""
+    from sqlalchemy.orm import Session as OrmSession
+
+    from app.models.config_version import ProjectConfigVersion
+    from app.models.patch import Patch
+    from app.models.project import Project
+    from app.models.slide import Slide
+    from app.services.patch_grid import IMAGE_GRID_KEY, grid_key_of
+
+    bind = bind or engine
+    with OrmSession(bind) as db:
+        if db.query(Patch.id).filter(Patch.grid_key.is_(None)).first() is None and (
+            db.query(Slide.id).filter(Slide.active_grid_key.is_(None), Slide.active_config_version_id.isnot(None)).first() is None
+        ):
+            return
+        image_projects = {pid for (pid,) in db.query(Project.id).filter(Project.project_type == "image")}
+        for config in db.query(ProjectConfigVersion):
+            key = IMAGE_GRID_KEY if config.project_id in image_projects else grid_key_of(config)
+            db.query(Patch).filter(Patch.config_version_id == config.id, Patch.grid_key.is_(None)).update(
+                {Patch.grid_key: key}, synchronize_session=False
+            )
+            for slide in db.query(Slide).filter(Slide.active_config_version_id == config.id, Slide.active_grid_key.is_(None)):
+                if db.query(Patch.id).filter(Patch.slide_id == slide.id, Patch.config_version_id == config.id).first():
+                    slide.active_grid_key = key
+        db.commit()
 
 
 LEGACY_TOOLS = ["polygon", "rectangle", "point", "freehand"]

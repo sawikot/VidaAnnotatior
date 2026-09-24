@@ -22,6 +22,9 @@ class Patch(Base, TimestampMixin):
     )
 
     patch_index: Mapped[int] = mapped_column(Integer)  # stable ordering within the slide's grid
+    # Which grid (patch size, stride, magnification, tissue threshold) it was cut with -- see
+    # services/patch_grid.py. A slide can hold several grids; it shows its active one.
+    grid_key: Mapped[str | None] = mapped_column(String(80), default=None, index=True)
 
     # Level-0 absolute origin -- the master coordinate.
     x: Mapped[int] = mapped_column(Integer)

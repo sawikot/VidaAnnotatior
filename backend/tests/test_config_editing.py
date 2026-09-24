@@ -119,10 +119,13 @@ def test_update_is_atomic_when_class_edit_is_rejected(db):
     assert config.allow_skip is True and config.title is None
 
 
-def test_critical_edit_blocked_with_data_but_noncritical_and_classes_allowed(db):
+def test_with_data_the_grid_classes_and_settings_are_editable_but_not_the_tissue_method(db):
     _, config, _, _, _, _ = _seed(db)
+    # Existing patches keep the grid they were cut with, so the grid can change in place.
+    out = update_config(ConfigVersionUpdate(patch_width=1024, stride_x=512), config=config, db=db)
+    assert out.patch_width == 1024 and out.stride_x == 512
     with pytest.raises(HTTPException) as exc:
-        update_config(ConfigVersionUpdate(patch_width=1024), config=config, db=db)
+        update_config(ConfigVersionUpdate(tissue_method="other"), config=config, db=db)
     assert exc.value.status_code == 409
 
     rows = _rows(config)

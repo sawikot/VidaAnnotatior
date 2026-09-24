@@ -13,6 +13,7 @@ import { useTissueRegions } from "../features/tissue/useTissueRegions";
 import type { AnnotationTool } from "../stores/annotationStore";
 import { detectTissue, generatePatches, getConfig, getSlide, listConfigs, setSlideActiveConfig } from "../services/api";
 import { TissueMaskOutline } from "../features/tissue/TissueMaskOutline";
+import { GridSwitcher } from "../features/grids/GridSwitcher";
 import { tissueParamsOf } from "../features/projects/configDraft";
 import type { ConfigVersion, Slide, TissueRegionMode, TissueRegionType } from "../types/api";
 import { useContextStore } from "../stores/contextStore";
@@ -227,7 +228,7 @@ export function SlideProcessingPage() {
               onChange={(e) => handleSwitchConfig(Number(e.target.value))}
               disabled={busy || configs.length < 2}
               className="bg-[#1e293b] border border-slate-700 rounded px-space-sm py-1 text-label-md text-white font-mono disabled:opacity-60"
-              title={configs.length < 2 ? "Create another version on the Config Versions page to switch" : "Which configuration this slide's patches and annotations use"}
+              title={configs.length < 2 ? "Create another version in Settings to switch" : "Which configuration this slide's patches and annotations use"}
             >
               {configs.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -454,7 +455,7 @@ export function SlideProcessingPage() {
                 <span className="text-label-md text-slate-300">
                   Patch grid <span className="font-mono text-slate-500">({config.version_label})</span>
                 </span>
-                <Link to={`/projects/${pid}/versions`} className="text-label-sm text-sky-400 hover:underline flex items-center gap-1">
+                <Link to={`/projects/${pid}/settings`} className="text-label-sm text-sky-400 hover:underline flex items-center gap-1">
                   <MaterialIcon name="edit" className="!text-[14px]" />
                   Edit configuration
                 </Link>
@@ -466,8 +467,19 @@ export function SlideProcessingPage() {
                 <GridStat label="Min tissue" value={`${Math.round(config.min_tissue_fraction * 100)}%`} />
               </div>
               <span className="text-label-sm text-slate-500">
-                Set per configuration version; used by Generate Coords.
+                The project's grid, used by Generate Coords. The slide can hold other patch sizes too:
               </span>
+              <GridSwitcher
+                slideId={sid}
+                configVersionId={slide.active_config_version_id}
+                refreshKey={`${gridRefresh}:${slide.active_grid_key}`}
+                disabled={busy || !slide.tissue_mask_path}
+                onChanged={() => {
+                  setGridRefresh((n) => n + 1);
+                  setMode("grid");
+                  refresh();
+                }}
+              />
             </div>
           )}
 

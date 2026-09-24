@@ -1,11 +1,12 @@
 """Config version lock/fork rules.
 
-A ProjectConfigVersion's critical geometry parameters become immutable once
-it has any Patch generated against it, or once it has been explicitly locked
-("Locked & Certified") -- changing them would silently invalidate every
-existing patch/annotation's spatial meaning. Callers must fork a new version
-instead. This module is the single place that enforces that rule, plus the
-diagnostic-class editing rules.
+An explicitly locked version ("Locked & Certified") cannot have its critical parameters changed; a
+new version must be forked instead. The patch-grid fields (size, stride, magnification, tissue
+threshold) of an unlocked version can always be changed, even after patches exist: every patch
+records the grid it was cut with (services/patch_grid.py), so existing patches and annotations keep
+their meaning and the new values simply describe the grid used next. The remaining critical fields
+(tissue method, coordinate system) are fixed once patches exist. This module is the single place that
+enforces those rules, plus the diagnostic-class editing rules.
 """
 from __future__ import annotations
 
@@ -29,6 +30,18 @@ CRITICAL_FIELDS = (
     "min_tissue_fraction",
     "tissue_method",
     "coordinate_system",
+)
+
+
+# Describe the grid patches are cut with; each patch keeps its own grid, so these stay editable.
+GRID_FIELDS = (
+    "patch_width",
+    "patch_height",
+    "stride_x",
+    "stride_y",
+    "target_level",
+    "target_magnification",
+    "min_tissue_fraction",
 )
 
 
@@ -60,7 +73,8 @@ def assert_mutable(db: Session, config: ProjectConfigVersion, changes: dict) -> 
     locked = config.status == "locked"
     if not locked and not has_generated_data(db, config.id):
         return
-    touched_critical = [f for f in CRITICAL_FIELDS if f in changes and changes[f] != getattr(config, f)]
+    guarded = CRITICAL_FIELDS if locked else tuple(f for f in CRITICAL_FIELDS if f not in GRID_FIELDS)
+    touched_critical = [f for f in guarded if f in changes and changes[f] != getattr(config, f)]
     if touched_critical:
         reason = "is locked" if locked else "already has generated patches"
         raise ConfigLockedError(

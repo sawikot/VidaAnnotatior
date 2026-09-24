@@ -45,6 +45,8 @@ class Slide(Base, TimestampMixin):
     active_config_version_id: Mapped[int | None] = mapped_column(
         ForeignKey("project_config_versions.id"), default=None
     )
+    # The patch grid shown and exported (services/patch_grid.py); None before any patches exist.
+    active_grid_key: Mapped[str | None] = mapped_column(String(80), default=None)
 
     @property
     def image_version(self) -> str:

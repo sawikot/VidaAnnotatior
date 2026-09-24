@@ -14,10 +14,8 @@ import {
   type ConfigDraft,
 } from "./configDraft";
 
-interface Props {
-  open: boolean;
-  onClose: () => void;
-  config: ConfigVersion | null;
+interface EditorProps {
+  config: ConfigVersion;
   existingLabels: string[];
   /** "edit" changes this version in place where that is safe and otherwise
    * offers a new version; "fork" always creates a new version from it. */
@@ -25,9 +23,40 @@ interface Props {
   /** Image projects have no patch grid or tissue detection to edit, and never fork. */
   projectType?: ProjectType;
   onSaved: (result: { kind: "updated" | "forked"; config: ConfigVersion }) => void;
+  /** Shown as a Cancel button next to Save (the modal); the page has none. */
+  onCancel?: () => void;
 }
 
-export function EditConfigModal({ open, onClose, config, existingLabels, mode, projectType = "wsi", onSaved }: Props) {
+interface Props extends Omit<EditorProps, "config" | "onCancel"> {
+  open: boolean;
+  onClose: () => void;
+  config: ConfigVersion | null;
+}
+
+export function EditConfigModal({ open, onClose, config, mode, ...rest }: Props) {
+  if (!config) return null;
+  const title = mode === "fork" ? `New version from ${config.version_label}` : `Edit ${config.version_label}`;
+  return (
+    <Modal open={open} onClose={onClose} widthClass="max-w-3xl">
+      <div className="p-space-lg flex flex-col gap-space-lg">
+        <div className="flex items-center justify-between">
+          <h2 className="font-headline-md text-headline-md">{title}</h2>
+          <button onClick={onClose} aria-label="Close">
+            <MaterialIcon name="close" />
+          </button>
+        </div>
+        {open && <ConfigEditor key={config.id} config={config} mode={mode} onCancel={onClose} {...rest} />}
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * Every setting of a configuration version -- patch grid, tissue detection, classes, tools, QC -- with
+ * the save logic: changes are saved in place, except critical ones on a locked version (or anything in
+ * "fork" mode), which become a new version.
+ */
+export function ConfigEditor({ config, existingLabels, mode, projectType = "wsi", onSaved, onCancel }: EditorProps) {
   const isImage = projectType === "image";
   const pushToast = useUiStore((s) => s.pushToast);
   const annotatorName = useUiStore((s) => s.annotatorName);
@@ -40,7 +69,6 @@ export function EditConfigModal({ open, onClose, config, existingLabels, mode, p
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open || !config) return;
     setDraft(draftFromConfig(config));
     setLabel(suggestVersionLabel(existingLabels));
     setError(null);
@@ -54,15 +82,17 @@ export function EditConfigModal({ open, onClose, config, existingLabels, mode, p
       .catch(() => setUsage(null))
       .finally(() => setUsageLoaded(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, config?.id]);
+  }, [config.id, config.updated_at]);
 
   const diff = useMemo(() => (draft && config ? diffDraft(draft, config) : null), [draft, config]);
   const problem = draft ? validateDraft(draft) : null;
 
-  if (!config || !draft || !diff) return null;
+  if (!draft || !diff) return null;
 
   const hasData = (usage?.patch_count ?? 0) > 0;
-  const geometryLocked = hasData || config.status === "locked";
+  // Only an explicitly locked version keeps its grid: patches record the grid they were cut with, so
+  // changing it on a version that has patches just sets the grid used next.
+  const geometryLocked = config.status === "locked";
   const willFork = !isImage && (mode === "fork" || (geometryLocked && diff.touchedCritical.length > 0));
   const labelTaken = willFork && existingLabels.includes(label.trim());
   const labelOk = !willFork || (!!label.trim() && !labelTaken);
@@ -106,18 +136,8 @@ export function EditConfigModal({ open, onClose, config, existingLabels, mode, p
     }
   }
 
-  const title = mode === "fork" ? `New version from ${config.version_label}` : `Edit ${config.version_label}`;
-
   return (
-    <Modal open={open} onClose={onClose} widthClass="max-w-3xl">
-      <div className="p-space-lg flex flex-col gap-space-lg">
-        <div className="flex items-center justify-between">
-          <h2 className="font-headline-md text-headline-md">{title}</h2>
-          <button onClick={onClose} aria-label="Close">
-            <MaterialIcon name="close" />
-          </button>
-        </div>
-
+      <div className="flex flex-col gap-space-lg">
         {mode === "fork" ? (
           <p className="text-body-md text-on-surface-variant">
             Creates an independent version starting from {config.version_label}'s settings. Nothing already generated
@@ -127,17 +147,18 @@ export function EditConfigModal({ open, onClose, config, existingLabels, mode, p
           <div className="flex gap-space-sm rounded bg-surface-container-low border-l-4 border-primary p-space-md text-body-md">
             <MaterialIcon name="lock" className="text-primary shrink-0" />
             <span>
-              {hasData ? (
-                <>
-                  {config.version_label} has <strong>{usage?.patch_count.toLocaleString()}</strong> generated patches and{" "}
-                  <strong>{usage?.annotation_count.toLocaleString()}</strong> annotations.
-                </>
-              ) : (
-                <>{config.version_label} is locked.</>
-              )}{" "}
-              Everything below except patch size, stride, magnification and tissue threshold can be changed in place.
-              Changing those saves as a <strong>new version</strong>, so existing annotations keep the geometry they
-              were drawn against.
+              {config.version_label} is locked. Everything below except the patch grid can still be changed in place;
+              changing the grid saves as a <strong>new version</strong>.
+            </span>
+          </div>
+        ) : hasData && !isImage ? (
+          <div className="flex gap-space-sm rounded bg-surface-container-low border-l-4 border-primary p-space-md text-body-md">
+            <MaterialIcon name="info" className="text-primary shrink-0" />
+            <span>
+              {config.version_label} has <strong>{usage?.patch_count.toLocaleString()}</strong> patches and{" "}
+              <strong>{usage?.annotation_count.toLocaleString()}</strong> annotations. Changing the patch grid does not
+              move them: each slide keeps the grid it has (and every annotation shows in every grid). The new grid is
+              used the next time you generate patches, or pick another patch size in the workspace.
             </span>
           </div>
         ) : null}
@@ -183,7 +204,8 @@ export function EditConfigModal({ open, onClose, config, existingLabels, mode, p
           </div>
           {!geometryLocked && (
             <p className="text-body-sm text-on-surface-variant">
-              Grid changes take effect the next time you press <em>Generate Coords</em> on a slide.
+              The grid used the next time you press <em>Generate Coords</em>. Slides can also hold other grids: pick
+              a patch size in the annotation workspace.
             </p>
           )}
         </Section>
@@ -285,7 +307,7 @@ export function EditConfigModal({ open, onClose, config, existingLabels, mode, p
             {labelTaken && <span className="text-body-sm text-error">A version named {label.trim()} already exists.</span>}
             <span className="text-body-sm text-on-surface-variant">
               To use it on an existing slide, pick it in that slide's <em>Config version</em> selector on Slide
-              Processing, then run <em>Generate Coords</em>.
+              Processing, then run <em>Generate Coords</em>. <em>Use for new slides</em> in Settings makes it the default.
             </span>
           </div>
         )}
@@ -297,15 +319,16 @@ export function EditConfigModal({ open, onClose, config, existingLabels, mode, p
         )}
 
         <div className="flex items-center justify-end gap-space-sm">
-          <Button variant="ghost" onClick={onClose} disabled={busy}>
-            Cancel
-          </Button>
+          {onCancel && (
+            <Button variant="ghost" onClick={onCancel} disabled={busy}>
+              Cancel
+            </Button>
+          )}
           <Button variant="primary" icon={willFork ? "call_split" : "save"} onClick={handleSave} disabled={!canSave}>
             {busy ? "Saving..." : willFork ? "Save as new version" : "Save changes"}
           </Button>
         </div>
       </div>
-    </Modal>
   );
 }
 

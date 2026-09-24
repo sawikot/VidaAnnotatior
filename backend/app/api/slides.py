@@ -29,6 +29,7 @@ from app.schemas.slide import (
     WsiFormatsOut,
 )
 from app.services import reader_cache
+from app.services.patch_grid import IMAGE_GRID_KEY, grid_key_of
 from app.services.tissue_mask import auto_mask_path
 from app.services.image_import import IMAGE_EXTENSIONS, ImageDiscovery, ImageItem, discover_images
 from app.services.deepzoom_service import DeepZoomAdapter, purge_slide_tiles, render_thumbnail_bytes, render_tile_bytes
@@ -194,6 +195,7 @@ def _register_image(
             level_dimensions=[[item.width, item.height]],
             level_downsamples=[1.0],
             active_config_version_id=project.active_config_version_id,
+            active_grid_key=IMAGE_GRID_KEY,
         )
         db.add(slide)
         db.flush()
@@ -201,6 +203,7 @@ def _register_image(
             Patch(
                 slide_id=slide.id,
                 config_version_id=project.active_config_version_id,
+                grid_key=IMAGE_GRID_KEY,
                 patch_index=0,
                 x=0,
                 y=0,
@@ -458,10 +461,11 @@ def set_slide_active_config(
         raise HTTPException(status_code=404, detail="Config version not found in this slide's project")
 
     slide.active_config_version_id = config.id
-    has_patches = (
-        db.query(Patch.id).filter(Patch.slide_id == slide.id, Patch.config_version_id == config.id).first()
-        is not None
-    )
+    # Show that version's own grid if the slide has it, else whichever grid of it the slide has.
+    own = grid_key_of(config)
+    keys = {k for (k,) in db.query(Patch.grid_key).filter(Patch.slide_id == slide.id, Patch.config_version_id == config.id).distinct()}
+    slide.active_grid_key = own if own in keys else (sorted(k for k in keys if k)[0] if any(keys) else None)
+    has_patches = bool(keys)
     if has_patches:
         slide.status = "patches_generated"
     elif slide.tissue_mask_path:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_project_or_404
@@ -56,7 +56,14 @@ def list_images(
     )
     query = (
         db.query(Slide, Patch, func.coalesce(counts.c.n, 0))
-        .join(Patch, and_(Patch.slide_id == Slide.id, Patch.config_version_id == Slide.active_config_version_id))
+        .join(
+            Patch,
+            and_(
+                Patch.slide_id == Slide.id,
+                Patch.config_version_id == Slide.active_config_version_id,
+                or_(Slide.active_grid_key.is_(None), Patch.grid_key == Slide.active_grid_key),
+            ),
+        )
         .outerjoin(counts, counts.c.patch_id == Patch.id)
         .filter(Slide.project_id == project.id)
     )

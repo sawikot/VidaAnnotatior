@@ -117,8 +117,10 @@ class COCOExporter(Exporter):
                         "vp_shape_type": piece.type,
                         "vp_unsure": ann.unsure,
                         "vp_flagged": ann.flagged,
-                        "vp_scope": "slide",
+                        # "slide": drawn on the whole slide; "patch": drawn in a patch of another grid.
+                        "vp_scope": "slide" if ann.patch_id is None else "patch",
                         "vp_source_annotation_id": ann.id,
+                        "vp_source_patch_id": ann.patch_id,
                         "vp_clipped": piece.clipped,
                     }
                 )

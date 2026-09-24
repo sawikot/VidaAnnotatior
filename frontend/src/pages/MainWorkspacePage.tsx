@@ -10,6 +10,7 @@ import { WsiAnnotationView, type WsiFocus } from "../features/annotations/WsiAnn
 import { HOTKEYS, visibleTools as toolsFor } from "../features/annotations/tools";
 import { PatchGridOverlay, PATCH_STATUS_COLORS } from "../features/viewer/PatchGridOverlay";
 import { WsiViewer, type ViewportBbox } from "../features/viewer/WsiViewer";
+import { GridSwitcher } from "../features/grids/GridSwitcher";
 import {
   createAnnotation,
   createSlideAnnotation,
@@ -263,6 +264,22 @@ export function MainWorkspacePage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patch?.id, isImage, mode]);
+
+  /** After switching patch size: open the patch of the new grid at the same spot of the slide. */
+  async function afterGridChange() {
+    const cur = patch;
+    let next: Patch | null = null;
+    if (cur) {
+      const cx = Math.round(cur.x + cur.width_l0 / 2);
+      const cy = Math.round(cur.y + cur.height_l0 / 2);
+      next = (await listPatches(sid, { bbox: `${cx},${cy},${cx + 1},${cy + 1}`, limit: 1 })).items[0] ?? null;
+    }
+    next = next ?? (await listPatches(sid, { limit: 1 })).items[0] ?? null;
+    getSlide(sid).then(setSlide).catch(() => undefined);
+    setPatch(next);
+    setNoPatches(next === null);
+    setGridRefresh((n) => n + 1);
+  }
 
   function refreshTotals() {
     listPatches(sid, { limit: 1 }).then((r) => setTotals((t) => ({ ...t, total: r.total })));
@@ -717,6 +734,9 @@ export function MainWorkspacePage() {
       <div className="bg-[#0b1329] border-b border-[#1e293b] px-space-md py-1.5 flex items-center gap-space-md text-body-sm flex-wrap">
         <span className="font-headline-sm">{switching ? "Loading..." : slide.filename}</span>
         {!isImage && <AnnotationModeSwitch mode="patch" onChange={(next) => (next === "wsi" ? showPatchOnSlide() : undefined)} />}
+        {!isImage && (
+          <GridSwitcher slideId={sid} configVersionId={slide.active_config_version_id} refreshKey={slide.active_grid_key} onChanged={afterGridChange} />
+        )}
         {isImage ? (
           <span className="font-mono text-label-sm text-cyan-300">
             {patch.width.toLocaleString()} × {patch.height.toLocaleString()} px

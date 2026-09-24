@@ -1,3 +1,6 @@
+import type { GridSpec } from "../types/api";
+import { gridKey, gridProblem } from "./gridKey";
+
 /** What is chosen at export time besides the format. Mirrors backend/app/services/exporter/options.py. */
 export type PatchScope = "annotated" | "all" | "empty" | "reviewed";
 export type ExportContent = "annotations" | "images";
@@ -10,6 +13,8 @@ export interface ExportOptions {
   masks: boolean;
   /** One file for the whole project instead of one per slide; null lets the server decide. */
   combine: boolean | null;
+  /** Export in this patch grid instead of the one each slide was annotated in; null: as annotated. */
+  grid: GridSpec | null;
 }
 
 export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
@@ -18,6 +23,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   imageFormat: "jpg",
   masks: false,
   combine: null,
+  grid: null,
 };
 
 export interface ExportSummary {
@@ -48,6 +54,7 @@ export function optionsQuery(o: ExportOptions, opts: { project?: boolean } = {})
     if (n.masks) params.set("masks", "true");
   }
   if (opts.project && n.combine !== null) params.set("combine", String(n.combine));
+  if (n.grid && !gridProblem(n.grid)) params.set("grid", gridKey(n.grid));
   const text = params.toString();
   return text ? `?${text}` : "";
 }
@@ -57,6 +64,7 @@ export function summaryQuery(o: ExportOptions): string {
   const params = new URLSearchParams();
   if (o.patches !== DEFAULT_EXPORT_OPTIONS.patches) params.set("patches", o.patches);
   if (o.content === "images" && o.imageFormat !== DEFAULT_EXPORT_OPTIONS.imageFormat) params.set("image_format", o.imageFormat);
+  if (o.grid && !gridProblem(o.grid)) params.set("grid", gridKey(o.grid));
   const text = params.toString();
   return text ? `?${text}` : "";
 }
@@ -74,6 +82,7 @@ export function isCombinable(format: string): boolean {
 
 /** Why the chosen options can't be downloaded, or null. Checked before the user waits for a download. */
 export function exportProblem(summary: ExportSummary | null, o: ExportOptions): string | null {
+  if (o.grid && gridProblem(o.grid)) return gridProblem(o.grid);
   if (!summary) return null;
   if (summary.slides === 0) return "Nothing to export yet: no slide has a patch grid.";
   if (o.content === "images") {

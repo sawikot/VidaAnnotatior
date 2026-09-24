@@ -10,12 +10,14 @@ import {
   exportSlideUrl,
   getExportSummary,
   getSlide,
+  listGrids,
   listSlides,
   navigateDownload,
 } from "../services/api";
 import { useContextStore } from "../stores/contextStore";
 import { useUiStore } from "../stores/uiStore";
-import type { Slide } from "../types/api";
+import type { GridSpec, Slide } from "../types/api";
+import { gridKey } from "../utils/gridKey";
 import { formatBytes } from "../features/slides/uploadSelection";
 import {
   DEFAULT_EXPORT_OPTIONS,
@@ -56,6 +58,8 @@ export function ExportPage() {
   const [projectSlides, setProjectSlides] = useState<Slide[]>([]);
   const [downloading, setDownloading] = useState(false);
   const [summary, setSummary] = useState<ExportSummary | null>(null);
+  const [defaultGrid, setDefaultGrid] = useState<GridSpec | null>(null);
+  const gridParam = options.grid ? gridKey(options.grid) : ""; // re-fetch counts and preview when it changes
 
   const setOptions = (next: ExportOptions) => setOptionsState(normalizeOptions(next));
   const images = options.content === "images";
@@ -66,6 +70,9 @@ export function ExportPage() {
       setSlide(s);
       listSlides(s.project_id).then(setProjectSlides).catch(() => setProjectSlides([s]));
     });
+    listGrids(sid)
+      .then((grids) => setDefaultGrid((grids.find((g) => g.active) ?? grids.find((g) => g.is_default))?.spec ?? null))
+      .catch(() => setDefaultGrid(null));
   }, [sid]);
 
   // What the selection covers, refreshed whenever it changes.
@@ -79,7 +86,7 @@ export function ExportPage() {
     return () => {
       stale = true;
     };
-  }, [slide?.id, scope, options.patches, options.imageFormat, options.content]);
+  }, [slide?.id, scope, options.patches, options.imageFormat, options.content, gridParam]);
 
   // The preview always shows the annotation file (images can't be shown as text).
   useEffect(() => {
@@ -99,7 +106,7 @@ export function ExportPage() {
     return () => {
       stale = true;
     };
-  }, [sid, format, scope, options.patches]);
+  }, [sid, format, scope, options.patches, gridParam]);
 
   const problem = exportProblem(summary, options);
 
@@ -213,6 +220,7 @@ export function ExportPage() {
           isImageProject={isImage}
           summary={summary}
           problem={problem}
+          defaultGrid={defaultGrid}
         />
       </div>
 

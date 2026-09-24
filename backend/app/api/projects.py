@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_project_or_404
@@ -158,6 +158,7 @@ def _to_detail(db: Session, project: Project) -> ProjectDetailOut:
             .filter(
                 Slide.project_id == project.id,
                 Patch.config_version_id == Slide.active_config_version_id,
+                or_(Slide.active_grid_key.is_(None), Patch.grid_key == Slide.active_grid_key),
                 *criteria,
             )
             .scalar()

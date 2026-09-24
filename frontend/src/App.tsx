@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { ProjectManagerPage } from "./pages/ProjectManagerPage";
 import { NewProjectWizardPage } from "./pages/NewProjectWizardPage";
@@ -7,7 +7,7 @@ import { SlideProcessingPage } from "./pages/SlideProcessingPage";
 import { MainWorkspacePage } from "./pages/MainWorkspacePage";
 import { PatchGalleryPage } from "./pages/PatchGalleryPage";
 import { FullOverviewPage } from "./pages/FullOverviewPage";
-import { ConfigVersioningPage } from "./pages/ConfigVersioningPage";
+import { ProjectSettingsPage } from "./pages/ProjectSettingsPage";
 import { ExportPage } from "./pages/ExportPage";
 import { ImageAnnotateRedirect } from "./pages/ImageAnnotateRedirect";
 import { ImageGalleryPage } from "./pages/ImageGalleryPage";
@@ -22,7 +22,8 @@ export default function App() {
           <Route path="/projects/new" element={<NewProjectWizardPage />} />
           <Route path="/projects/:projectId/wizard" element={<NewProjectWizardPage />} />
           <Route path="/projects/:projectId" element={<ProjectDashboardPage />} />
-          <Route path="/projects/:projectId/versions" element={<ConfigVersioningPage />} />
+          <Route path="/projects/:projectId/settings" element={<ProjectSettingsPage />} />
+          <Route path="/projects/:projectId/versions" element={<SettingsRedirect />} />
           <Route path="/projects/:projectId/images" element={<ImageGalleryPage />} />
           <Route path="/projects/:projectId/annotate" element={<ImageAnnotateRedirect />} />
           <Route path="/projects/:projectId/slides/:slideId/processing" element={<SlideProcessingPage />} />
@@ -35,4 +36,10 @@ export default function App() {
       </Routes>
     </BrowserRouter>
   );
+}
+
+/** The old Configuration Versions address, kept working for bookmarks. */
+function SettingsRedirect() {
+  const { projectId } = useParams();
+  return <Navigate to={`/projects/${projectId}/settings`} replace />;
 }

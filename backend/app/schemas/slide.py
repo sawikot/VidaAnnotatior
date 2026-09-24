@@ -43,6 +43,7 @@ class SlideOut(BaseModel):
     tissue_source: str = "auto"
     image_version: str = "0"  # add as ?v= to tile/patch/thumbnail URLs so the browser may cache them
     active_config_version_id: int | None
+    active_grid_key: str | None = None
 
     created_at: datetime
     updated_at: datetime
@@ -126,11 +127,46 @@ class TissueRegionsOut(BaseModel):
     has_mask: bool
 
 
+class GridSpecIn(BaseModel):
+    """A patch grid: size, stride, magnification and tissue threshold (see services/patch_grid.py)."""
+
+    patch_width: int = Field(ge=16, le=8192)
+    patch_height: int = Field(ge=16, le=8192)
+    stride_x: int = Field(ge=1, le=8192)
+    stride_y: int = Field(ge=1, le=8192)
+    target_magnification: float | None = Field(default=None, gt=0, le=200)
+    min_tissue_fraction: float = Field(default=0.5, ge=0, le=1)
+    include_edge_patches: bool = False
+    allow_partial_patches: bool = False
+
+
+class GridOut(BaseModel):
+    key: str
+    label: str
+    spec: GridSpecIn
+    patch_count: int
+    annotated_patch_count: int
+    active: bool
+    is_default: bool  # the configuration's own grid
+
+
 class GeneratePatchesRequest(BaseModel):
     config_version_id: int
+    # Another grid than the configuration's own (a different patch size, stride ...). The slide
+    # switches to it; its other grids -- and every annotation -- stay as they are.
+    grid: GridSpecIn | None = None
 
 
 class GeneratePatchesResponse(BaseModel):
     total_candidates: int
     kept: int
     excluded: int
+    grid_key: str | None = None
+    grid_label: str | None = None
+    # Annotated patches of an earlier run of this grid that no longer meet the threshold: kept, so no
+    # annotation is ever lost by regenerating.
+    preserved: int = 0
+
+
+class SetActiveGridRequest(BaseModel):
+    grid_key: str

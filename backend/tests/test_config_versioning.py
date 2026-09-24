@@ -41,7 +41,7 @@ def test_explicitly_locked_version_blocks_critical_edits_even_without_patches(db
     assert_mutable(db, config, {"allow_skip": False, "title": "Renamed"})
 
 
-def test_locked_once_patches_exist(db):
+def test_once_patches_exist_only_the_grid_stays_editable(db):
     project, config = _seed(db)
     slide = Slide(project_id=project.id, filename="Patient_001.svs", source_type="upload")
     db.add(slide)
@@ -54,10 +54,15 @@ def test_locked_once_patches_exist(db):
     )
     db.commit()
 
+    # The grid can change: the existing patches keep the grid they were cut with.
+    assert_mutable(db, config, {"patch_width": 1024, "stride_x": 256, "min_tissue_fraction": 0.2})
+    # What the existing patches' meaning depends on cannot.
     with pytest.raises(ConfigLockedError):
-        assert_mutable(db, config, {"patch_width": 1024})
+        assert_mutable(db, config, {"tissue_method": "other"})
+    with pytest.raises(ConfigLockedError):
+        assert_mutable(db, config, {"coordinate_system": "level1"})
 
-    # Non-critical fields (e.g. QC flags) remain freely editable even after lock.
+    # Non-critical fields (e.g. QC flags) remain freely editable.
     assert_mutable(db, config, {"allow_skip": False})
 
 

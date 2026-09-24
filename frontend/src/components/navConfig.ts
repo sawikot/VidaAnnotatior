@@ -47,10 +47,10 @@ export const NAV_ITEMS: NavItem[] = [
     requiresProjectSlide: true,
   },
   {
-    key: "versioning",
-    label: "Versioning",
-    icon: "account_tree",
-    path: (p) => (p ? `/projects/${p}/versions` : "/projects"),
+    key: "settings",
+    label: "Settings",
+    icon: "settings",
+    path: (p) => (p ? `/projects/${p}/settings` : "/projects"),
     requiresProject: true,
   },
   {

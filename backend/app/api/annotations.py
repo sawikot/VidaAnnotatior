@@ -141,7 +141,10 @@ def import_annotations(
 
     classes_by_name = {c.name.strip().lower(): c for c in config.annotation_classes}
 
-    patches = db.query(Patch).filter(Patch.slide_id == slide.id, Patch.config_version_id == config.id).all()
+    patch_query = db.query(Patch).filter(Patch.slide_id == slide.id, Patch.config_version_id == config.id)
+    if config.id == slide.active_config_version_id and slide.active_grid_key is not None:
+        patch_query = patch_query.filter(Patch.grid_key == slide.active_grid_key)  # the grid on screen
+    patches = patch_query.all()
     patch_by_origin = {(p.x, p.y): p for p in patches}
 
     existing_by_patch: dict[int, list[GeometryAnnotation]] = defaultdict(list)

@@ -102,3 +102,20 @@ describe("exportProblem", () => {
     expect(exportProblem(summary({ images: 60_000 }), opts())).toBeNull(); // only images are capped
   });
 });
+
+describe("custom export grid", () => {
+  const grid = { patch_width: 512, patch_height: 512, stride_x: 256, stride_y: 256, target_magnification: 20, min_tissue_fraction: 0.5, include_edge_patches: false, allow_partial_patches: false };
+
+  it("is sent as the server's grid key, in downloads and in the counts", () => {
+    const o = { ...DEFAULT_EXPORT_OPTIONS, grid };
+    expect(optionsQuery(o)).toBe("?grid=512x512_s256x256_m20_t0.5");
+    expect(summaryQuery(o)).toBe("?grid=512x512_s256x256_m20_t0.5");
+    expect(optionsQuery(DEFAULT_EXPORT_OPTIONS)).toBe("");
+  });
+
+  it("an invalid grid is reported and not sent", () => {
+    const o = { ...DEFAULT_EXPORT_OPTIONS, grid: { ...grid, patch_width: 4 } };
+    expect(optionsQuery(o)).toBe("");
+    expect(exportProblem(null, o)).toMatch(/Patch size/);
+  });
+});

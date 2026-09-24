@@ -1,6 +1,8 @@
 import { MaterialIcon } from "../../components/MaterialIcon";
 import { Card } from "../../components/primitives";
 import { formatBytes } from "../slides/uploadSelection";
+import { GridForm } from "../grids/GridForm";
+import type { GridSpec } from "../../types/api";
 import {
   isCombinable,
   type ExportOptions,
@@ -17,9 +19,11 @@ interface Props {
   isImageProject: boolean;
   summary: ExportSummary | null;
   problem: string | null;
+  /** Where a custom grid starts from: the slide's current grid (or the project's). */
+  defaultGrid?: GridSpec | null;
 }
 
-export function ExportOptionsPanel({ options, onChange, format, scope, isImageProject, summary, problem }: Props) {
+export function ExportOptionsPanel({ options, onChange, format, scope, isImageProject, summary, problem, defaultGrid }: Props) {
   const patch = isImageProject ? "image" : "patch";
   const plural = isImageProject ? "images" : "patches";
   const set = (over: Partial<ExportOptions>) => onChange({ ...options, ...over });
@@ -36,6 +40,35 @@ export function ExportOptionsPanel({ options, onChange, format, scope, isImagePr
 
   return (
     <Card className="p-space-lg flex flex-col gap-space-lg">
+      {!isImageProject && (
+        <div>
+          <div className="text-label-md text-on-surface-variant mb-space-sm">Patch grid</div>
+          <div role="radiogroup" aria-label="Patch grid" className="grid sm:grid-cols-2 gap-space-sm">
+            <OptionCard
+              selected={!options.grid}
+              onSelect={() => set({ grid: null })}
+              title="As annotated"
+              body="Each slide's patches, in the patch size it is annotated in"
+            />
+            <OptionCard
+              selected={!!options.grid}
+              onSelect={() => defaultGrid && set({ grid: options.grid ?? { ...defaultGrid } })}
+              title="Custom grid"
+              body="Another patch size, stride or magnification -- cut at export time, nothing is saved"
+            />
+          </div>
+          {options.grid && (
+            <div className="mt-space-md flex flex-col gap-space-sm">
+              <GridForm value={options.grid} onChange={(grid) => set({ grid })} />
+              <Hint>
+                Each slide is cut into this grid from its tissue mask when you download, and every annotation -- whatever
+                patch size it was drawn in -- is cut into the new {plural}. Nothing in the project changes.
+              </Hint>
+            </div>
+          )}
+        </div>
+      )}
+
       <div>
         <div className="text-label-md text-on-surface-variant mb-space-sm">Which {plural} to include</div>
         <div role="radiogroup" aria-label="Patches to include" className="grid sm:grid-cols-2 xl:grid-cols-4 gap-space-sm">

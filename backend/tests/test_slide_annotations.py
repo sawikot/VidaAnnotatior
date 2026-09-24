@@ -200,15 +200,17 @@ def test_editing_uses_the_coordinate_space_the_annotation_lives_in(grid):
     assert client.get(f"/api/slides/{slide_id}/annotations?scope=slide").json() == []
 
 
-def test_slide_annotations_survive_regenerating_the_patch_grid(grid):
-    """Patch annotations go with their patches when the grid is rebuilt; slide-level ones belong to no patch."""
+def test_all_annotations_survive_regenerating_the_patch_grid(grid):
+    """Regenerating a grid updates it in place: a patch at the same place keeps its id and annotations,
+    and slide-level annotations belong to no patch anyway."""
     client, slide_id, patches, classes, config_id = grid
-    client.post(f"/api/patches/{patches[0]['id']}/annotations", json={"type": "point", "coordinates_patch_local": [[5, 5]]})
-    kept = make(client, slide_id, "circle", [[400, 400], [450, 400]], classes["Tumor"]).json()
+    point = client.post(f"/api/patches/{patches[0]['id']}/annotations", json={"type": "point", "coordinates_patch_local": [[5, 5]]}).json()
+    circle = make(client, slide_id, "circle", [[400, 400], [450, 400]], classes["Tumor"]).json()
 
     assert client.post(f"/api/slides/{slide_id}/generate-patches", json={"config_version_id": config_id}).status_code == 200
     remaining = client.get(f"/api/slides/{slide_id}/annotations").json()
-    assert [a["id"] for a in remaining] == [kept["id"]]  # the patch's point went with the old grid; the circle is still there
+    assert sorted(a["id"] for a in remaining) == sorted([point["id"], circle["id"]])
+    assert any(p["id"] == patches[0]["id"] for p in client.get(f"/api/slides/{slide_id}/patches").json()["items"])
 
 
 def test_importing_a_wsi_json_file_recreates_slide_level_annotations_and_is_repeatable(grid):

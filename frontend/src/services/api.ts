@@ -4,7 +4,9 @@ import type {
   ConfigVersion,
   GeometryAnnotation,
   GeometryType,
+  GridSpec,
   OverlappingAnnotation,
+  PatchGrid,
   Patch,
   ImageList,
   PatchListResponse,
@@ -216,6 +218,9 @@ export const tissueMaskUrl = (slideId: number) => `${API_BASE}/slides/${slideId}
 export const getTissueMaskOutline = (slideId: number) => request<{ rings: [number, number][][] }>(`/slides/${slideId}/tissue-mask/outline`);
 
 // ---- Processing ----
+export const listGrids = (slideId: number) => request<PatchGrid[]>(`/slides/${slideId}/grids`);
+export const setActiveGrid = (slideId: number, gridKey: string) =>
+  request<Slide>(`/slides/${slideId}/active-grid`, { method: "PUT", body: JSON.stringify({ grid_key: gridKey }) });
 export const getTissueRegions = (slideId: number) => request<TissueRegions>(`/slides/${slideId}/tissue-regions`);
 export const setTissueRegions = (slideId: number, source: TissueSource, regions: Omit<TissueRegion, "id">[]) =>
   request<TissueRegions>(`/slides/${slideId}/tissue-regions`, {
@@ -230,10 +235,11 @@ export const detectTissue = (
     `/slides/${slideId}/detect-tissue`,
     { method: "POST", body: JSON.stringify(params) },
   );
-export const generatePatches = (slideId: number, configVersionId: number) =>
-  request<{ total_candidates: number; kept: number; excluded: number }>(`/slides/${slideId}/generate-patches`, {
+/** Cut the slide's patches -- with the configuration's grid, or with `grid` (another patch size ...). */
+export const generatePatches = (slideId: number, configVersionId: number, grid?: GridSpec) =>
+  request<{ total_candidates: number; kept: number; excluded: number; grid_key: string; grid_label: string; preserved: number }>(`/slides/${slideId}/generate-patches`, {
     method: "POST",
-    body: JSON.stringify({ config_version_id: configVersionId }),
+    body: JSON.stringify({ config_version_id: configVersionId, ...(grid ? { grid } : {}) }),
   });
 
 // ---- Images (image projects) ----

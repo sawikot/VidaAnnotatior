@@ -97,8 +97,8 @@ export function ProjectDashboardPage() {
             <Button icon="edit" onClick={() => setEditOpen(true)}>
               Edit Details
             </Button>
-            <Button icon="account_tree" onClick={() => navigate(`/projects/${pid}/versions`)}>
-              Config
+            <Button icon="settings" onClick={() => navigate(`/projects/${pid}/settings`)}>
+              Settings
             </Button>
           </div>
         </div>
