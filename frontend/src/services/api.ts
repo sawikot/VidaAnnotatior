@@ -1,4 +1,4 @@
-import { optionsQuery, summaryQuery, type ExportOptions, type ExportSummary } from "../utils/exportOptions";
+import { optionsQuery, selectionQuery, summaryQuery, type ExportOptions, type ExportSummary } from "../utils/exportOptions";
 import type {
   ConfigUsage,
   ConfigVersion,
@@ -346,40 +346,25 @@ export const exportProjectUrl = (projectId: number, formatId: string, options?: 
   `${API_BASE}/projects/${projectId}/export/${formatId}${options ? optionsQuery(options, { project: true }) : ""}`;
 
 /** What an export with these options would cover (counts only; nothing is rendered). */
-export const getExportSummary = (scope: "slide" | "project", id: number, options: ExportOptions, format?: string) =>
-  request<ExportSummary>(`/${scope === "slide" ? "slides" : "projects"}/${id}/export-summary${summaryQuery(options, format)}`);
+export const getExportSummary = (scope: "slide" | "project", id: number, options: ExportOptions, formats?: string | string[], slides?: number[]) =>
+  request<ExportSummary>(`/${scope === "slide" ? "slides" : "projects"}/${id}/export-summary${summaryQuery(options, formats, slides)}`);
+
+/** The export screen's download: the chosen slides, in one or several formats (see `selectionDownloadKind`). */
+export const exportSelectionUrl = (projectId: number, options: ExportOptions, formats: string[], slides: number[], allSlides: number) =>
+  `${API_BASE}/projects/${projectId}/export${selectionQuery(options, formats, slides, allSlides)}`;
 
 /**
- * Downloads an export through fetch and resolves with its file name. Going through fetch rather than
- * navigating means a refusal (nothing processed yet, too many images ...) surfaces as a thrown message
- * instead of replacing the page with a JSON error. Server-side detail is passed through. The file is
- * held in memory, so use `navigateDownload` for large ones.
+ * Starts a download the browser itself carries out: the server's file streams straight to disk, under
+ * the server's file name, with no copy in memory. Call it directly from the click handler -- Chrome only
+ * lets a page start a download while it is still handling the user's click, so fetching the file first
+ * and saving it afterwards is silently blocked there for anything that takes a few seconds to build.
  */
-export async function downloadExport(url: string, fallbackName: string): Promise<string> {
-  let res: Response;
-  try {
-    res = await fetch(url);
-  } catch {
-    throw new Error("Export failed: could not reach the server");
-  }
-  if (!res.ok) {
-    const detail = await res.json().then((b) => b.detail).catch(() => null);
-    throw new Error(typeof detail === "string" ? detail : "Export failed");
-  }
-  const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? fallbackName;
-  const objectUrl = URL.createObjectURL(await res.blob());
+export function startDownload(url: string): void {
   const link = document.createElement("a");
-  link.href = objectUrl;
-  link.download = name;
+  link.href = url;
+  link.rel = "noopener";
+  link.style.display = "none";
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(objectUrl);
-  return name;
-}
-
-export const downloadProjectExport = (projectId: number, formatId: string, options?: ExportOptions) =>
-  downloadExport(exportProjectUrl(projectId, formatId, options), `project_${formatId}_all_slides.zip`);
-
-/** Hands the URL to the browser, which streams the response straight to disk (no copy in memory). */
-export function navigateDownload(url: string): void {
-  window.location.assign(url);
+  link.remove();
 }

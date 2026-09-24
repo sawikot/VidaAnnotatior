@@ -1095,7 +1095,7 @@ export function MainWorkspacePage() {
           </button>
         </div>
         <button
-          onClick={() => navigate(`/projects/${pid}/slides/${sid}/export`)}
+          onClick={() => navigate(`/projects/${pid}/export`)}
           className="text-label-md text-slate-400 hover:text-white flex items-center gap-1"
         >
           <MaterialIcon name="code" className="!text-[16px]" />

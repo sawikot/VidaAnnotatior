@@ -247,6 +247,91 @@ def export_project(
     )
 
 
+# ------------------------------------------------------- chosen slides, one or several formats
+
+
+def _ids(text: str | None, what: str) -> list[int] | None:
+    if text is None or not text.strip():
+        return None
+    try:
+        return [int(t) for t in text.split(",") if t.strip()]
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"{what} must be comma-separated ids") from exc
+
+
+def _exporters(formats: str) -> list:
+    ids = list(dict.fromkeys(f.strip() for f in formats.split(",") if f.strip()))
+    if not ids:
+        raise HTTPException(status_code=422, detail="Choose at least one format")
+    try:
+        return [get_exporter(f) for f in ids]
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _chosen_slides(project: Project, slide_ids: list[int] | None) -> list[Slide]:
+    slides = sorted(project.slides, key=lambda s: s.id)
+    if slide_ids is None:
+        return slides
+    by_id = {s.id: s for s in slides}
+    unknown = [i for i in slide_ids if i not in by_id]
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"Not slides of this project: {', '.join(map(str, unknown))}")
+    return [by_id[i] for i in dict.fromkeys(slide_ids)]
+
+
+@router.get("/projects/{project_id}/export")
+def export_selection(
+    formats: str = Query(..., description="one or more formats, comma-separated, e.g. coco,patch_csv"),
+    slides: str | None = Query(None, description="the slides to export, comma-separated ids (default: every slide)"),
+    patches: str = Query("annotated", description="annotated | all | empty | reviewed"),
+    content: str = Query("annotations", description="annotations | images (adds the patch images)"),
+    image_format: str = Query("jpg", description="jpg | png"),
+    masks: bool = Query(False),
+    combine: bool | None = Query(None, description="one combined file per dataset-level format (COCO, CSV) instead of one per slide"),
+    grid: str | None = Query(None, description="export in another patch grid, e.g. 512x512_s512x512_m20_t0.5"),
+    classify: dict = Depends(classification_params),
+    project: Project = Depends(get_project_or_404),
+    db: Session = Depends(get_db),
+):
+    """The export screen's download: the chosen slides, in one or several formats, optionally with images.
+
+    One format for one slide (or combined into one file) without images arrives as that file;
+    anything else is a ZIP (annotation files under ``annotations/``, images under ``images/``, and a
+    ``manifest.json`` listing slides that were skipped and why)."""
+    exporters = _exporters(formats)
+    options = _options(patches, content, image_format, masks, combine, grid, classify)
+    chosen = _chosen_slides(project, _ids(slides, "slides"))
+    ready = [s for s in chosen if _ready(db, s, options)]
+    skipped = [{"slide_id": s.id, "slide": s.filename, "reason": "No patch grid generated yet"} for s in chosen if s not in ready]
+    if not ready:
+        raise HTTPException(status_code=422, detail="Nothing to export: none of the chosen slides has a patch grid yet.")
+
+    slug = _safe_stem(project.slug, "project")
+    wants_combined = options.combine if options.combine is not None else (project.project_type == "image" or options.with_images)
+
+    if len(exporters) == 1 and not options.with_images:
+        exporter = exporters[0]
+        single = len(ready) == 1 and not skipped
+        if single or (wants_combined and exporter.mergeable):
+            try:
+                results = [exporter.export(db, s, options) for s in ready]
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            body = exporter.render(results[0] if single else exporter.merge(results))
+            stem = _safe_stem(ready[0].filename.rsplit(".", 1)[0], "slide") if single else slug
+            return Response(
+                content=body,
+                media_type=exporter.content_type,
+                headers={"Content-Disposition": f'attachment; filename="{stem}_{exporter.format_id}{_suffix(options)}.{exporter.file_extension}"'},
+            )
+
+    what = exporters[0].format_id if len(exporters) == 1 else "export"
+    bundle = _bundle(db, ready, exporters, options, combine=bool(wants_combined), label=slug, skipped=skipped)
+    tail = "_with_images" if options.with_images else ""
+    return _stream(bundle, f"{slug}_{what}{_suffix(options)}{tail}.zip")
+
+
 # --------------------------------------------------------------------------- preview counts
 
 
@@ -265,14 +350,9 @@ _BYTES_PER_PIXEL = {"jpg": 0.3, "png": 1.8}
 
 
 def _summary_out(db: Session, slides: list[Slide], options: ExportOptions, image_format: str, format_id: str | None = None) -> ExportSummaryOut:
-    exporter = None
-    if format_id:
-        try:
-            exporter = get_exporter(format_id)
-        except ValueError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
+    exporters = _exporters(format_id) if format_id else []  # formats decide which patches get images (classification)
     try:
-        total = summarize(db, [s for s in slides if _ready(db, s, options)], options, exporter)
+        total = summarize(db, [s for s in slides if _ready(db, s, options)], options, exporters)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return ExportSummaryOut(
@@ -304,12 +384,13 @@ def export_project_summary(
     patches: str = Query("annotated"),
     image_format: str = Query("jpg"),
     grid: str | None = Query(None),
-    format: str | None = Query(None),
+    format: str | None = Query(None, description="the export format(s), comma-separated"),
+    slides: str | None = Query(None, description="only these slides, comma-separated ids"),
     classify: dict = Depends(classification_params),
     project: Project = Depends(get_project_or_404),
     db: Session = Depends(get_db),
 ):
     return _summary_out(
-        db, sorted(project.slides, key=lambda s: s.id),
+        db, _chosen_slides(project, _ids(slides, "slides")),
         _options(patches, "annotations", image_format, False, None, grid, classify), image_format, format,
     )

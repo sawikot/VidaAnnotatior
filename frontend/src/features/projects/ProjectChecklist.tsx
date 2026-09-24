@@ -29,9 +29,9 @@ export function ProjectChecklist({ project, slides, onAdd }: Props) {
   function go(step: ChecklistStep) {
     if (step.target === "add") return onAdd();
     if (isImage && step.target === "workspace") return navigate(`/projects/${pid}/annotate`);
+    if (step.target === "export") return navigate(`/projects/${pid}/export`);
     if (step.slideId === null || step.target === null) return;
-    const scope = isImage && step.target === "export" ? "?scope=project" : "";
-    navigate(`/projects/${pid}/slides/${step.slideId}/${step.target}${scope}`);
+    navigate(`/projects/${pid}/slides/${step.slideId}/${step.target}`);
   }
 
   return (

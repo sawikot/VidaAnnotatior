@@ -57,7 +57,7 @@ export const NAV_ITEMS: NavItem[] = [
     key: "export",
     label: "Export",
     icon: "file_download",
-    path: (p, s) => (p && s ? `/projects/${p}/slides/${s}/export` : p ? `/projects/${p}` : "/projects"),
+    path: (p) => (p ? `/projects/${p}/export` : "/projects"),
     requiresProject: true,
   },
 ];

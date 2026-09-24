@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { MaterialIcon } from "../../components/MaterialIcon";
 import { Button } from "../../components/primitives";
-import { downloadProjectExport } from "../../services/api";
+import { exportProjectUrl, startDownload } from "../../services/api";
 import { useUiStore } from "../../stores/uiStore";
 import type { ProjectType } from "../../types/api";
 import { EXPORT_FORMATS, isMergedExport } from "./formats";
@@ -42,17 +42,13 @@ export function ExportAllMenu({
     };
   }, [open]);
 
-  async function run(formatId: string) {
+  function run(formatId: string) {
+    // Straight from the click: the browser downloads the file itself (see startDownload).
+    startDownload(exportProjectUrl(projectId, formatId));
+    pushToast("Building the export on the server. Your browser saves it as soon as it is ready.", "info");
+    setOpen(false);
     setBusyFormat(formatId);
-    try {
-      const name = await downloadProjectExport(projectId, formatId);
-      pushToast(`Exported all slides (${name})`, "success");
-      setOpen(false);
-    } catch (e) {
-      pushToast(e instanceof Error ? e.message : "Export failed", "error");
-    } finally {
-      setBusyFormat(null);
-    }
+    window.setTimeout(() => setBusyFormat(null), 3000);
   }
 
   return (

@@ -189,6 +189,7 @@ export function ProjectManagerPage() {
               onToggleMenu={() => setOpenMenuId(openMenuId === p.id ? null : p.id)}
               onOpen={() => navigate(`/projects/${p.id}`)}
               onOpenVersions={() => navigate(`/projects/${p.id}/settings`)}
+              onExport={() => navigate(`/projects/${p.id}/export`)}
               onDelete={() => {
                 setOpenMenuId(null);
                 setDeleteTarget(p);
@@ -299,12 +300,14 @@ function ProjectCard({
   onToggleMenu,
   onOpen,
   onOpenVersions,
+  onExport,
   onDelete,
 }: {
   project: Project;
   menuOpen: boolean;
   onToggleMenu: () => void;
   onOpen: () => void;
+  onExport: () => void;
   onOpenVersions: () => void;
   onDelete: () => void;
 }) {
@@ -348,7 +351,7 @@ function ProjectCard({
             <div className="absolute right-0 top-9 z-20 w-44 bg-surface-container-lowest rounded shadow-lg border border-outline-variant py-1">
               <MenuItem icon="grid_view" label="Dashboard" onClick={onOpen} />
               <MenuItem icon="settings" label="Settings" onClick={onOpenVersions} />
-              <MenuItem icon="file_download" label="Export (pick a slide)" onClick={onOpen} />
+              <MenuItem icon="file_download" label="Export" onClick={onExport} />
               <div className="h-px bg-outline-variant my-1" />
               <MenuItem icon="delete" label="Delete Project" onClick={onDelete} destructive />
             </div>

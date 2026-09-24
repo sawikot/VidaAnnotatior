@@ -19,6 +19,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],  # so a download started from the page keeps the server's file name
 )
 
 

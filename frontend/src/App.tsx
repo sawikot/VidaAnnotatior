@@ -8,7 +8,7 @@ import { MainWorkspacePage } from "./pages/MainWorkspacePage";
 import { PatchGalleryPage } from "./pages/PatchGalleryPage";
 import { FullOverviewPage } from "./pages/FullOverviewPage";
 import { ProjectSettingsPage } from "./pages/ProjectSettingsPage";
-import { ExportPage } from "./pages/ExportPage";
+import { ProjectExportPage } from "./pages/ProjectExportPage";
 import { ImageAnnotateRedirect } from "./pages/ImageAnnotateRedirect";
 import { ImageGalleryPage } from "./pages/ImageGalleryPage";
 
@@ -30,12 +30,19 @@ export default function App() {
           <Route path="/projects/:projectId/slides/:slideId/workspace" element={<MainWorkspacePage />} />
           <Route path="/projects/:projectId/slides/:slideId/gallery" element={<PatchGalleryPage />} />
           <Route path="/projects/:projectId/slides/:slideId/overview" element={<FullOverviewPage />} />
-          <Route path="/projects/:projectId/slides/:slideId/export" element={<ExportPage />} />
+          <Route path="/projects/:projectId/export" element={<ProjectExportPage />} />
+          <Route path="/projects/:projectId/slides/:slideId/export" element={<ExportRedirect />} />
           <Route path="*" element={<Navigate to="/projects" replace />} />
         </Route>
       </Routes>
     </BrowserRouter>
   );
+}
+
+/** Export belongs to the project now (every slide, pick which); the old per-slide address opens it. */
+function ExportRedirect() {
+  const { projectId } = useParams();
+  return <Navigate to={`/projects/${projectId}/export`} replace />;
 }
 
 /** The old Configuration Versions address, kept working for bookmarks. */

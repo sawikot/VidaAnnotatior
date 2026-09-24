@@ -84,7 +84,7 @@ export function ProjectDashboardPage() {
               projectId={pid}
               slideCount={slides.length}
               projectType={project.project_type}
-              optionsPath={slides[0] ? `/projects/${pid}/slides/${slides[0].id}/export?scope=project` : undefined}
+              optionsPath={`/projects/${pid}/export`}
               disabledReason={
                 slides.some((s) => ["patches_generated", "annotating", "reviewed"].includes(s.status))
                   ? undefined
@@ -285,7 +285,8 @@ function SlideRow({ slide, projectId }: { slide: Slide; projectId: number }) {
   const navigate = useNavigate();
   const canAnnotate = ["patches_generated", "annotating", "reviewed"].includes(slide.status);
   const next = slideNextStep(slide);
-  const open = (page: string) => navigate(`/projects/${projectId}/slides/${slide.id}/${page}`);
+  const open = (page: string) =>
+    navigate(page === "export" ? `/projects/${projectId}/export?slides=${slide.id}` : `/projects/${projectId}/slides/${slide.id}/${page}`);
   return (
     <tr className="border-t border-outline-variant hover:bg-surface-container-low/50">
       <td className="px-space-md py-space-sm">

@@ -81,17 +81,20 @@ export function optionsQuery(o: ExportOptions, opts: { project?: boolean } = {})
 
 /**
  * Query for the counts endpoint (it only needs the scope and the image format for the size estimate --
- * and, for patch classification, which patches get a class and so an image).
+ * and, for patch classification, which patches get a class and so an image). `formats` may be one
+ * format or several; `slides` limits the counts to those slides (the whole project when omitted).
  */
-export function summaryQuery(o: ExportOptions, format?: string): string {
+export function summaryQuery(o: ExportOptions, formats?: string | string[], slides?: number[]): string {
   const params = new URLSearchParams();
   if (o.patches !== DEFAULT_EXPORT_OPTIONS.patches) params.set("patches", o.patches);
   if (o.content === "images" && o.imageFormat !== DEFAULT_EXPORT_OPTIONS.imageFormat) params.set("image_format", o.imageFormat);
   if (o.grid && !gridProblem(o.grid)) params.set("grid", gridKey(o.grid));
-  if (format === CLASSIFICATION_FORMAT) {
-    params.set("format", format);
+  const list = typeof formats === "string" ? [formats] : (formats ?? []);
+  if (list.includes(CLASSIFICATION_FORMAT)) {
+    params.set("format", list.join(","));
     addClassification(o, params);
   }
+  if (slides) params.set("slides", slides.join(","));
   const text = params.toString();
   return text ? `?${text}` : "";
 }
@@ -119,4 +122,30 @@ export function exportProblem(summary: ExportSummary | null, o: ExportOptions): 
     }
   }
   return null;
+}
+
+/**
+ * Query for the export screen's download (GET /projects/{id}/export): the chosen formats and slides plus
+ * the options. `slides` is left out when every slide of the project is chosen, which keeps the URL short.
+ */
+export function selectionQuery(o: ExportOptions, formats: string[], slides: number[], allSlides: number): string {
+  const params = new URLSearchParams(optionsQuery(o, { project: true }).replace(/^\?/, ""));
+  params.set("formats", formats.join(","));
+  if (slides.length !== allSlides) params.set("slides", slides.join(","));
+  return `?${params.toString()}`;
+}
+
+/** What the export screen's download arrives as -- the same rule the server applies. */
+export function selectionDownloadKind(projectType: string | undefined, formats: string[], o: ExportOptions, slideCount: number): "zip" | "file" {
+  if (o.content === "images" || formats.length !== 1) return "zip";
+  if (slideCount === 1) return "file";
+  const combine = o.combine ?? projectType === "image";
+  return combine && COMBINABLE_FORMATS.has(formats[0]) ? "file" : "zip";
+}
+
+/** Why the export screen can't download yet, or null. */
+export function selectionProblem(summary: ExportSummary | null, o: ExportOptions, formats: string[], slideCount: number, noun = "slide"): string | null {
+  if (slideCount === 0) return `Choose at least one ${noun} to export.`;
+  if (formats.length === 0) return "Choose at least one file to download (JSON, CSV).";
+  return exportProblem(summary, o);
 }

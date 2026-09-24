@@ -6,6 +6,9 @@ import {
   normalizeOptions,
   optionsQuery,
   projectDownloadKind,
+  selectionDownloadKind,
+  selectionProblem,
+  selectionQuery,
   summaryQuery,
   type ExportOptions,
   type ExportSummary,
@@ -117,5 +120,31 @@ describe("custom export grid", () => {
     const o = { ...DEFAULT_EXPORT_OPTIONS, grid: { ...grid, patch_width: 4 } };
     expect(optionsQuery(o)).toBe("");
     expect(exportProblem(null, o)).toMatch(/Patch size/);
+  });
+});
+
+describe("the export screen's download", () => {
+  it("names the formats, and the slides only when not all are chosen", () => {
+    expect(selectionQuery(opts(), ["coco", "patch_csv"], [1, 2, 3], 3)).toBe("?formats=coco%2Cpatch_csv");
+    expect(selectionQuery(opts({ content: "images" }), ["coco"], [2], 3)).toBe("?content=images&formats=coco&slides=2");
+  });
+
+  it("is one file only for one format without images, for one slide or combined", () => {
+    expect(selectionDownloadKind("wsi", ["wsi_json"], opts(), 1)).toBe("file");
+    expect(selectionDownloadKind("wsi", ["wsi_json"], opts(), 2)).toBe("zip");
+    expect(selectionDownloadKind("wsi", ["coco"], opts({ combine: true }), 2)).toBe("file");
+    expect(selectionDownloadKind("wsi", ["coco", "patch_csv"], opts(), 1)).toBe("zip");
+    expect(selectionDownloadKind("wsi", ["coco"], opts({ content: "images" }), 1)).toBe("zip");
+  });
+
+  it("needs a slide and a file", () => {
+    expect(selectionProblem(summary(), opts(), ["coco"], 0)).toMatch(/at least one slide/);
+    expect(selectionProblem(summary(), opts(), [], 2)).toMatch(/at least one file/);
+    expect(selectionProblem(summary(), opts(), ["coco"], 2)).toBeNull();
+  });
+
+  it("counts only the chosen slides", () => {
+    expect(summaryQuery(opts(), ["coco"], [4, 5])).toBe("?slides=4%2C5");
+    expect(summaryQuery(opts(), ["patch_classification", "coco"])).toBe("?format=patch_classification%2Ccoco");
   });
 });

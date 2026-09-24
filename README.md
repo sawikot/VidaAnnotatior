@@ -353,6 +353,8 @@ patches, marked `excluded = true`, so it stays a complete registry).
 
 **Patch labels.** Choosing one of the project's classes as a patch's label also adds a rectangle of that class covering the whole patch (`whole_patch`), so the label reaches masks, COCO and other patch sizes. Label and rectangle stay linked: changing either changes the other, unsetting the label removes the rectangle, deleting the rectangle clears the label, and reshaping it turns it into an ordinary shape. Mixed and Artifact / Background are labels only. Labels are stored by class, so renaming a class renames them, and a class used by a label cannot be removed.
 
+**The export screen** (`/projects/{id}/export`, Export in the sidebar) belongs to the project: tick the slides (those without a patch grid are shown but can't be chosen), tick any number of files — JSON, CSV, patch images (+ masks) — and get them in one download via `GET /api/projects/{id}/export?formats=coco,patch_csv&slides=3,7&content=images`. One format for one slide (or combined) without images arrives as that file; anything else is a ZIP with `annotations/`, `images/` and a `manifest.json`. `export-summary` takes the same `slides` and `format` parameters.
+
 **All slides at once:** `GET /api/projects/{id}/export/{format}` returns one ZIP with a file per processed
 slide (same content as the single-slide download) plus a `manifest.json`. Slides with no patch grid yet, or
 whose export fails, don't block the download; they're listed under `skipped` with the reason. On the Export

@@ -1,8 +1,10 @@
 """The "annotations + patch images" download: one ZIP, built into a temporary file.
 
+One or several formats at once (say COCO + the patch CSV), with or without the patch images.
+
 Layout::
 
-    annotations/<file>           the annotation file(s) in the chosen format
+    annotations/<file>           the annotation file(s), for every chosen format
     images/<name>.<jpg|png>      one image per patch in scope (cut from the original slide)
                                  -- patch classification: images/<class>/<name>, beside labels.csv
     masks/<name>.png             optional label masks, same size as the images
@@ -47,24 +49,38 @@ class Summary:
     image_pixels: int = 0
 
 
-def _image_folders(slides: list[Slide], datas: dict, exporter: Exporter | None, options: ExportOptions) -> dict[int, str] | None:
-    """Patch id -> folder, when the format sorts images into folders (and leaves some patches out)."""
-    if exporter is None:
-        return None
-    folders: dict[int, str] | None = None
-    for slide in slides:
-        part = exporter.image_folders(datas[slide.id], options)
-        if part is not None:
-            folders = {**(folders or {}), **part}
-    return folders
+def _as_list(exporters: "Exporter | list[Exporter] | None") -> list[Exporter]:
+    if exporters is None:
+        return []
+    return list(exporters) if isinstance(exporters, (list, tuple)) else [exporters]
 
 
-def summarize(db: Session, slides: list[Slide], options: ExportOptions, exporter: Exporter | None = None) -> Summary:
+def _image_plan(data, exporters: list[Exporter], options: ExportOptions) -> dict[int, str]:
+    """Patch id -> folder under images/ ("" for images/ itself) for every patch of one slide that gets an image.
+
+    A format that sorts images into folders (patch classification) names the folder of the patches it
+    wants; any other format wants every patch in scope, straight in images/. With both, every patch gets
+    an image and a classified one sits in its class folder -- each annotation file names its images by
+    exactly the path written into the ZIP."""
+    drawable = [p for p in data.patches if not p.excluded]
+    folders: dict[int, str] = {}
+    wants_all = not exporters
+    for exporter in exporters:
+        part = exporter.image_folders(data, options)
+        if part is None:
+            wants_all = True
+        else:
+            folders.update(part)
+    return {p.id: folders.get(p.id, "") for p in drawable if wants_all or p.id in folders}
+
+
+def summarize(db: Session, slides: list[Slide], options: ExportOptions, exporters: "Exporter | list[Exporter] | None" = None) -> Summary:
+    chosen = _as_list(exporters)
     total = Summary()
     for slide in slides:
         data = load_export_data(db, slide, options)
-        folders = exporter.image_folders(data, options) if exporter is not None else None
-        drawable = [p for p in data.patches if not p.excluded and (folders is None or p.id in folders)]
+        plan = _image_plan(data, chosen, options)
+        drawable = [p for p in data.patches if p.id in plan]
         total.slides += 1
         total.patches += len(data.patches)
         total.annotations += len(data.annotations) + len(data.slide_annotations)
@@ -87,7 +103,7 @@ class Bundle:
 def build_bundle(
     db: Session,
     slides: list[Slide],
-    exporter: Exporter,
+    exporter: "Exporter | list[Exporter]",
     options: ExportOptions,
     *,
     combine: bool,
@@ -95,19 +111,29 @@ def build_bundle(
     max_images: int,
     skipped_slides: list[dict] | None = None,
 ) -> Bundle:
-    """Write the ZIP for ``slides`` into a temporary file (deleted when closed)."""
+    """Write the ZIP for ``slides`` into a temporary file (deleted when closed).
+
+    ``exporter`` may be several formats; each writes its own annotation file(s). Patch images are
+    written only with ``options.content == "images"``."""
+    exporters = _as_list(exporter)
+    several = len(exporters) > 1
     datas = {slide.id: load_export_data(db, slide, options) for slide in slides}
 
-    folders = _image_folders(slides, datas, exporter, options)
-    pairs = [(slide, p) for slide in slides for p in datas[slide.id].patches if not p.excluded and (folders is None or p.id in folders)]
-    if len(pairs) > max_images:
-        raise ExportTooLarge(
-            f"{len(pairs):,} images were requested but one download holds at most {max_images:,}. "
-            "Narrow the patch selection (for example annotated or reviewed only) or export one slide at a time."
-        )
-    names = unique_names(pairs, options.image_ext)
-    if folders is not None:  # e.g. patch classification: images/<class>/<name>
-        names = {pid: f"{folders[pid]}/{name}" for pid, name in names.items()}
+    names: dict[int, str] = {}
+    pairs: list = []
+    if options.with_images:
+        plans = {slide.id: _image_plan(datas[slide.id], exporters, options) for slide in slides}
+        pairs = [(slide, p) for slide in slides for p in datas[slide.id].patches if p.id in plans[slide.id]]
+        if len(pairs) > max_images:
+            raise ExportTooLarge(
+                f"{len(pairs):,} images were requested but one download holds at most {max_images:,}. "
+                "Narrow the patch selection (for example annotated or reviewed only) or export fewer slides at a time."
+            )
+        folder_of = {pid: folder for plan in plans.values() for pid, folder in plan.items()}
+        names = {
+            pid: (f"{folder_of[pid]}/{name}" if folder_of.get(pid) else name)  # e.g. patch classification: images/<class>/<name>
+            for pid, name in unique_names(pairs, options.image_ext).items()
+        }
     options = replace(options, image_names=names)
 
     skipped: list[dict] = list(skipped_slides or [])  # slides the caller already left out (e.g. no patch grid)
@@ -115,37 +141,40 @@ def build_bundle(
     tmp = tempfile.TemporaryFile()
     try:
         with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-            # -------- annotation file(s)
+            # -------- annotation file(s), per format
             files: list[dict] = []
-            results = []
-            for slide in slides:
-                try:
-                    results.append((slide, exporter.export(db, slide, options)))
-                except Exception as exc:  # noqa: BLE001 - one bad slide must not lose the rest
-                    skipped.append({"slide_id": slide.id, "slide": slide.filename, "reason": f"annotation export failed: {exc}"})
+            for exp in exporters:
+                results = []
+                for slide in slides:
+                    try:
+                        results.append((slide, exp.export(db, slide, options)))
+                    except Exception as exc:  # noqa: BLE001 - one bad slide must not lose the rest
+                        skipped.append(
+                            {"slide_id": slide.id, "slide": slide.filename, "format": exp.format_id, "reason": f"annotation export failed: {exc}"}
+                        )
 
-            if combine and exporter.mergeable and results:
-                body = exporter.render(exporter.merge([r for _, r in results])).encode("utf-8")
-                name = exporter.bundle_name or f"annotations/{_safe(label, 'project')}_{exporter.format_id}.{exporter.file_extension}"
-                archive.writestr(name, body)
-                files.append({"file": name, "slides": len(results), "bytes": len(body)})
-            else:
-                used: set[str] = set()
-                for slide, result in results:
-                    stem = _safe(slide.filename.rsplit(".", 1)[0], "slide")
-                    name = f"annotations/{stem}_{exporter.format_id}.{exporter.file_extension}"
-                    if exporter.bundle_name and len(results) == 1:
-                        name = exporter.bundle_name
-                    elif name in used:
-                        name = f"annotations/{stem}_{slide.id}_{exporter.format_id}.{exporter.file_extension}"
-                    used.add(name)
-                    body = exporter.render(result).encode("utf-8")
+                if combine and exp.mergeable and results:
+                    body = exp.render(exp.merge([r for _, r in results])).encode("utf-8")
+                    name = exp.bundle_name or f"annotations/{_safe(label, 'project')}_{exp.format_id}.{exp.file_extension}"
                     archive.writestr(name, body)
-                    files.append({"slide_id": slide.id, "slide": slide.filename, "file": name, "bytes": len(body)})
+                    files.append({"file": name, "format": exp.format_id, "slides": len(results), "bytes": len(body)})
+                else:
+                    used: set[str] = set()
+                    for slide, result in results:
+                        stem = _safe(slide.filename.rsplit(".", 1)[0], "slide")
+                        name = f"annotations/{stem}_{exp.format_id}.{exp.file_extension}"
+                        if exp.bundle_name and len(results) == 1:
+                            name = exp.bundle_name
+                        elif name in used:
+                            name = f"annotations/{stem}_{slide.id}_{exp.format_id}.{exp.file_extension}"
+                        used.add(name)
+                        body = exp.render(result).encode("utf-8")
+                        archive.writestr(name, body)
+                        files.append({"slide_id": slide.id, "slide": slide.filename, "format": exp.format_id, "file": name, "bytes": len(body)})
 
             # -------- images (and masks)
             class_index: dict[int, int] = {}
-            if options.masks:
+            if options.with_images and options.masks:
                 known = {}
                 for data in datas.values():
                     known.update(data.classes)
@@ -155,7 +184,7 @@ def build_bundle(
                 archive.writestr("mask_classes.json", json.dumps(classes_doc, indent=2))
 
             written = 0
-            for slide in slides:
+            for slide in slides if options.with_images else []:
                 data = datas[slide.id]
                 drawable = [p for p in data.patches if p.id in names]
                 if not drawable:
@@ -189,14 +218,17 @@ def build_bundle(
 
             manifest = {
                 "label": label,
-                "format": exporter.format_id,
+                "format": ",".join(e.format_id for e in exporters) if several else exporters[0].format_id,
                 "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "options": {
                     "patches": options.patch_scope,
-                    "image_format": options.image_format,
+                    "images": options.with_images,
+                    "image_format": options.image_format if options.with_images else None,
                     "masks": options.masks,
-                    "combined": bool(combine and exporter.mergeable),
+                    "grid": options.grid.key if options.grid else "as annotated",
+                    "combined": bool(combine and any(e.mergeable for e in exporters)),
                 },
+                "slides": [{"slide_id": s.id, "slide": s.filename} for s in slides],
                 "annotation_files": files,
                 "image_count": written,
                 "skipped_slides": skipped,

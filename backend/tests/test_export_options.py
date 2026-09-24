@@ -141,7 +141,7 @@ def test_slide_export_with_images_is_a_trainable_coco_dataset(annotated_slide): 
 
     manifest = json.loads(archive.read("manifest.json"))
     assert manifest["image_count"] == len(image_files) and manifest["image_errors"] == []
-    assert manifest["options"] == {"patches": "all", "image_format": "jpg", "masks": False, "combined": False}
+    assert manifest["options"] == {"patches": "all", "images": True, "image_format": "jpg", "masks": False, "grid": "as annotated", "combined": False}
 
 
 def test_images_scope_annotated_only_writes_just_those_patches(annotated_slide):  # noqa: F811
