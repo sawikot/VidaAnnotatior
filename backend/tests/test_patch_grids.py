@@ -176,3 +176,16 @@ def test_as_annotated_export_includes_annotations_from_other_grids(slide):
     doc = json.loads(client.get(f"/api/slides/{sid}/export/wsi_json").text)
     (entry,) = doc["annotations"]
     assert entry["annotation_id"] == f"ann_{ann['id']:06d}" and entry["source_patch"]["patch_id"] == first["id"]  # provenance kept
+
+
+def test_the_slide_list_reports_each_slides_progress(slide):
+    client, pid, sid, config_id = slide
+    (row,) = client.get(f"/api/projects/{pid}/slides").json()
+    assert (row["patch_count"], row["annotated_patch_count"], row["reviewed_patch_count"]) == (0, 0, 0)
+
+    generate(client, sid, config_id, BIG)
+    first, second = patches(client, sid)[:2]
+    client.post(f"/api/patches/{first['id']}/annotations", json={"type": "point", "coordinates_patch_local": [[5, 5]]})
+    client.put(f"/api/patches/{second['id']}", json={"status": "reviewed"})
+    (row,) = client.get(f"/api/projects/{pid}/slides").json()
+    assert (row["patch_count"], row["annotated_patch_count"], row["reviewed_patch_count"]) == (6, 2, 1)

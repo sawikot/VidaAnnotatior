@@ -184,6 +184,14 @@ Open `http://localhost:5173`.
 
 ## Using the app
 
+**Where am I, and what next?** The project dashboard shows a *Project progress* checklist — add slides →
+find tissue → generate patches → annotate → review → export — with how far each step is and a button for
+the current one (it opens the first slide that needs it). Each row of the slide table has a *Next step*
+button with a one-line status (e.g. *Continue · 12 of 80 patches annotated, 3 reviewed*).
+
+**Shortcuts:** press **?** anywhere (or the header's help button) for every keyboard and mouse shortcut,
+the ones for the current page first.
+
 1. **Create a project** (`/projects` → *New Project*). The wizard sets patch size, stride, target magnification, minimum tissue fraction,
    tissue-detection parameters, diagnostic classes (name/color/hotkey), and QC settings — all versioned
    as a `ProjectConfigVersion`.

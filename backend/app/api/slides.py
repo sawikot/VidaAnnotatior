@@ -10,6 +10,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import forbid_for_image_project, get_project_or_404, get_slide_or_404
@@ -29,7 +30,7 @@ from app.schemas.slide import (
     WsiFormatsOut,
 )
 from app.services import reader_cache
-from app.services.patch_grid import IMAGE_GRID_KEY, grid_key_of
+from app.services.patch_grid import IMAGE_GRID_KEY, active_grid_filter, grid_key_of
 from app.services.tissue_mask import auto_mask_path
 from app.services.image_import import IMAGE_EXTENSIONS, ImageDiscovery, ImageItem, discover_images
 from app.services.deepzoom_service import DeepZoomAdapter, purge_slide_tiles, render_thumbnail_bytes, render_tile_bytes
@@ -73,12 +74,22 @@ def _extract_and_store_metadata(db: Session, slide: Slide) -> None:
 
 @router.get("/projects/{project_id}/slides", response_model=list[SlideOut])
 def list_slides(project: Project = Depends(get_project_or_404), db: Session = Depends(get_db)):
-    return (
-        db.query(Slide)
-        .filter(Slide.project_id == project.id)
-        .order_by(Slide.created_at.desc())
-        .all()
-    )
+    """The project's slides, each with its progress in its active grid (patches, annotated, reviewed),
+    so a list can say what each slide needs next."""
+    slides = db.query(Slide).filter(Slide.project_id == project.id).order_by(Slide.created_at.desc()).all()
+    out = []
+    for slide in slides:
+        rows = dict(
+            active_grid_filter(db.query(Patch.status, func.count(Patch.id)).filter(Patch.slide_id == slide.id), slide)
+            .group_by(Patch.status)
+            .all()
+        )
+        item = SlideOut.model_validate(slide)
+        item.patch_count = sum(rows.values())
+        item.annotated_patch_count = rows.get("annotated", 0) + rows.get("reviewed", 0)
+        item.reviewed_patch_count = rows.get("reviewed", 0)
+        out.append(item)
+    return out
 
 
 @router.get("/wsi-formats", response_model=WsiFormatsOut)

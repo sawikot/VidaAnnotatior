@@ -4,6 +4,8 @@ import { Button, Card, IconButton, StatusPill } from "../components/primitives";
 import { ExportAllMenu } from "../features/export/ExportAllMenu";
 import { EditProjectModal } from "../features/projects/EditProjectModal";
 import { AddSlideModal } from "../features/slides/AddSlideModal";
+import { ProjectChecklist } from "../features/projects/ProjectChecklist";
+import { slideNextStep } from "../utils/nextStep";
 import { getProject, listSlides } from "../services/api";
 import type { ProjectDetail, Slide } from "../types/api";
 import { useContextStore } from "../stores/contextStore";
@@ -123,6 +125,8 @@ export function ProjectDashboardPage() {
         </Card>
       )}
 
+      <ProjectChecklist project={project} slides={slides} onAdd={() => setAddOpen(true)} />
+
       {/* Metrics */}
       {isImage ? (
         <div className="grid grid-cols-2 xl:grid-cols-5 gap-space-md">
@@ -220,7 +224,8 @@ export function ProjectDashboardPage() {
                   <th className="text-left px-space-md py-space-sm">Dimensions (L0)</th>
                   <th className="text-left px-space-md py-space-sm">Tissue %</th>
                   <th className="text-left px-space-md py-space-sm">Status</th>
-                  <th className="text-left px-space-md py-space-sm">Actions</th>
+                  <th className="text-left px-space-md py-space-sm">Next step</th>
+                  <th className="text-left px-space-md py-space-sm">Open</th>
                 </tr>
               </thead>
               <tbody>
@@ -284,6 +289,8 @@ function Metric({ label, value, sub }: { label: string; value: string; sub: stri
 function SlideRow({ slide, projectId }: { slide: Slide; projectId: number }) {
   const navigate = useNavigate();
   const canAnnotate = ["patches_generated", "annotating", "reviewed"].includes(slide.status);
+  const next = slideNextStep(slide);
+  const open = (page: string) => navigate(`/projects/${projectId}/slides/${slide.id}/${page}`);
   return (
     <tr className="border-t border-outline-variant hover:bg-surface-container-low/50">
       <td className="px-space-md py-space-sm">
@@ -301,22 +308,20 @@ function SlideRow({ slide, projectId }: { slide: Slide; projectId: number }) {
         {slide.status === "error" && <div className="text-body-sm text-error mt-1">{slide.error_message}</div>}
       </td>
       <td className="px-space-md py-space-sm">
-        <div className="flex items-center gap-1.5">
-          <Button variant="secondary" onClick={() => navigate(`/projects/${projectId}/slides/${slide.id}/processing`)}>
-            Process
-          </Button>
-          {canAnnotate && (
-            <Button variant="primary" onClick={() => navigate(`/projects/${projectId}/slides/${slide.id}/workspace`)}>
-              Annotate
+        <div className="flex items-center gap-space-sm">
+          {next.target && (
+            <Button variant={next.tone === "done" ? "secondary" : "primary"} onClick={() => open(next.target!)}>
+              {next.label}
             </Button>
           )}
-          {canAnnotate && (
-            <IconButton
-              icon="file_download"
-              onClick={() => navigate(`/projects/${projectId}/slides/${slide.id}/export`)}
-              title="Export this slide's annotations"
-            />
-          )}
+          <span className={`text-body-sm ${next.tone === "problem" ? "text-error" : "text-on-surface-variant"}`}>{next.detail}</span>
+        </div>
+      </td>
+      <td className="px-space-md py-space-sm">
+        <div className="flex items-center gap-0.5">
+          <IconButton icon="tune" onClick={() => open("processing")} title="Slide processing: tissue and patches" />
+          <IconButton icon="edit" onClick={() => open("workspace")} disabled={!canAnnotate} title={canAnnotate ? "Annotation workspace" : "Generate patches first"} />
+          <IconButton icon="file_download" onClick={() => open("export")} disabled={!canAnnotate} title={canAnnotate ? "Export this slide" : "Generate patches first"} />
         </div>
       </td>
     </tr>

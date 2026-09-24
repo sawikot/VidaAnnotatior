@@ -1043,7 +1043,7 @@ export function MainWorkspacePage() {
               className="flex-1 h-8 rounded bg-primary-container text-on-primary-container text-label-md"
               onClick={() => persistPatchFields({ status: "reviewed", reviewed_by: annotatorName }, true)}
             >
-              Validate (V)
+              Validate
             </button>
           </div>
         </div>

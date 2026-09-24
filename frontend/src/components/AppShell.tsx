@@ -4,6 +4,7 @@ import { getProject } from "../services/api";
 import { useContextStore } from "../stores/contextStore";
 import { IconRail } from "./IconRail";
 import { TopHeader } from "./TopHeader";
+import { ShortcutsSheet } from "./ShortcutsSheet";
 import { ToastHost } from "./ToastHost";
 
 export function AppShell() {
@@ -41,6 +42,7 @@ export function AppShell() {
         </main>
       </div>
       <ToastHost />
+      <ShortcutsSheet />
     </div>
   );
 }

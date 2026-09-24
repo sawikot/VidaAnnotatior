@@ -44,6 +44,10 @@ class SlideOut(BaseModel):
     image_version: str = "0"  # add as ?v= to tile/patch/thumbnail URLs so the browser may cache them
     active_config_version_id: int | None
     active_grid_key: str | None = None
+    # Progress in the active grid; filled in by the slide list (None elsewhere).
+    patch_count: int | None = None
+    annotated_patch_count: int | None = None
+    reviewed_patch_count: int | None = None
 
     created_at: datetime
     updated_at: datetime

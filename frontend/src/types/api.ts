@@ -157,6 +157,10 @@ export interface Slide {
   image_version: string;
   /** The patch grid shown and exported (see PatchGrid); null before any patches exist. */
   active_grid_key: string | null;
+  /** Progress in the active patch grid; only filled in by the project's slide list. */
+  patch_count?: number | null;
+  annotated_patch_count?: number | null;
+  reviewed_patch_count?: number | null;
   active_config_version_id: number | null;
 
   created_at: string;

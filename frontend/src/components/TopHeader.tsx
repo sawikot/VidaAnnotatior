@@ -11,6 +11,7 @@ export function TopHeader() {
   const slideId = params.slideId ? Number(params.slideId) : undefined;
   const activeProject = useContextStore((s) => s.activeProject);
   const annotatorName = useUiStore((s) => s.annotatorName);
+  const setShortcutsOpen = useUiStore((s) => s.setShortcutsOpen);
 
   const projectPill = activeProject
     ? `${activeProject.slug}: ${activeProject.name}${
@@ -65,7 +66,12 @@ export function TopHeader() {
         />
       </div>
 
-      <button className="w-8 h-8 rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white flex items-center justify-center shrink-0" title="Help">
+      <button
+        className="w-8 h-8 rounded-lg text-slate-400 hover:bg-[#1e293b] hover:text-white flex items-center justify-center shrink-0"
+        title="Keyboard and mouse shortcuts (?)"
+        aria-label="Keyboard and mouse shortcuts"
+        onClick={() => setShortcutsOpen(true)}
+      >
         <MaterialIcon name="help_outline" />
       </button>
 
