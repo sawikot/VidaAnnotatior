@@ -22,6 +22,8 @@ from app.schemas.annotation import (
     OverlappingAnnotationOut,
     OwnerPatchOut,
 )
+from app.api.access import current_user
+from app.models.user import User
 from app.services.patch_labels import on_fill_class_changed, on_fill_deleted
 from app.services.geometry import circle_center_radius, polygon_bounds, validate_shape
 from app.services.coordinate_transform import PatchOrigin, polygon_level0_to_patch_local, polygon_patch_local_to_level0
@@ -68,6 +70,7 @@ def create_slide_annotation(
     payload: SlideAnnotationCreate,
     slide: Slide = Depends(get_slide_or_404),
     db: Session = Depends(get_db),
+    user: User = Depends(current_user),
 ):
     """An annotation drawn directly on the whole slide rather than in one patch.
 
@@ -90,7 +93,8 @@ def create_slide_annotation(
         type=payload.type,
         coordinates_patch_local=[],
         coordinates_level0=payload.coordinates_level0,
-        created_by=payload.created_by,
+        created_by=user.name,  # the signed-in person, whatever the client says
+        created_by_id=user.id,
         notes=payload.notes,
         unsure=payload.unsure,
         flagged=payload.flagged,
@@ -117,6 +121,7 @@ def import_annotations(
     payload: ImportAnnotationsRequest,
     slide: Slide = Depends(get_slide_or_404),
     db: Session = Depends(get_db),
+    user: User = Depends(current_user),
 ):
     """Re-import annotations from a previously exported WSI JSON file (or any
     payload shaped like its `annotations[]` array).
@@ -186,7 +191,8 @@ def import_annotations(
                 type=entry.type,
                 coordinates_patch_local=[],
                 coordinates_level0=entry.coordinates,
-                created_by=payload.created_by or "Imported",
+                created_by=payload.created_by or f"Imported by {user.name}",
+                created_by_id=user.id,
                 unsure=entry.unsure,
                 flagged=entry.flagged,
             )
@@ -227,7 +233,8 @@ def import_annotations(
             type=entry.type,
             coordinates_patch_local=local_coords,
             coordinates_level0=entry.coordinates,
-            created_by=payload.created_by or "Imported",
+            created_by=payload.created_by or f"Imported by {user.name}",
+            created_by_id=user.id,
             unsure=entry.unsure,
             flagged=entry.flagged,
         )
@@ -326,6 +333,7 @@ def create_patch_annotation(
     payload: GeometryAnnotationCreate,
     patch: Patch = Depends(get_patch_or_404),
     db: Session = Depends(get_db),
+    user: User = Depends(current_user),
 ):
     if len(payload.coordinates_patch_local) < 1:
         raise HTTPException(status_code=422, detail="coordinates_patch_local must not be empty")
@@ -342,7 +350,8 @@ def create_patch_annotation(
         type=payload.type,
         coordinates_patch_local=payload.coordinates_patch_local,
         coordinates_level0=coords_l0,
-        created_by=payload.created_by,
+        created_by=user.name,  # the signed-in person, whatever the client says
+        created_by_id=user.id,
         notes=payload.notes,
         unsure=payload.unsure,
         flagged=payload.flagged,

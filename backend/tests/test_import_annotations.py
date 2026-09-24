@@ -1,4 +1,8 @@
+from types import SimpleNamespace
+
 from app.api.annotations import _coords_close, import_annotations
+
+IMPORTER = SimpleNamespace(name="Tester", id=None)
 from app.models.annotation import GeometryAnnotation
 from app.models.config_version import AnnotationClass, ProjectConfigVersion
 from app.models.patch import Patch
@@ -71,7 +75,7 @@ def _entry(x=20000, y=15000, label="Tumor", ann_type="polygon", coords=None):
 def test_import_creates_annotation_at_correct_local_coords(db):
     project, config, slide, patch, tumor = _seed(db)
     result = import_annotations(
-        ImportAnnotationsRequest(annotations=[_entry()]), slide=slide, db=db
+        ImportAnnotationsRequest(annotations=[_entry()]), slide=slide, db=db, user=IMPORTER
     )
 
     assert result.imported == 1
@@ -89,7 +93,7 @@ def test_import_creates_annotation_at_correct_local_coords(db):
 def test_import_skips_annotation_with_no_matching_patch(db):
     project, config, slide, patch, tumor = _seed(db)
     result = import_annotations(
-        ImportAnnotationsRequest(annotations=[_entry(x=99999, y=99999)]), slide=slide, db=db
+        ImportAnnotationsRequest(annotations=[_entry(x=99999, y=99999)]), slide=slide, db=db, user=IMPORTER
     )
     assert result.imported == 0
     assert result.skipped_no_matching_patch == 1
@@ -98,7 +102,7 @@ def test_import_skips_annotation_with_no_matching_patch(db):
 def test_import_skips_unknown_class_label(db):
     project, config, slide, patch, tumor = _seed(db)
     result = import_annotations(
-        ImportAnnotationsRequest(annotations=[_entry(label="Necrosis")]), slide=slide, db=db
+        ImportAnnotationsRequest(annotations=[_entry(label="Necrosis")]), slide=slide, db=db, user=IMPORTER
     )
     assert result.imported == 0
     assert result.skipped_unknown_class == 1
@@ -107,10 +111,10 @@ def test_import_skips_unknown_class_label(db):
 def test_reimporting_the_same_file_is_a_noop(db):
     project, config, slide, patch, tumor = _seed(db)
     entry = _entry()
-    first = import_annotations(ImportAnnotationsRequest(annotations=[entry]), slide=slide, db=db)
+    first = import_annotations(ImportAnnotationsRequest(annotations=[entry]), slide=slide, db=db, user=IMPORTER)
     assert first.imported == 1
 
-    second = import_annotations(ImportAnnotationsRequest(annotations=[entry]), slide=slide, db=db)
+    second = import_annotations(ImportAnnotationsRequest(annotations=[entry]), slide=slide, db=db, user=IMPORTER)
     assert second.imported == 0
     assert second.skipped_duplicate == 1
     assert db.query(GeometryAnnotation).filter(GeometryAnnotation.patch_id == patch.id).count() == 1

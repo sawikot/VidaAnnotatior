@@ -4,7 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
+from app.api.access import current_user
 from app.api.deps import get_project_or_404
+from app.models.user import ProjectMember, User
 from app.core.config import get_settings
 from app.database.session import get_db
 from app.models.annotation import GeometryAnnotation
@@ -22,12 +24,15 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 @router.get("", response_model=list[ProjectOut])
-def list_projects(db: Session = Depends(get_db)) -> list[Project]:
-    return db.query(Project).order_by(Project.updated_at.desc()).all()
+def list_projects(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[Project]:
+    query = db.query(Project)
+    if not user.is_admin:  # everyone else sees the projects they are a member of
+        query = query.join(ProjectMember, ProjectMember.project_id == Project.id).filter(ProjectMember.user_id == user.id)
+    return query.order_by(Project.updated_at.desc()).all()
 
 
 @router.post("", response_model=ProjectDetailOut, status_code=201)
-def create_project(payload: ProjectCreate, db: Session = Depends(get_db)) -> Project:
+def create_project(payload: ProjectCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Project:
     base_slug = slugify(payload.slug or payload.name)
     slug = unique_project_slug(db, base_slug)
 
@@ -42,6 +47,7 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db)) -> Pro
     )
     db.add(project)
     db.flush()
+    db.add(ProjectMember(project_id=project.id, user_id=user.id))  # the creator works in it
     # SQLite can hand a deleted project's id to a new one; never let the new
     # project inherit files a failed delete left behind under that id.
     project_storage.remove_tree(project_storage.project_dir(get_settings().wsi_storage_dir, project.id))

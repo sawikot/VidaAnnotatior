@@ -30,6 +30,7 @@ class GeometryAnnotation(Base, TimestampMixin):
     coordinates_level0: Mapped[list] = mapped_column(JSON)
 
     created_by: Mapped[str | None] = mapped_column(String(120), default=None)
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), default=None)  # the account
     notes: Mapped[str | None] = mapped_column(String(2000), default=None)
     unsure: Mapped[bool] = mapped_column(Boolean, default=False)
     flagged: Mapped[bool] = mapped_column(Boolean, default=False)

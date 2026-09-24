@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useCan } from "../stores/authStore";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button, Card, IconButton, StatusPill } from "../components/primitives";
 import { ExportAllMenu } from "../features/export/ExportAllMenu";
@@ -12,6 +13,7 @@ import { useContextStore } from "../stores/contextStore";
 import { useUiStore } from "../stores/uiStore";
 
 export function ProjectDashboardPage() {
+  const canManage = useCan().manage;
   const { projectId } = useParams();
   const pid = Number(projectId);
   const navigate = useNavigate();
@@ -77,9 +79,11 @@ export function ProjectDashboardPage() {
                 Annotate
               </Button>
             )}
-            <Button icon="add_photo_alternate" onClick={() => setAddOpen(true)}>
-              {isImage ? "Add Images" : "Add WSI Slides"}
-            </Button>
+            {canManage && (
+              <Button icon="add_photo_alternate" onClick={() => setAddOpen(true)}>
+                {isImage ? "Add Images" : "Add WSI Slides"}
+              </Button>
+            )}
             <ExportAllMenu
               projectId={pid}
               slideCount={slides.length}
@@ -91,9 +95,11 @@ export function ProjectDashboardPage() {
                   : "Process at least one slide (generate patches) before exporting"
               }
             />
-            <Button icon="edit" onClick={() => setEditOpen(true)}>
-              Edit Details
-            </Button>
+            {canManage && (
+              <Button icon="edit" onClick={() => setEditOpen(true)}>
+                Edit Details
+              </Button>
+            )}
             <Button icon="settings" onClick={() => navigate(`/projects/${pid}/settings`)}>
               Settings
             </Button>
@@ -283,6 +289,7 @@ function Metric({ label, value, sub }: { label: string; value: string; sub: stri
 
 function SlideRow({ slide, projectId }: { slide: Slide; projectId: number }) {
   const navigate = useNavigate();
+  const canManage = useCan().manage;
   const canAnnotate = ["patches_generated", "annotating", "reviewed"].includes(slide.status);
   const next = slideNextStep(slide);
   const open = (page: string) =>
@@ -305,7 +312,7 @@ function SlideRow({ slide, projectId }: { slide: Slide; projectId: number }) {
       </td>
       <td className="px-space-md py-space-sm">
         <div className="flex items-center gap-space-sm">
-          {next.target && (
+          {next.target && (canManage || next.target !== "processing") && (
             <Button variant={next.tone === "done" ? "secondary" : "primary"} onClick={() => open(next.target!)}>
               {next.label}
             </Button>
@@ -315,7 +322,7 @@ function SlideRow({ slide, projectId }: { slide: Slide; projectId: number }) {
       </td>
       <td className="px-space-md py-space-sm">
         <div className="flex items-center gap-0.5">
-          <IconButton icon="tune" onClick={() => open("processing")} title="Slide processing: tissue and patches" />
+          {canManage && <IconButton icon="tune" onClick={() => open("processing")} title="Slide processing: tissue and patches" />}
           <IconButton icon="edit" onClick={() => open("workspace")} disabled={!canAnnotate} title={canAnnotate ? "Annotation workspace" : "Generate patches first"} />
           <IconButton icon="file_download" onClick={() => open("export")} disabled={!canAnnotate} title={canAnnotate ? "Export this slide" : "Generate patches first"} />
         </div>

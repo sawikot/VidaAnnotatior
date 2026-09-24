@@ -169,11 +169,44 @@ for this MVP — tables are created via `Base.metadata.create_all`; add Alembic 
 ```bash
 cd frontend
 npm install
-cp .env.example .env               # VITE_API_BASE must match the backend's host:port
+cp .env.example .env               # nothing to set: the dev server passes /api to the backend
 npm run dev
 ```
 
-Open `http://localhost:5173`.
+Open `http://localhost:5173`. The first visit asks you to create the **administrator** account.
+
+### Running it on a server (others sign in from their own devices)
+
+```bash
+cd frontend && npm install && npm run build      # the backend serves frontend/dist itself
+cd ../backend && python -m uvicorn app.main:app --host 0.0.0.0 --port 8088
+```
+
+Everyone opens `http://<server>:8088` — the page and the API on one address, which the sign-in cookie
+needs. On a network, put it behind HTTPS (e.g. nginx or Caddy as a reverse proxy) and set
+`COOKIE_SECURE=true` in `.env` so the session cookie is only ever sent encrypted. `SESSION_DAYS`
+(default 14) is how long a sign-in lasts.
+
+## Users and access
+
+Everyone signs in with an email and password. There are three roles:
+
+| Role | Can |
+|---|---|
+| **Administrator** | Manage users (Users page); see and manage every project |
+| **Project manager** | Create projects; in their projects change settings, add slides, run processing, manage members, delete |
+| **Annotator** | In their projects: annotate, label, review (Validate) and export |
+
+- People see only the projects they are **members** of (Project settings → Members); administrators
+  see all. Whoever creates a project becomes a member of it.
+- The administrator adds people on the Users page, either with a password or — better — with a
+  one-time **password link** (valid 7 days) they open to choose their own. The same link resets a
+  forgotten password. Disabling an account signs it out everywhere at once.
+- Who drew an annotation (`created_by`) and who reviewed a patch (`reviewed_by`) are filled in by the
+  server from the signed-in account; the names from before accounts existed are kept as they were.
+- The rules are enforced by the server on every request (`backend/app/api/access.py`), not only by
+  hiding buttons. Passwords are stored as salted scrypt hashes; sessions and password links only as
+  SHA-256 digests. Repeated failed sign-ins are slowed down.
 
 ### Windows notes
 

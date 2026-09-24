@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { MembersPanel } from "../features/projects/MembersPanel";
+import { useCan } from "../stores/authStore";
 import { Link, useParams } from "react-router-dom";
 import { Button, Card } from "../components/primitives";
 import { ConfigEditor } from "../features/projects/ConfigEditor";
@@ -18,6 +20,7 @@ export function ProjectSettingsPage() {
   const pid = Number(projectId);
   const pushToast = useUiStore((s) => s.pushToast);
   const setActiveProject = useContextStore((s) => s.setActiveProject);
+  const { manage: canManage, user } = useCan();
 
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -52,9 +55,11 @@ export function ProjectSettingsPage() {
       <Card className="p-space-md flex flex-col gap-space-sm">
         <div className="flex items-center justify-between">
           <h2 className="font-headline-sm text-headline-sm">Project details</h2>
-          <Button icon="edit" onClick={() => setDetailsOpen(true)}>
-            Edit details
-          </Button>
+          {canManage && (
+            <Button icon="edit" onClick={() => setDetailsOpen(true)}>
+              Edit details
+            </Button>
+          )}
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-space-md text-body-md">
           <Kv label="Name" value={project.name} />
@@ -65,9 +70,15 @@ export function ProjectSettingsPage() {
         {project.description && <p className="text-body-md text-on-surface-variant">{project.description}</p>}
       </Card>
 
-      {config && !isImage && <PatchSizesPanel projectId={pid} config={config} onConfigChanged={() => refresh()} />}
+      <MembersPanel projectId={pid} canEdit={canManage} currentUserId={user?.id} />
 
-      {config && (
+      {!canManage && (
+        <p className="text-body-sm text-on-surface-variant">Only project managers and administrators can change this project&apos;s settings.</p>
+      )}
+
+      {canManage && config && !isImage && <PatchSizesPanel projectId={pid} config={config} onConfigChanged={() => refresh()} />}
+
+      {canManage && config && (
         <Card className="p-space-md flex flex-col gap-space-md">
           <h2 className="font-headline-sm text-headline-sm">Configuration</h2>
           <ConfigEditor key={config.id} config={config} projectType={project.project_type} onSaved={() => refresh()} />

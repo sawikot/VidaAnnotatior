@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useAuthStore } from "../stores/authStore";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { MaterialIcon } from "../components/MaterialIcon";
 import { IconButton } from "../components/primitives";
@@ -54,7 +55,7 @@ export function MainWorkspacePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const pushToast = useUiStore((s) => s.pushToast);
-  const annotatorName = useUiStore((s) => s.annotatorName);
+  const annotatorName = useAuthStore((s) => s.user?.name ?? "");
   const setActiveSlide = useContextStore((s) => s.setActiveSlide);
 
   const tool = useAnnotationStore((s) => s.tool);

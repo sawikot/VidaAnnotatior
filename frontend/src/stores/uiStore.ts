@@ -7,8 +7,6 @@ export interface Toast {
 }
 
 interface UiState {
-  annotatorName: string;
-  setAnnotatorName: (name: string) => void;
   toasts: Toast[];
   pushToast: (message: string, tone?: Toast["tone"]) => void;
   dismissToast: (id: number) => void;
@@ -20,11 +18,6 @@ interface UiState {
 let toastId = 0;
 
 export const useUiStore = create<UiState>((set) => ({
-  annotatorName: localStorage.getItem("annotatorName") || "Dr. Eliza Chen",
-  setAnnotatorName: (name) => {
-    localStorage.setItem("annotatorName", name);
-    set({ annotatorName: name });
-  },
   toasts: [],
   pushToast: (message, tone = "info") => {
     const id = ++toastId;

@@ -23,7 +23,15 @@ import type {
   WsiFormats,
 } from "../types/api";
 
-export const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8088/api";
+// Same address as the page (the dev server proxies /api to the backend; in production the backend
+// serves the page), so the sign-in cookie reaches every request -- images and tiles included.
+export const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
+
+let onUnauthorized: () => void = () => undefined;
+/** Called when the server answers 401 (not signed in, or the session ended). */
+export function setUnauthorizedHandler(handler: () => void): void {
+  onUnauthorized = handler;
+}
 
 /** FastAPI returns `detail` as a string for our own errors and as a list of
  * {loc, msg} objects for request-validation errors -- flatten both to text. */
@@ -59,6 +67,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
         : options.headers,
   });
   if (!res.ok) {
+    if (res.status === 401 && !path.startsWith("/auth/")) onUnauthorized();
     let detail: unknown;
     try {
       detail = await res.json();
@@ -368,3 +377,55 @@ export function startDownload(url: string): void {
   link.click();
   link.remove();
 }
+
+// ---- Signing in, users, project members ----
+export type UserRole = "admin" | "manager" | "annotator";
+
+export interface AuthUser {
+  id: number;
+  email: string;
+  name: string;
+  role: UserRole;
+  is_active: boolean;
+  has_password: boolean;
+  project_count: number;
+}
+
+export interface ProjectMemberInfo {
+  id: number;
+  name: string;
+  email: string;
+  role: UserRole;
+  is_active: boolean;
+}
+
+export interface UserCreated {
+  user: AuthUser;
+  /** Present when no password was given: the person sets one from /set-password?token=... */
+  password_link_token: string | null;
+}
+
+const post = <T,>(path: string, body: unknown) => request<T>(path, { method: "POST", body: JSON.stringify(body) });
+
+export const getAuthStatus = () => request<{ needs_setup: boolean; user: AuthUser | null }>("/auth/status");
+export const setupAdmin = (body: { name: string; email: string; password: string }) => post<AuthUser>("/auth/setup", body);
+export const login = (email: string, password: string) => post<AuthUser>("/auth/login", { email, password });
+export const logout = () => request<void>("/auth/logout", { method: "POST" });
+export const changePassword = (current_password: string, new_password: string) =>
+  post<void>("/auth/password", { current_password, new_password });
+export const getPasswordLink = (token: string) => request<AuthUser>(`/auth/password-link/${encodeURIComponent(token)}`);
+export const submitPasswordLink = (token: string, password: string) => post<AuthUser>("/auth/password-link", { token, password });
+
+export const listUsers = () => request<AuthUser[]>("/users");
+export const createUser = (body: { name: string; email: string; role: UserRole; password?: string }) => post<UserCreated>("/users", body);
+export const updateUser = (id: number, body: { name?: string; role?: UserRole; is_active?: boolean }) =>
+  request<AuthUser>(`/users/${id}`, { method: "PUT", body: JSON.stringify(body) });
+export const newPasswordLink = (id: number) => post<UserCreated>(`/users/${id}/password-link`, {});
+
+export const listMembers = (projectId: number) => request<ProjectMemberInfo[]>(`/projects/${projectId}/members`);
+export const addMember = (projectId: number, userId: number) => post<ProjectMemberInfo[]>(`/projects/${projectId}/members`, { user_id: userId });
+export const removeMember = (projectId: number, userId: number) =>
+  request<ProjectMemberInfo[]>(`/projects/${projectId}/members/${userId}`, { method: "DELETE" });
+
+/** The address a password link opens (shown to the administrator to pass on). */
+export const passwordLinkUrl = (token: string) => `${window.location.origin}/set-password?token=${encodeURIComponent(token)}`;

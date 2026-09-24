@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useCan } from "../stores/authStore";
 import { useNavigate, useParams } from "react-router-dom";
 import { MaterialIcon } from "../components/MaterialIcon";
 import { Pagination } from "../components/Pagination";
@@ -13,6 +14,7 @@ type FilterKey = "all" | PatchStatus | "flagged";
 
 /** Every image of an image project as a filterable thumbnail grid. */
 export function ImageGalleryPage() {
+  const canManage = useCan().manage;
   const { projectId } = useParams();
   const pid = Number(projectId);
   const navigate = useNavigate();
@@ -89,9 +91,11 @@ export function ImageGalleryPage() {
                 setPage(0);
               }}
             />
-            <Button icon="add_photo_alternate" onClick={() => setAddOpen(true)}>
-              Add Images
-            </Button>
+            {canManage && (
+              <Button icon="add_photo_alternate" onClick={() => setAddOpen(true)}>
+                Add Images
+              </Button>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-space-sm flex-wrap">

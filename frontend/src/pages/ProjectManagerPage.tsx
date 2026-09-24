@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useCan } from "../stores/authStore";
 import { useNavigate } from "react-router-dom";
 import { MaterialIcon } from "../components/MaterialIcon";
 import { Button, Card, ConfirmDeleteModal, StatusPill } from "../components/primitives";
@@ -7,6 +8,7 @@ import type { Project } from "../types/api";
 import { useUiStore } from "../stores/uiStore";
 
 export function ProjectManagerPage() {
+  const canManage = useCan().manage;
   const navigate = useNavigate();
   const pushToast = useUiStore((s) => s.pushToast);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -80,9 +82,11 @@ export function ProjectManagerPage() {
             </p>
           </div>
           <div className="flex items-center gap-space-sm shrink-0">
-            <Button variant="primary" icon="add_box" onClick={() => navigate("/projects/new")}>
-              New Project
-            </Button>
+            {canManage && (
+              <Button variant="primary" icon="add_box" onClick={() => navigate("/projects/new")}>
+                New Project
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -188,6 +192,7 @@ export function ProjectManagerPage() {
               menuOpen={openMenuId === p.id}
               onToggleMenu={() => setOpenMenuId(openMenuId === p.id ? null : p.id)}
               onOpen={() => navigate(`/projects/${p.id}`)}
+              canManage={canManage}
               onOpenVersions={() => navigate(`/projects/${p.id}/settings`)}
               onExport={() => navigate(`/projects/${p.id}/export`)}
               onDelete={() => {
@@ -296,6 +301,7 @@ function MetricCard({
 
 function ProjectCard({
   project,
+  canManage,
   menuOpen,
   onToggleMenu,
   onOpen,
@@ -310,6 +316,7 @@ function ProjectCard({
   onExport: () => void;
   onOpenVersions: () => void;
   onDelete: () => void;
+  canManage: boolean;
 }) {
   return (
     <div className="flex flex-col bg-surface-container-lowest rounded shadow-sm group hover:shadow-md transition-shadow">
@@ -353,7 +360,7 @@ function ProjectCard({
               <MenuItem icon="settings" label="Settings" onClick={onOpenVersions} />
               <MenuItem icon="file_download" label="Export" onClick={onExport} />
               <div className="h-px bg-outline-variant my-1" />
-              <MenuItem icon="delete" label="Delete Project" onClick={onDelete} destructive />
+              {canManage && <MenuItem icon="delete" label="Delete Project" onClick={onDelete} destructive />}
             </div>
           )}
         </div>

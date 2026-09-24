@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAuthStore } from "../../stores/authStore";
 import { Button, Modal } from "../../components/primitives";
 import { MaterialIcon } from "../../components/MaterialIcon";
 import { ApiError, importAnnotations, type ImportAnnotationsResult } from "../../services/api";
@@ -20,7 +21,7 @@ interface Props {
  * fabricated from unverified import data). */
 export function ImportAnnotationsModal({ open, onClose, slideId, onImported }: Props) {
   const pushToast = useUiStore((s) => s.pushToast);
-  const annotatorName = useUiStore((s) => s.annotatorName);
+  const annotatorName = useAuthStore((s) => s.user?.name ?? "");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportAnnotationsResult | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);

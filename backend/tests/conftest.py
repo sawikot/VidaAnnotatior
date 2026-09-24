@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.database.base import Base
-from app.models import annotation, config_version, patch, project, slide  # noqa: F401
+from app.models import annotation, config_version, patch, project, slide, user  # noqa: F401
 
 
 @pytest.fixture(autouse=True)
@@ -42,3 +42,35 @@ def db() -> Session:
         yield session
     finally:
         session.close()
+
+
+TEST_ADMIN_EMAIL = "test-admin@example.org"
+
+
+def _signed_in_admin(db=None):
+    """Every API test runs as an administrator stored in that test's own database (tests of signing
+    in and of the access rules remove this override; see test_auth.py)."""
+    from app.models.user import User
+
+    user = db.query(User).filter(User.email == TEST_ADMIN_EMAIL).first()
+    if user is None:
+        user = User(email=TEST_ADMIN_EMAIL, name="Test Admin", role="admin")
+        db.add(user)
+        db.commit()
+    return user
+
+
+@pytest.fixture(autouse=True)
+def signed_in_as_admin():
+    from fastapi import Depends
+
+    from app.api.access import current_user
+    from app.database.session import get_db
+    from app.main import app
+
+    def override(db=Depends(get_db)):
+        return _signed_in_admin(db)
+
+    app.dependency_overrides[current_user] = override
+    yield
+    app.dependency_overrides.pop(current_user, None)

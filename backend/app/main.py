@@ -1,9 +1,11 @@
 import shutil
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
-from app.api import annotations, configs, export, images, patches, processing, projects, slides
+from app.api import annotations, auth, configs, export, images, patches, processing, projects, slides
+from app.api.access import authorize
 from app.core.config import get_settings
 from app.database.session import SessionLocal, init_db
 from app.models.project import Project
@@ -40,11 +42,22 @@ def health() -> dict:
     return {"status": "ok", "app": settings.app_name}
 
 
-app.include_router(projects.router, prefix=settings.api_prefix)
-app.include_router(configs.router, prefix=settings.api_prefix)
-app.include_router(slides.router, prefix=settings.api_prefix)
-app.include_router(processing.router, prefix=settings.api_prefix)
-app.include_router(patches.router, prefix=settings.api_prefix)
-app.include_router(annotations.router, prefix=settings.api_prefix)
-app.include_router(export.router, prefix=settings.api_prefix)
-app.include_router(images.router, prefix=settings.api_prefix)
+# Signing in, users and members check access themselves; every other route needs a signed-in user
+# with access to what it touches (api/access.py).
+app.include_router(auth.router, prefix=settings.api_prefix)
+for module in (projects, configs, slides, processing, patches, annotations, export, images):
+    app.include_router(module.router, prefix=settings.api_prefix, dependencies=[Depends(authorize)])
+
+
+# The built frontend, when there is one (npm run build): the whole app from this one address.
+_dist = settings.frontend_dist.resolve()
+if (_dist / "index.html").exists():
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def frontend(path: str) -> FileResponse:
+        if path.startswith(settings.api_prefix.strip("/") + "/"):
+            raise HTTPException(status_code=404, detail="Not found")
+        target = (_dist / path).resolve()
+        if path and target.is_file() and target.is_relative_to(_dist):
+            return FileResponse(target)
+        return FileResponse(_dist / "index.html")  # the app's own pages (/projects/3/...) all load it

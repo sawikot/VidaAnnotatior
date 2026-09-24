@@ -7,6 +7,8 @@ export interface NavItem {
   path: (projectId?: number, slideId?: number) => string;
   requiresProjectSlide?: boolean;
   requiresProject?: boolean;
+  /** Only project managers and administrators use it. */
+  managerOnly?: boolean;
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -24,6 +26,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "filter_center_focus",
     path: (p, s) => (p && s ? `/projects/${p}/slides/${s}/processing` : "/projects"),
     requiresProjectSlide: true,
+    managerOnly: true,
   },
   {
     key: "workspace-annotator",
@@ -86,6 +89,7 @@ const IMAGE_NAV_ITEMS: NavItem[] = [
   NAV_ITEMS[7],
 ];
 
-export function navItemsFor(projectType: ProjectType | undefined): NavItem[] {
-  return projectType === "image" ? IMAGE_NAV_ITEMS : NAV_ITEMS;
+export function navItemsFor(projectType: ProjectType | undefined, canManage = true): NavItem[] {
+  const items = projectType === "image" ? IMAGE_NAV_ITEMS : NAV_ITEMS;
+  return canManage ? items : items.filter((item) => !item.managerOnly);
 }

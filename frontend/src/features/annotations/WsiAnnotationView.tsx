@@ -1,4 +1,5 @@
 import OpenSeadragon from "openseadragon";
+import { useAuthStore } from "../../stores/authStore";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { IconButton } from "../../components/primitives";
 import {
@@ -53,7 +54,7 @@ function isTyping(target: EventTarget | null): boolean {
  */
 export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnnotations, focus, onModeChange, onOpenPatch }: Props) {
   const pushToast = useUiStore((s) => s.pushToast);
-  const annotatorName = useUiStore((s) => s.annotatorName);
+  const annotatorName = useAuthStore((s) => s.user?.name ?? "");
   const tool = useAnnotationStore((s) => s.tool);
   const setTool = useAnnotationStore((s) => s.setTool);
   const activeClassId = useAnnotationStore((s) => s.activeClassId);

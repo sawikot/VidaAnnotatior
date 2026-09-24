@@ -43,6 +43,15 @@ class Settings(BaseSettings):
     # Most patch images one export download may contain (they are cut from the slide on the fly).
     max_export_images: int = 50_000
 
+    # Signing in: how long a session lasts, and whether its cookie is sent over HTTPS only. Set
+    # COOKIE_SECURE=true when the server is reached through HTTPS (it should be, on a network).
+    session_days: int = 14
+    cookie_secure: bool = False
+
+    # The built frontend (npm run build). When it exists the backend serves it too, so the whole app
+    # is one address -- which is also what lets the sign-in cookie reach every request.
+    frontend_dist: Path = PROJECT_ROOT / "frontend" / "dist"
+
 
 @lru_cache
 def get_settings() -> Settings:

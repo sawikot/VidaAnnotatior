@@ -43,6 +43,7 @@ PARENTS = [
     "CREATE TABLE slides (id INTEGER PRIMARY KEY)",
     "CREATE TABLE project_config_versions (id INTEGER PRIMARY KEY)",
     "CREATE TABLE annotation_classes (id INTEGER PRIMARY KEY)",
+    "CREATE TABLE users (id INTEGER PRIMARY KEY)",  # exists before this migration runs (create_all makes it)
 ]
 
 

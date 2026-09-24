@@ -8,6 +8,8 @@ from app.api.deps import get_patch_or_404, get_slide_or_404
 from app.database.session import get_db
 from app.models.patch import Patch
 from app.models.slide import Slide
+from app.api.access import current_user
+from app.models.user import User
 from app.services.patch_labels import set_patch_label
 from app.services.patch_grid import active_grid_filter
 from app.schemas.patch import PatchListResponse, PatchOut, PatchUpdate
@@ -94,16 +96,20 @@ def update_patch(
     payload: PatchUpdate,
     patch: Patch = Depends(get_patch_or_404),
     db: Session = Depends(get_db),
+    user: User = Depends(current_user),
 ):
     changes = payload.model_dump(exclude_unset=True)
     if "patch_label" in changes:
         # A class label also annotates the whole patch with that class (services/patch_labels.py).
-        set_patch_label(db, patch, changes.pop("patch_label"), created_by=changes.get("reviewed_by"))
+        set_patch_label(db, patch, changes.pop("patch_label"), created_by=user.name, created_by_id=user.id)
+    # The reviewer is the signed-in person, whatever the client says.
+    reviewing = bool(changes.pop("reviewed_by", None)) or changes.get("status") == "reviewed"
     for field, value in changes.items():
         setattr(patch, field, value)
-    if "reviewed_by" in changes and changes["reviewed_by"]:
+    if reviewing:
         from app.database.base import utcnow
 
+        patch.reviewed_by, patch.reviewed_by_id = user.name, user.id
         patch.reviewed_at = utcnow()
         if patch.status != "reviewed":
             patch.status = "reviewed"

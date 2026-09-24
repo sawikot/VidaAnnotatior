@@ -4,14 +4,16 @@ import { HeaderNavMenu } from "./HeaderNavMenu";
 import { navItemsFor } from "./navConfig";
 import { useContextStore } from "../stores/contextStore";
 import { useUiStore } from "../stores/uiStore";
+import { useCan } from "../stores/authStore";
+import { UserMenu } from "./UserMenu";
 
 export function TopHeader() {
   const params = useParams();
   const projectId = params.projectId ? Number(params.projectId) : undefined;
   const slideId = params.slideId ? Number(params.slideId) : undefined;
   const activeProject = useContextStore((s) => s.activeProject);
-  const annotatorName = useUiStore((s) => s.annotatorName);
   const setShortcutsOpen = useUiStore((s) => s.setShortcutsOpen);
+  const canManage = useCan().manage;
 
   const projectPill = activeProject
     ? `${activeProject.slug}: ${activeProject.name}${
@@ -35,7 +37,7 @@ export function TopHeader() {
 
       <div className="hidden md:block h-6 w-px bg-slate-700 shrink-0" />
       <div className="hidden md:block shrink-0">
-        <HeaderNavMenu items={navItemsFor(activeProject?.project_type)} projectId={projectId} slideId={slideId} />
+        <HeaderNavMenu items={navItemsFor(activeProject?.project_type, canManage)} projectId={projectId} slideId={slideId} />
       </div>
 
       {projectPill && (
@@ -77,19 +79,7 @@ export function TopHeader() {
 
       <div className="h-6 w-px bg-slate-700 shrink-0" />
 
-      <div className="flex items-center gap-2 shrink-0">
-        <div className="hidden lg:flex flex-col items-end leading-tight">
-          <span className="text-label-md text-white">{annotatorName}</span>
-          <span className="text-body-sm text-slate-400">Senior Computational Pathologist</span>
-        </div>
-        <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-label-md text-white">
-          {annotatorName
-            .split(" ")
-            .map((p) => p[0])
-            .slice(0, 2)
-            .join("")}
-        </div>
-      </div>
+      <UserMenu />
     </header>
   );
 }

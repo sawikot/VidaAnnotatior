@@ -1,4 +1,5 @@
-import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
+import { useEffect } from "react";
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { ProjectManagerPage } from "./pages/ProjectManagerPage";
 import { NewProjectWizardPage } from "./pages/NewProjectWizardPage";
@@ -11,11 +12,23 @@ import { ProjectSettingsPage } from "./pages/ProjectSettingsPage";
 import { ProjectExportPage } from "./pages/ProjectExportPage";
 import { ImageAnnotateRedirect } from "./pages/ImageAnnotateRedirect";
 import { ImageGalleryPage } from "./pages/ImageGalleryPage";
+import { LoginPage, SetPasswordPage, SetupPage } from "./pages/AuthPages";
+import { UsersPage } from "./pages/UsersPage";
+import { useAuthStore } from "./stores/authStore";
 
 export default function App() {
+  const load = useAuthStore((s) => s.load);
+  useEffect(() => {
+    load();
+  }, [load]);
+
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/setup" element={<SetupPage />} />
+        <Route path="/set-password" element={<SetPasswordPage />} />
+        <Route element={<RequireSignIn />}>
         <Route element={<AppShell />}>
           <Route index element={<Navigate to="/projects" replace />} />
           <Route path="/projects" element={<ProjectManagerPage />} />
@@ -32,11 +45,23 @@ export default function App() {
           <Route path="/projects/:projectId/slides/:slideId/overview" element={<FullOverviewPage />} />
           <Route path="/projects/:projectId/export" element={<ProjectExportPage />} />
           <Route path="/projects/:projectId/slides/:slideId/export" element={<ExportRedirect />} />
+          <Route path="/admin/users" element={<UsersPage />} />
           <Route path="*" element={<Navigate to="/projects" replace />} />
+        </Route>
         </Route>
       </Routes>
     </BrowserRouter>
   );
+}
+
+/** The app itself needs a signed-in person; everyone else is sent to sign in (and back afterwards). */
+function RequireSignIn() {
+  const state = useAuthStore((s) => s.state);
+  const location = useLocation();
+  if (state === "loading") return <div className="min-h-screen bg-[#0f172a]" />;
+  if (state === "setup") return <Navigate to="/setup" replace />;
+  if (state === "signed-out") return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
+  return <Outlet />;
 }
 
 /** Export belongs to the project now (every slide, pick which); the old per-slide address opens it. */

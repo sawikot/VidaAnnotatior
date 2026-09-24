@@ -50,6 +50,7 @@ class Patch(Base, TimestampMixin):
     notes: Mapped[str | None] = mapped_column(String(4000), default=None)
 
     reviewed_by: Mapped[str | None] = mapped_column(String(120), default=None)
+    reviewed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), default=None)  # the account
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
 
     slide: Mapped["Slide"] = relationship("Slide", back_populates="patches")

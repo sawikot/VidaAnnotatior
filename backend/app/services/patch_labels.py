@@ -46,7 +46,7 @@ def _fill(db: Session, patch: Patch) -> GeometryAnnotation | None:
     )
 
 
-def set_patch_label(db: Session, patch: Patch, label: str | None, created_by: str | None = None) -> None:
+def set_patch_label(db: Session, patch: Patch, label: str | None, created_by: str | None = None, created_by_id: int | None = None) -> None:
     """Set (or clear, with None/"") the patch's label, keeping its whole-patch annotation in step. Not committed."""
     label = (label or "").strip() or None
     fill = _fill(db, patch)
@@ -75,6 +75,7 @@ def set_patch_label(db: Session, patch: Patch, label: str | None, created_by: st
                     coordinates_level0=level0,
                     whole_patch=True,
                     created_by=created_by,
+                    created_by_id=created_by_id,
                 )
             )
         else:
