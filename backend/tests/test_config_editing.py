@@ -1,21 +1,13 @@
 import pytest
 from fastapi import HTTPException
 
-from app.api.configs import fork_config_endpoint, get_config_usage, update_config
-from app.api.patches import list_patches
-from app.api.projects import _to_detail
-from app.api.slides import set_slide_active_config
+from app.api.configs import get_config_usage, update_config
 from app.models.annotation import GeometryAnnotation
 from app.models.config_version import AnnotationClass, ProjectConfigVersion
 from app.models.patch import Patch
 from app.models.project import Project
 from app.models.slide import Slide
-from app.schemas.config_version import (
-    AnnotationClassSync,
-    ConfigVersionForkRequest,
-    ConfigVersionUpdate,
-)
-from app.schemas.slide import SlideActiveConfigRequest
+from app.schemas.config_version import AnnotationClassSync, ConfigVersionUpdate
 from app.services.config_versioning import ClassSyncError, sync_annotation_classes
 
 
@@ -147,71 +139,11 @@ def test_usage_counts(db):
     assert get_config_usage(config=config, db=db) == {"patch_count": 1, "annotation_count": 1, "slide_count": 1}
 
 
-def test_fork_with_edited_classes_leaves_original_untouched(db):
-    _, config, _, _, _, _ = _seed(db)
-    req = ConfigVersionForkRequest(
-        new_version_label="v2.0",
-        overrides={"patch_width": 1024, "stride_x": 1024, "bogus": 1},
-        annotation_classes=[AnnotationClassSync(id=999, name="OnlyOne", color_hex="#000000")],
-    )
-    forked = fork_config_endpoint(req, config=config, db=db)
-    assert forked.patch_width == 1024 and forked.parent_version_id == config.id
-    assert [c.name for c in forked.annotation_classes] == ["OnlyOne"]
-    db.refresh(config)
-    assert config.patch_width == 512 and {c.name for c in config.annotation_classes} == {"Tumor", "Stroma"}
-
-
-def test_fork_rejects_duplicate_label_and_bad_override(db):
-    _, config, _, _, _, _ = _seed(db)
-    with pytest.raises(HTTPException) as exc:
-        fork_config_endpoint(ConfigVersionForkRequest(new_version_label="v1.0"), config=config, db=db)
-    assert exc.value.status_code == 409
-    with pytest.raises(HTTPException) as exc:
-        fork_config_endpoint(
-            ConfigVersionForkRequest(new_version_label="v3", overrides={"patch_width": -5}), config=config, db=db
-        )
-    assert exc.value.status_code == 422
-
-
-def test_switching_slide_version_changes_which_patches_are_listed(db):
-    project, config, slide, _, _, _ = _seed(db)
-    v2 = fork_config_endpoint(ConfigVersionForkRequest(new_version_label="v2.0"), config=config, db=db)
-
-    def listed():
-        return list_patches(slide=slide, db=db, bbox=None, status=None, flagged=None, limit=500, offset=0).total
-
-    assert listed() == 1
-    out = set_slide_active_config(SlideActiveConfigRequest(config_version_id=v2.id), slide=slide, db=db)
-    assert out.active_config_version_id == v2.id and out.status == "imported"  # no patches under v2 yet
-    assert listed() == 0
-    assert _to_detail(db, project).stats.total_patches == 0
-
-    set_slide_active_config(SlideActiveConfigRequest(config_version_id=config.id), slide=slide, db=db)
-    assert listed() == 1 and slide.status == "patches_generated"
-    assert _to_detail(db, project).stats.total_patches == 1
-
-
-def test_cannot_switch_slide_to_another_projects_version(db):
-    _, _, slide, _, _, _ = _seed(db)
-    other = Project(slug="O", name="O")
-    db.add(other)
-    db.flush()
-    foreign = ProjectConfigVersion(project_id=other.id, version_label="v1.0")
-    db.add(foreign)
-    db.commit()
-    with pytest.raises(HTTPException) as exc:
-        set_slide_active_config(SlideActiveConfigRequest(config_version_id=foreign.id), slide=slide, db=db)
-    assert exc.value.status_code == 404
-
-
-def test_project_default_version_must_belong_to_the_project(db):
+def test_a_project_cannot_point_at_another_projects_configuration(db):
     from app.api.projects import update_project
     from app.schemas.project import ProjectUpdate
 
     project, config, _, _, _, _ = _seed(db, with_patch=False)
-    v2 = fork_config_endpoint(ConfigVersionForkRequest(new_version_label="v2.0"), config=config, db=db)
-    out = update_project(ProjectUpdate(active_config_version_id=v2.id), project=project, db=db)
-    assert out.active_config.id == v2.id
 
     other = Project(slug="O2", name="O2")
     db.add(other)

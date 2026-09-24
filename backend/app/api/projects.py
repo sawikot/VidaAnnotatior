@@ -87,7 +87,7 @@ def update_project(
     if new_active is not None:
         config = db.get(ProjectConfigVersion, new_active)
         if config is None or config.project_id != project.id:
-            raise HTTPException(status_code=422, detail="That config version does not belong to this project")
+            raise HTTPException(status_code=422, detail="That configuration does not belong to this project")
     for field, value in changes.items():
         setattr(project, field, value)
     db.commit()

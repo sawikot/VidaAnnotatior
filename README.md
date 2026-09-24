@@ -31,7 +31,7 @@ Backend service modules (`backend/app/services/`):
 | `tissue_detector.py` | `TissueDetector` interface. `HSVOtsuDetector`: HSV→Otsu threshold→morphology→small-component removal |
 | `patch_generator.py` | Walks the Level-0 grid at the configured patch/stride size, keeps patches meeting the tissue threshold |
 | `coordinate_transform.py` | The **single** source of truth for Level-0 ⇄ patch-local math (mirrored in `frontend/src/utils/coordinates.ts`) |
-| `config_versioning.py` | Locks a config version's critical fields once patches exist; forks a new version instead of mutating |
+| `config_versioning.py` | Editing rules for the project's one configuration (tissue method fixed once patches exist) and diagnostic-class sync |
 | `exporter/` | Export format registry (`get_exporter`). One small class per format — `wsi_json`, `geojson`, `coco`, `patch_csv`, `stats_csv` — all reading the same `ExportData` snapshot (see *Export formats* below) |
 | `geometry.py` | Shape kinds, validation and Shapely-backed area/length helpers shared by the API and the exporters |
 | `projection.py` | Shows whole-slide annotations inside patches: `local = (level0 − origin) / downsample`, clipped to each patch |
@@ -47,7 +47,7 @@ Backend service modules (`backend/app/services/`):
 | Freehand line | `G` | Drag along a path | `freehand_line`: an open path, ≥ 2 points |
 | Rectangle | `R` | Drag a corner to the opposite corner | `rectangle`: 4 corners |
 | Circle | `C` | Drag from the centre outwards | `circle`: the centre and one point on the edge |
-| Polygon | `P` | Click the vertices, then double-click or `Enter` | `polygon`: ≥ 3 points |
+| Polygon | `P` | Click the vertices, then click the first point, double-click or press `Enter`; `Backspace` takes back the last point. Panning mid-shape (Space) keeps it | `polygon`: ≥ 3 points |
 | Freehand polygon | `F` | Drag around the outline | `freehand`: a closed outline, ≥ 3 points |
 
 **Modifying an annotation** (Select tool, or click an object in the workspace's object list): the selected
@@ -245,17 +245,19 @@ the ones for the current page first.
    Originals in `WSI_WATCH_DIR` that were imported by *Server path* are never touched — only the app's copies.
 
 9. **Project settings**: *Settings* (sidebar, dashboard, or the project card's `⋮` menu) shows and edits
-   everything in one place — project details (name, cancer type, team, description) and the configuration:
-   patch grid, tissue-detection defaults, diagnostic classes, tools and QC settings. Changes save in place.
+   everything in one place — project details (name, cancer type, team, description) and the project's
+   **one configuration**: tissue-detection defaults, diagnostic classes, tools and QC settings. Changes save
+   in place. Patch sizes have their own section, *Patch sizes* (see 10): **+ Add patch size** opens the same
+   dialog as on Slide Processing and cuts every slide whose tissue has been found into that size (slides
+   without tissue are listed as skipped), optionally making it the default for *Generate Coords*.
    - Renaming or recoloring a class keeps every annotation attached to it; removing a class that annotations
      still use is refused.
-   - Changing the **patch grid** (size, stride, magnification, minimum tissue) never moves existing patches:
-     every patch records the grid it was cut with, so slides keep the grid they have and the new values are
-     used the next time *Generate Coords* runs. Only a **locked** version keeps its grid fixed (editing it
-     then saves a new version). Tissue method and coordinate system are fixed once patches exist.
-   - *Version history* lists every configuration version with its grid and usage; *Use for new slides*,
-     *Lock* and *Save a copy as a new version* live there. A slide can be switched to another version on
-     *Slide Processing*. (The old `/versions` address redirects here.)
+   - Changing the default **patch size** never moves existing patches: every patch records the grid it was
+     cut with, so slides keep the grid they have. Tissue method and coordinate system are fixed once patches
+     exist.
+   - There are no configuration versions: a project has exactly one configuration. Projects from before
+     were merged into the configuration they used, at startup, without losing anything (classes matched by
+     name, patches and annotations moved over). The old `/versions` address redirects to Settings.
 
 10. **Several patch sizes on one slide**: a slide can hold any number of **patch grids** under the same
     configuration (so the same classes). In the workspace — or the *Patch grid* card on Slide Processing —
@@ -266,6 +268,10 @@ the ones for the current page first.
     be edited; each stays owned by the patch it was drawn in). Switching opens the patch at the same spot.
     Regenerating a grid updates it in place: patches at the same place keep their ids, status and
     annotations, and annotated patches that no longer meet the threshold are kept.
+    *Settings → Patch sizes* lists every size used in the project (slides, patches, annotated) with **Use as
+    default** (what *Generate Coords* cuts) and **Remove**, which deletes that size's patches from every slide —
+    the annotations drawn in them are kept as whole-slide annotations at the same place, so nothing drawn is
+    lost. The patch-size menu on a slide can remove a size from just that slide the same way.
 
 11. **Export in any patch grid**: the Export screen's *Patch grid* option is *As annotated* (each slide's
     active grid; annotations drawn in other grids or on the whole slide are cut into it) or *Custom grid*
@@ -288,7 +294,7 @@ cd frontend && npx vitest run && npx tsc -b
 ```
 
 Backend tests cover coordinate transforms (including a downsampled-level case), tissue-fraction
-sampling, patch-grid generation/bounds, config-version lock/fork behavior, and JSON export shape —
+sampling, patch-grid generation/bounds, configuration editing rules, and JSON export shape —
 all against synthetic fixtures, no OpenSlide/file dependency, so they run anywhere.
 
 Tests never touch your real data: `tests/conftest.py` points the storage and watch directories at
@@ -318,8 +324,8 @@ Differences worth knowing:
 
 - Images up to 8192 px per side and 25 megapixels (`MAX_IMAGE_PIXELS`) are accepted; anything bigger belongs in a
   WSI project. Unreadable or oversized images are reported, not imported.
-- An image project has one configuration. Classes, tools and QC settings are edited in place; forking versions,
-  tissue detection and patch generation are refused (they would strand or delete the whole-image patch).
+- An image project has one configuration. Classes, tools and QC settings are edited in place; tissue
+  detection and patch generation are refused (they would strand or delete the whole-image patch).
 - The workspace lists the project's images on the left; *Next / Prev / Next Unannotated / Next Flagged* (and
   A / D / Space) move across images, and *Validate* / *Skip* advance to the next one. The gallery (*Images*) is the
   whole project as a filterable thumbnail grid.
@@ -332,7 +338,7 @@ existing project to WSI).
 
 ## Export formats
 
-`GET /api/slides/{id}/export/{format}` — every format covers the slide's **active config version** only
+`GET /api/slides/{id}/export/{format}` — every format covers the slide's **active patch grid** (or a custom grid, below)
 and leaves out annotations on patches flagged *Exclude from training* (the patch CSV still lists those
 patches, marked `excluded = true`, so it stays a complete registry).
 
@@ -404,6 +410,6 @@ to `[A-Za-z0-9._-]`. Adding a format means one `Exporter` subclass registered in
 - **Tissue detection finds ~0% coverage**: lower the Otsu sensitivity slider, or check the slide isn't
   mostly background glass at the macro level.
 - **"0 of N candidate patches met the minimum tissue fraction"**: run tissue detection first, or lower
-  `min_tissue_fraction` in the project config (fork a new config version if patches already exist).
+  `min_tissue_fraction` in Settings (existing patches keep their grid; generate again to apply it).
 - **CORS errors in the browser console**: `VITE_API_BASE` (frontend `.env`) must match the backend's
   actual host:port, and that origin must be listed in `cors_origins` in `backend/app/core/config.py`.

@@ -4,9 +4,11 @@ import type {
   ConfigVersion,
   GeometryAnnotation,
   GeometryType,
+  GridRemoval,
   GridSpec,
   OverlappingAnnotation,
   PatchGrid,
+  ProjectGrid,
   Patch,
   ImageList,
   PatchListResponse,
@@ -85,34 +87,16 @@ export const updateProject = (id: number, payload: unknown) =>
 export const deleteProject = (id: number) => request<void>(`/projects/${id}`, { method: "DELETE" });
 
 // ---- Config versions ----
-export const listConfigs = (projectId: number) => request<ConfigVersion[]>(`/projects/${projectId}/configs`);
 export const getConfig = (id: number) => request<ConfigVersion>(`/configs/${id}`);
-export const createConfig = (projectId: number, payload: unknown) =>
-  request<ConfigVersion>(`/projects/${projectId}/configs`, { method: "POST", body: JSON.stringify(payload) });
 export const updateConfig = (id: number, payload: unknown) =>
   request<ConfigVersion>(`/configs/${id}`, { method: "PUT", body: JSON.stringify(payload) });
-export const lockConfig = (id: number) => request<ConfigVersion>(`/configs/${id}/lock`, { method: "POST" });
 export interface ClassSyncItem {
   id?: number;
   name: string;
   color_hex: string;
   hotkey: string | null;
 }
-export const forkConfig = (
-  id: number,
-  payload: {
-    new_version_label: string;
-    overrides?: Record<string, unknown>;
-    created_by?: string;
-    annotation_classes?: ClassSyncItem[];
-  },
-) => request<ConfigVersion>(`/configs/${id}/fork`, { method: "POST", body: JSON.stringify(payload) });
 export const getConfigUsage = (id: number) => request<ConfigUsage>(`/configs/${id}/usage`);
-export const setSlideActiveConfig = (slideId: number, configVersionId: number) =>
-  request<Slide>(`/slides/${slideId}/active-config`, {
-    method: "PUT",
-    body: JSON.stringify({ config_version_id: configVersionId }),
-  });
 
 // ---- Slides ----
 export const listSlides = (projectId: number) => request<Slide[]>(`/projects/${projectId}/slides`);
@@ -219,6 +203,18 @@ export const getTissueMaskOutline = (slideId: number) => request<{ rings: [numbe
 
 // ---- Processing ----
 export const listGrids = (slideId: number) => request<PatchGrid[]>(`/slides/${slideId}/grids`);
+export const listProjectGrids = (projectId: number) => request<ProjectGrid[]>(`/projects/${projectId}/grids`);
+/** Remove a patch size (from every slide, or one); its annotations are kept as whole-slide annotations. */
+/** Cut every slide with tissue into another patch size (optionally making it the project's grid). */
+export const addProjectGrid = (projectId: number, grid: GridSpec, makeDefault: boolean) =>
+  request<{ grid_key: string; grid_label: string; slides: number; patches: number; skipped: { slide_id: number; slide: string; reason: string }[] }>(
+    `/projects/${projectId}/grids`,
+    { method: "POST", body: JSON.stringify({ grid, make_default: makeDefault }) },
+  );
+export const removeProjectGrid = (projectId: number, gridKey: string) =>
+  request<GridRemoval>(`/projects/${projectId}/grids/${encodeURIComponent(gridKey)}`, { method: "DELETE" });
+export const removeSlideGrid = (slideId: number, gridKey: string) =>
+  request<GridRemoval>(`/slides/${slideId}/grids/${encodeURIComponent(gridKey)}`, { method: "DELETE" });
 export const setActiveGrid = (slideId: number, gridKey: string) =>
   request<Slide>(`/slides/${slideId}/active-grid`, { method: "PUT", body: JSON.stringify({ grid_key: gridKey }) });
 export const getTissueRegions = (slideId: number) => request<TissueRegions>(`/slides/${slideId}/tissue-regions`);

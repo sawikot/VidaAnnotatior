@@ -36,6 +36,26 @@ export interface PatchGrid {
   is_default: boolean;
 }
 
+/** A patch size used somewhere in the project. */
+export interface ProjectGrid {
+  key: string;
+  label: string;
+  spec: GridSpec;
+  slide_count: number;
+  patch_count: number;
+  annotated_patch_count: number;
+  /** Drawn in its patches; kept as whole-slide annotations if it is removed. */
+  annotation_count: number;
+  /** The project's grid, used by Generate Coords. */
+  is_default: boolean;
+}
+
+export interface GridRemoval {
+  slides: number;
+  patches: number;
+  annotations_kept: number;
+}
+
 export type TissueSource = "auto" | "manual";
 export type TissueRegionMode = "add" | "remove";
 export type TissueRegionType = "rectangle" | "polygon" | "freehand" | "circle";

@@ -1,12 +1,10 @@
-"""Config version lock/fork rules.
+"""Configuration editing rules. A project has exactly one configuration (a single
+ProjectConfigVersion row, kept as a row because patches, annotations and classes point at it).
 
-An explicitly locked version ("Locked & Certified") cannot have its critical parameters changed; a
-new version must be forked instead. The patch-grid fields (size, stride, magnification, tissue
-threshold) of an unlocked version can always be changed, even after patches exist: every patch
-records the grid it was cut with (services/patch_grid.py), so existing patches and annotations keep
-their meaning and the new values simply describe the grid used next. The remaining critical fields
-(tissue method, coordinate system) are fixed once patches exist. This module is the single place that
-enforces those rules, plus the diagnostic-class editing rules.
+The patch-grid fields (size, stride, magnification, tissue threshold) can always be changed: every
+patch records the grid it was cut with (services/patch_grid.py), so existing patches and annotations
+keep their meaning and the new values describe the grid used next. The tissue method and coordinate
+system are fixed once patches exist. This module enforces that, plus the diagnostic-class rules.
 """
 from __future__ import annotations
 
@@ -70,16 +68,14 @@ def has_generated_data(db: Session, config_version_id: int) -> bool:
 
 
 def assert_mutable(db: Session, config: ProjectConfigVersion, changes: dict) -> None:
-    locked = config.status == "locked"
-    if not locked and not has_generated_data(db, config.id):
+    if not has_generated_data(db, config.id):
         return
-    guarded = CRITICAL_FIELDS if locked else tuple(f for f in CRITICAL_FIELDS if f not in GRID_FIELDS)
+    guarded = tuple(f for f in CRITICAL_FIELDS if f not in GRID_FIELDS)
     touched_critical = [f for f in guarded if f in changes and changes[f] != getattr(config, f)]
     if touched_critical:
-        reason = "is locked" if locked else "already has generated patches"
         raise ConfigLockedError(
-            f"Version {config.version_label} {reason}; critical field(s) "
-            f"{touched_critical} cannot be changed in place. Create a new config version (fork) instead."
+            f"{', '.join(touched_critical)} cannot be changed once patches exist: existing patches and "
+            "annotations were made with it."
         )
 
 
@@ -117,7 +113,7 @@ def sync_annotation_classes(db: Session, config: ProjectConfigVersion, items: li
     existing = {c.id: c for c in config.annotation_classes}
     unknown = [i.id for i in items if i.id is not None and i.id not in existing]
     if unknown:
-        raise ClassSyncError(f"Class id(s) {unknown} do not belong to version {config.version_label}.")
+        raise ClassSyncError(f"Class id(s) {unknown} do not belong to this configuration.")
 
     keep_ids = {i.id for i in items if i.id is not None}
     removed = [c for cid, c in existing.items() if cid not in keep_ids]
@@ -152,57 +148,3 @@ def sync_annotation_classes(db: Session, config: ProjectConfigVersion, items: li
             )
     db.flush()
     db.expire(config, ["annotation_classes"])
-
-
-def fork_config(
-    db: Session,
-    source: ProjectConfigVersion,
-    overrides: dict,
-    new_version_label: str,
-    created_by: str | None = None,
-) -> ProjectConfigVersion:
-    data = {
-        "project_id": source.project_id,
-        "parent_version_id": source.id,
-        "version_label": new_version_label,
-        "status": "draft",
-        "title": overrides.get("title", source.title),
-        "created_by": created_by,
-        "coordinate_system": source.coordinate_system,
-        "target_magnification": source.target_magnification,
-        "target_level": source.target_level,
-        "mpp_handling": source.mpp_handling,
-        "patch_width": source.patch_width,
-        "patch_height": source.patch_height,
-        "stride_x": source.stride_x,
-        "stride_y": source.stride_y,
-        "min_tissue_fraction": source.min_tissue_fraction,
-        "allow_partial_patches": source.allow_partial_patches,
-        "include_edge_patches": source.include_edge_patches,
-        "tissue_method": source.tissue_method,
-        "tissue_params": dict(source.tissue_params or {}),
-        "enabled_tools": list(source.enabled_tools or []),
-        "allow_skip": source.allow_skip,
-        "allow_unsure": source.allow_unsure,
-        "require_annotation": source.require_annotation,
-        "reviewer_mode": source.reviewer_mode,
-    }
-    data.update({k: v for k, v in overrides.items() if k in data})
-
-    new_config = ProjectConfigVersion(**data)
-    new_config.config_hash = compute_config_hash(new_config)
-    db.add(new_config)
-    db.flush()
-
-    for cls in source.annotation_classes:
-        db.add(
-            AnnotationClass(
-                config_version_id=new_config.id,
-                name=cls.name,
-                color_hex=cls.color_hex,
-                hotkey=cls.hotkey,
-                order_index=cls.order_index,
-            )
-        )
-    db.flush()
-    return new_config

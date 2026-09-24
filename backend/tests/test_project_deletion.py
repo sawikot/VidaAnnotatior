@@ -4,13 +4,12 @@ from app.models.config_version import AnnotationClass, ProjectConfigVersion
 from app.models.patch import Patch
 from app.models.project import Project
 from app.models.slide import Slide
-from app.services.config_versioning import fork_config
 
 
 def _seed_full_project(db):
     """A project with everything that has a foreign key into
     project_config_versions: slides, patches, annotations, annotation
-    classes, and a forked (parent/child) config version -- the shape that
+    classes -- the shape that
     triggered the FK-ordering bug."""
     project = Project(slug="BCA_2026", name="Breast Cancer Annotation")
     db.add(project)
@@ -26,9 +25,6 @@ def _seed_full_project(db):
     db.add(tumor)
     db.flush()
 
-    # A forked child config version (parent_version_id self-FK).
-    fork_config(db, config, {}, "v2.0")
-    db.flush()
 
     slide = Slide(
         project_id=project.id, filename="Patient_001.svs", source_type="upload",

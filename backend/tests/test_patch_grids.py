@@ -189,3 +189,77 @@ def test_the_slide_list_reports_each_slides_progress(slide):
     client.put(f"/api/patches/{second['id']}", json={"status": "reviewed"})
     (row,) = client.get(f"/api/projects/{pid}/slides").json()
     assert (row["patch_count"], row["annotated_patch_count"], row["reviewed_patch_count"]) == (6, 2, 1)
+
+
+def test_the_project_lists_every_patch_size_it_uses(slide):
+    client, pid, sid, config_id = slide
+    generate(client, sid, config_id, BIG)
+    first = patches(client, sid)[0]
+    client.post(f"/api/patches/{first['id']}/annotations", json={"type": "point", "coordinates_patch_local": [[5, 5]]})
+    client.post(f"/api/patches/{first['id']}/annotations", json={"type": "point", "coordinates_patch_local": [[9, 9]]})
+    generate(client, sid, config_id, SMALL)
+
+    grids = {g["key"]: g for g in client.get(f"/api/projects/{pid}/grids").json()}
+    big, small = grids[key(BIG)], grids[key(SMALL)]
+    assert (big["slide_count"], big["patch_count"], big["annotated_patch_count"], big["annotation_count"]) == (1, 6, 1, 2)
+    assert (small["slide_count"], small["patch_count"], small["annotation_count"]) == (1, 24, 0)
+    assert sum(g["is_default"] for g in grids.values()) == 1  # the project's own grid, generated or not
+
+
+def test_removing_a_patch_size_keeps_its_annotations_as_whole_slide_ones(slide):
+    client, pid, sid, config_id = slide
+    generate(client, sid, config_id, BIG)
+    first = patches(client, sid)[0]
+    ann = client.post(f"/api/patches/{first['id']}/annotations", json={"type": "rectangle", "coordinates_patch_local": square(10, 10, 40)}).json()
+    generate(client, sid, config_id, SMALL)
+    client.put(f"/api/slides/{sid}/active-grid", json={"grid_key": key(BIG)})  # on the grid about to go
+
+    res = client.delete(f"/api/projects/{pid}/grids/{key(BIG)}")
+    assert res.status_code == 200, res.text
+    assert res.json() == {"slides": 1, "patches": 6, "annotations_kept": 1}
+
+    (kept,) = client.get(f"/api/slides/{sid}/annotations").json()
+    assert kept["id"] == ann["id"] and kept["patch_id"] is None and kept["coordinates_level0"] == ann["coordinates_level0"]
+    slide_now = client.get(f"/api/slides/{sid}").json()
+    assert slide_now["active_grid_key"] == key(SMALL)  # moved to the grid it still has
+    assert len(patches(client, sid)) == 24
+    assert key(BIG) not in {g["key"] for g in client.get(f"/api/projects/{pid}/grids").json() if g["patch_count"]}
+    assert client.delete(f"/api/projects/{pid}/grids/{key(BIG)}").status_code == 404  # nothing left to remove
+
+
+def test_removing_a_slides_last_patch_size_sends_it_back_to_generating(slide):
+    client, pid, sid, config_id = slide
+    generate(client, sid, config_id, BIG)
+    res = client.delete(f"/api/slides/{sid}/grids/{key(BIG)}")
+    assert res.status_code == 200 and res.json()["patches"] == 6
+    slide_now = client.get(f"/api/slides/{sid}").json()
+    assert slide_now["active_grid_key"] is None and slide_now["status"] in ("imported", "tissue_detected")
+    assert patches(client, sid) == []
+
+
+def test_any_patch_size_can_become_the_project_default(slide):
+    client, pid, sid, config_id = slide
+    generate(client, sid, config_id, SMALL)
+    res = client.put(f"/api/configs/{config_id}", json={k: SMALL[k] for k in ("patch_width", "patch_height", "stride_x", "stride_y", "target_magnification", "min_tissue_fraction")})
+    assert res.status_code == 200
+    defaults = [g for g in client.get(f"/api/projects/{pid}/grids").json() if g["is_default"]]
+    assert len(defaults) == 1 and defaults[0]["spec"]["patch_width"] == 256
+
+
+def test_a_patch_size_can_be_added_to_every_slide_of_the_project(slide):
+    client, pid, sid, config_id = slide
+    other = upload(client, pid, [("t.tif", SLIDE)]).json()["slides"][0]["id"]  # no tissue found yet
+    client.put(f"/api/slides/{sid}/tissue-regions", json={"source": "manual", "regions": [{"mode": "add", "type": "rectangle", "coordinates": [[0, 0], [W, 0], [W, H], [0, H]]}]})
+    generate(client, sid, config_id, BIG)
+
+    res = client.post(f"/api/projects/{pid}/grids", json={"grid": SMALL})
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["grid_key"] == key(SMALL) and body["slides"] == 1 and body["patches"] == 24
+    assert [s["slide_id"] for s in body["skipped"]] == [other] and "tissue" in body["skipped"][0]["reason"]
+    assert client.get(f"/api/slides/{sid}").json()["active_grid_key"] == key(BIG)  # still on the size it was on
+    assert {g["key"] for g in client.get(f"/api/slides/{sid}/grids").json() if g["patch_count"]} == {key(BIG), key(SMALL)}
+    assert not any(g["is_default"] and g["key"] == key(SMALL) for g in client.get(f"/api/projects/{pid}/grids").json())
+
+    client.post(f"/api/projects/{pid}/grids", json={"grid": SMALL, "make_default": True})  # again, now as default
+    assert next(g for g in client.get(f"/api/projects/{pid}/grids").json() if g["is_default"])["key"] == key(SMALL)

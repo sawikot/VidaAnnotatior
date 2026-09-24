@@ -137,7 +137,7 @@ def import_annotations(
     config_id = payload.config_version_id or slide.active_config_version_id
     config = db.get(ProjectConfigVersion, config_id) if config_id else None
     if config is None:
-        raise HTTPException(status_code=422, detail="Slide has no active config version to import against")
+        raise HTTPException(status_code=422, detail="This slide has no configuration to import against")
 
     classes_by_name = {c.name.strip().lower(): c for c in config.annotation_classes}
 

@@ -47,6 +47,7 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     _add_missing_columns()
     _backfill_grid_keys()
+    _merge_config_versions()
     _upgrade_enabled_tools()
     _allow_slide_level_annotations()
 
@@ -108,6 +109,107 @@ def _backfill_grid_keys(bind=None) -> None:
             for slide in db.query(Slide).filter(Slide.active_config_version_id == config.id, Slide.active_grid_key.is_(None)):
                 if db.query(Patch.id).filter(Patch.slide_id == slide.id, Patch.config_version_id == config.id).first():
                     slide.active_grid_key = key
+        db.commit()
+
+
+def _merge_config_versions(bind=None) -> None:
+    """A project has one configuration. Projects made when a project could have several versions are
+    merged into the one they use (the version new slides started on), without losing anything:
+
+    * classes are matched by name; one the kept configuration lacks is added to it;
+    * annotations and patches move over (a patch identical to one already there -- same slide, grid and
+      place -- hands its annotations to that one and goes);
+    * slides on another version move to the kept one; the other versions are then deleted.
+
+    Safe to run on every startup: a project with one configuration is left alone.
+    """
+    from sqlalchemy import func
+    from sqlalchemy.orm import Session as OrmSession
+
+    from app.models.annotation import GeometryAnnotation
+    from app.models.config_version import AnnotationClass, ProjectConfigVersion
+    from app.models.patch import Patch
+    from app.models.project import Project
+    from app.models.slide import Slide
+
+    bind = bind or engine
+    with OrmSession(bind) as db:
+        crowded = [
+            pid
+            for pid, n in db.query(ProjectConfigVersion.project_id, func.count(ProjectConfigVersion.id))
+            .group_by(ProjectConfigVersion.project_id)
+            .all()
+            if n > 1
+        ]
+        for project in db.query(Project).filter(Project.id.in_(crowded)):
+            configs = db.query(ProjectConfigVersion).filter(ProjectConfigVersion.project_id == project.id).order_by(ProjectConfigVersion.id).all()
+            keep = next((c for c in configs if c.id == project.active_config_version_id), configs[0])
+            if keep.status == "locked":
+                keep.status = "draft"  # there is no locking any more; the one configuration is editable
+            project.active_config_version_id = keep.id
+            by_name = {c.name.strip().lower(): c for c in keep.annotation_classes}
+            used_keys = {c.hotkey for c in keep.annotation_classes if c.hotkey}
+
+            for other in (c for c in configs if c.id != keep.id):
+                class_map = {}
+                for cls in other.annotation_classes:
+                    target = by_name.get(cls.name.strip().lower())
+                    if target is None:
+                        target = AnnotationClass(
+                            config_version_id=keep.id,
+                            name=cls.name,
+                            color_hex=cls.color_hex,
+                            hotkey=cls.hotkey if cls.hotkey and cls.hotkey not in used_keys else None,
+                            order_index=len(by_name),
+                        )
+                        db.add(target)
+                        db.flush()
+                        by_name[cls.name.strip().lower()] = target
+                        if target.hotkey:
+                            used_keys.add(target.hotkey)
+                    class_map[cls.id] = target.id
+
+                for ann in db.query(GeometryAnnotation).filter(GeometryAnnotation.config_version_id == other.id):
+                    ann.config_version_id = keep.id
+                    if ann.class_id is not None:
+                        ann.class_id = class_map.get(ann.class_id)
+
+                for patch in db.query(Patch).filter(Patch.config_version_id == other.id).all():
+                    twin = (
+                        db.query(Patch)
+                        .filter(
+                            Patch.config_version_id == keep.id,
+                            Patch.slide_id == patch.slide_id,
+                            Patch.grid_key == patch.grid_key,
+                            Patch.x == patch.x,
+                            Patch.y == patch.y,
+                            Patch.width_l0 == patch.width_l0,
+                            Patch.height_l0 == patch.height_l0,
+                        )
+                        .first()
+                    )
+                    if twin is None:
+                        patch.config_version_id = keep.id
+                        continue
+                    db.query(GeometryAnnotation).filter(GeometryAnnotation.patch_id == patch.id).update(
+                        {GeometryAnnotation.patch_id: twin.id}, synchronize_session=False
+                    )
+                    db.flush()
+                    db.query(Patch).filter(Patch.id == patch.id).delete(synchronize_session=False)
+
+                db.query(Slide).filter(Slide.active_config_version_id == other.id).update(
+                    {Slide.active_config_version_id: keep.id}, synchronize_session=False
+                )
+                db.query(ProjectConfigVersion).filter(ProjectConfigVersion.parent_version_id == other.id).update(
+                    {ProjectConfigVersion.parent_version_id: None}, synchronize_session=False
+                )
+                db.flush()
+                for cls in list(other.annotation_classes):
+                    db.delete(cls)
+                db.flush()
+                db.delete(other)
+                db.flush()
+            keep.parent_version_id = None
         db.commit()
 
 

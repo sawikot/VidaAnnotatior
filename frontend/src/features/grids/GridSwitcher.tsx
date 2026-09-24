@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { MaterialIcon } from "../../components/MaterialIcon";
 import { Button, Modal } from "../../components/primitives";
-import { generatePatches, listGrids, setActiveGrid } from "../../services/api";
+import { generatePatches, listGrids, removeSlideGrid, setActiveGrid } from "../../services/api";
 import { useUiStore } from "../../stores/uiStore";
 import type { GridSpec, PatchGrid } from "../../types/api";
 import { gridLabel, gridProblem } from "../../utils/gridKey";
 import { GridForm } from "./GridForm";
 
 const NEW = "__new__";
+const REMOVE = "__remove__";
 
 interface Props {
   slideId: number;
@@ -28,6 +29,7 @@ export function GridSwitcher({ slideId, configVersionId, refreshKey, onChanged, 
   const [grids, setGrids] = useState<PatchGrid[]>([]);
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<GridSpec | null>(null); // the "new patch size" dialog, when open
+  const [confirmRemove, setConfirmRemove] = useState<PatchGrid | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +69,10 @@ export function GridSwitcher({ slideId, configVersionId, refreshKey, onChanged, 
       setDraft({ ...(active ?? grids.find((g) => g.is_default))!.spec });
       return;
     }
+    if (key === REMOVE) {
+      if (active) setConfirmRemove(active);
+      return;
+    }
     const grid = grids.find((g) => g.key === key);
     if (!grid || grid.active) return;
     if (grid.patch_count === 0) generate(grid.spec); // the configuration's grid, not cut for this slide yet
@@ -96,9 +102,51 @@ export function GridSwitcher({ slideId, configVersionId, refreshKey, onChanged, 
             </option>
           ))}
           <option value={NEW}>+ New patch size...</option>
+          {active && active.patch_count > 0 && <option value={REMOVE}>Remove this patch size...</option>}
         </select>
         {busy && <span className="text-label-sm text-slate-400">Working...</span>}
       </label>
+
+      <Modal open={!!confirmRemove} onClose={() => setConfirmRemove(null)} widthClass="max-w-lg">
+        {confirmRemove && (
+          <div className="p-space-lg flex flex-col gap-space-md text-on-surface">
+            <h2 className="font-headline-md text-headline-md">Remove this patch size from the slide?</h2>
+            <p className="text-body-md">
+              <strong>{confirmRemove.label}</strong> - {confirmRemove.patch_count.toLocaleString()} patches
+              {confirmRemove.annotated_patch_count ? `, ${confirmRemove.annotated_patch_count.toLocaleString()} of them annotated` : ""}.
+            </p>
+            <p className="text-body-md text-on-surface-variant">
+              The patches go (with their status, flags and notes). Annotations drawn in them are <strong>kept</strong>, as
+              whole-slide annotations at the same place, so they still show in every other patch size. The slide switches to
+              another patch size it has.
+            </p>
+            <div className="flex justify-end gap-space-sm">
+              <Button variant="ghost" onClick={() => setConfirmRemove(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                icon="delete"
+                disabled={busy}
+                onClick={() => {
+                  const grid = confirmRemove;
+                  setConfirmRemove(null);
+                  run(async () => {
+                    const res = await removeSlideGrid(slideId, grid.key);
+                    pushToast(
+                      `Removed ${res.patches.toLocaleString()} patches` + (res.annotations_kept ? `; ${res.annotations_kept} annotations kept on the whole slide` : ""),
+                      "success",
+                    );
+                    return (await listGrids(slideId)).find((g) => g.active)?.key ?? "";
+                  });
+                }}
+              >
+                Remove patch size
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal open={!!draft} onClose={() => setDraft(null)} widthClass="max-w-2xl">
         {draft && (

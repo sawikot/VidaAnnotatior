@@ -94,7 +94,7 @@ def grid(env):  # noqa: F811
     """A real slide with a 3 x 2 grid of patches (each 512 Level-0 px wide, read at level 1) and two classes."""
     client, pid, _ = env
     slide_id = upload(client, pid, [("Whole.tif", SLIDE)]).json()["slides"][0]["id"]
-    config = client.get(f"/api/projects/{pid}/configs").json()[0]
+    config = client.get(f"/api/projects/{pid}/config").json()
     updated = client.put(
         f"/api/configs/{config['id']}",
         json={

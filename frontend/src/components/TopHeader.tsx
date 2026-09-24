@@ -17,8 +17,8 @@ export function TopHeader() {
     ? `${activeProject.slug}: ${activeProject.name}${
         activeProject.active_config
           ? activeProject.project_type === "image"
-            ? ` [${activeProject.active_config.version_label} - images]`
-            : ` [${activeProject.active_config.version_label} - ${activeProject.active_config.patch_width}px @ ${activeProject.active_config.target_magnification}x]`
+            ? " [images]"
+            : ` [${activeProject.active_config.patch_width}px @ ${activeProject.active_config.target_magnification}x]`
           : ""
       }`
     : null;

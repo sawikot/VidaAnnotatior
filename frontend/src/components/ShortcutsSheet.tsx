@@ -21,7 +21,8 @@ const EDITING: Row[] = [
   [["Drag a handle"], "Reshape it"],
   [["Double-click"], "On an outline: add a point. On a point: remove it"],
   [["Delete", "Backspace"], "Delete the selected shape"],
-  [["Enter"], "Finish a polygon (or double-click)"],
+  [["Enter"], "Finish a polygon (or double-click, or click its first point)"],
+  [["Backspace"], "While drawing a polygon: take back the last point"],
   [["Esc"], "Abandon the shape being drawn"],
 ];
 const UNDO: Row[] = [

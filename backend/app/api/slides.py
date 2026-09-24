@@ -22,7 +22,6 @@ from app.models.project import Project
 from app.models.slide import Slide
 from app.schemas.slide import (
     SkippedItemOut,
-    SlideActiveConfigRequest,
     SlideBatchImportResult,
     SlideImportPathRequest,
     SlideOut,
@@ -450,41 +449,6 @@ def import_slides_by_path(
 
 @router.get("/slides/{slide_id}", response_model=SlideOut)
 def get_slide(slide: Slide = Depends(get_slide_or_404)):
-    return slide
-
-
-@router.put("/slides/{slide_id}/active-config", response_model=SlideOut)
-def set_slide_active_config(
-    payload: SlideActiveConfigRequest,
-    slide: Slide = Depends(get_slide_or_404),
-    db: Session = Depends(get_db),
-):
-    """Point a slide at a different config version of its project.
-
-    Patches and annotations stay attached to the version they were generated
-    under (nothing is deleted or converted); every patch/annotation/export read
-    follows the slide's active version, so switching just changes which set is
-    shown. If the chosen version has no patches for this slide yet, the slide
-    drops back to the stage where they can be generated."""
-    forbid_for_image_project(slide.project, "Switching configuration versions")
-    config = db.get(ProjectConfigVersion, payload.config_version_id)
-    if config is None or config.project_id != slide.project_id:
-        raise HTTPException(status_code=404, detail="Config version not found in this slide's project")
-
-    slide.active_config_version_id = config.id
-    # Show that version's own grid if the slide has it, else whichever grid of it the slide has.
-    own = grid_key_of(config)
-    keys = {k for (k,) in db.query(Patch.grid_key).filter(Patch.slide_id == slide.id, Patch.config_version_id == config.id).distinct()}
-    slide.active_grid_key = own if own in keys else (sorted(k for k in keys if k)[0] if any(keys) else None)
-    has_patches = bool(keys)
-    if has_patches:
-        slide.status = "patches_generated"
-    elif slide.tissue_mask_path:
-        slide.status = "tissue_detected"
-    else:
-        slide.status = "imported"
-    db.commit()
-    db.refresh(slide)
     return slide
 
 

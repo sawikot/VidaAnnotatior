@@ -8,12 +8,13 @@ from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.api.deps import forbid_for_image_project, get_slide_or_404
+from app.api.deps import forbid_for_image_project, get_project_or_404, get_slide_or_404
 from app.core.config import get_settings
 from app.database.session import get_db
 from app.models.annotation import GeometryAnnotation
 from app.models.config_version import ProjectConfigVersion
 from app.models.patch import Patch
+from app.models.project import Project
 from app.models.slide import Slide
 from app.schemas.slide import (
     DetectTissueRequest,
@@ -21,6 +22,10 @@ from app.schemas.slide import (
     GeneratePatchesRequest,
     GeneratePatchesResponse,
     GridOut,
+    AddProjectGridOut,
+    AddProjectGridRequest,
+    GridRemovalOut,
+    ProjectGridOut,
     SetActiveGridRequest,
     SlideOut,
     TissueRegionOut,
@@ -30,7 +35,8 @@ from app.schemas.slide import (
 from app.services import reader_cache
 from app.services.geometry import validate_shape
 from app.services.patch_generator import generate_patch_grid
-from app.services.patch_grid import GridSpec, grid_key_of
+from app.services.config_versioning import compute_config_hash
+from app.services.patch_grid import GridSpec, grid_key_of, remove_grid
 from app.services.tissue_detector import get_detector
 from app.services.tissue_mask import DETECTION_MAX_SIZE, auto_mask_path, load_mask, mask_outline, rebuild_slide_mask, save_mask
 
@@ -138,25 +144,23 @@ def get_tissue_mask_outline(slide: Slide = Depends(get_slide_or_404)):
     return Response(content=json.dumps({"rings": rings}, separators=(",", ":")), media_type="application/json")
 
 
-@router.post("/slides/{slide_id}/generate-patches", response_model=GeneratePatchesResponse)
-def generate_patches(
-    payload: GeneratePatchesRequest,
-    slide: Slide = Depends(get_slide_or_404),
-    db: Session = Depends(get_db),
-):
-    forbid_for_image_project(slide.project, "Patch generation")
-    config = db.get(ProjectConfigVersion, payload.config_version_id)
-    if config is None:
-        raise HTTPException(status_code=404, detail="Config version not found")
-    if not slide.width_l0:
-        raise HTTPException(status_code=422, detail="Slide metadata is not available; re-import the slide.")
+class GridCutError(Exception):
+    def __init__(self, status: int, detail: str):
+        super().__init__(detail)
+        self.status, self.detail = status, detail
 
+
+def cut_grid(db: Session, slide: Slide, config: ProjectConfigVersion, spec: GridSpec, activate: bool = True) -> GeneratePatchesResponse:
+    """Cut `slide` into patches of `spec` (from its tissue mask), or update that grid if it exists: a patch
+    at the same place keeps its id, status and annotations, and an annotated patch that no longer meets
+    the threshold is kept. With `activate`, the slide switches to this grid (a slide with no grid always
+    does). Not committed; raises GridCutError when nothing can be cut."""
     settings = get_settings()
     try:
         reader = reader_cache.get_reader_for_slide(slide)
         meta = reader.get_metadata()
     except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise GridCutError(404, str(exc)) from exc
 
     tissue_mask = None
     if slide.tissue_mask_path:
@@ -164,19 +168,18 @@ def generate_patches(
         if mask_path.exists():
             tissue_mask = load_mask(mask_path)
 
-    spec = GridSpec(**payload.grid.model_dump()) if payload.grid else GridSpec.from_config(config)
     candidates = generate_patch_grid(meta, spec, tissue_mask, slide.tissue_mask_downsample)
     if not candidates:
-        raise HTTPException(
-            status_code=422,
-            detail="Zero patches were generated. Check patch/stride size against slide dimensions.",
+        raise GridCutError(
+            422,
+            "Zero patches were generated. Check patch/stride size against slide dimensions.",
         )
 
     kept = [c for c in candidates if c.kept]
     if not kept:
-        raise HTTPException(
-            status_code=422,
-            detail=(
+        raise GridCutError(
+            422,
+            (
                 f"0 of {len(candidates)} candidate patches met the minimum tissue fraction "
                 f"({spec.min_tissue_fraction:.0%}). Run tissue detection first or lower the threshold."
             ),
@@ -236,9 +239,9 @@ def generate_patches(
             db.delete(patch)
 
     slide.active_config_version_id = config.id
-    slide.active_grid_key = key
-    slide.status = "patches_generated"
-    db.commit()
+    if activate or slide.active_grid_key is None:
+        slide.active_grid_key = key
+    slide.status = "patches_generated" if slide.status in ("imported", "tissue_detected") or activate else slide.status
 
     return GeneratePatchesResponse(
         total_candidates=len(candidates),
@@ -248,6 +251,28 @@ def generate_patches(
         grid_label=spec.label,
         preserved=preserved,
     )
+
+
+@router.post("/slides/{slide_id}/generate-patches", response_model=GeneratePatchesResponse)
+def generate_patches(
+    payload: GeneratePatchesRequest,
+    slide: Slide = Depends(get_slide_or_404),
+    db: Session = Depends(get_db),
+):
+    forbid_for_image_project(slide.project, "Patch generation")
+    config = db.get(ProjectConfigVersion, payload.config_version_id)
+    if config is None:
+        raise HTTPException(status_code=404, detail="Configuration not found")
+    if not slide.width_l0:
+        raise HTTPException(status_code=422, detail="Slide metadata is not available; re-import the slide.")
+
+    spec = GridSpec(**payload.grid.model_dump()) if payload.grid else GridSpec.from_config(config)
+    try:
+        result = cut_grid(db, slide, config, spec)
+    except GridCutError as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.detail) from exc
+    db.commit()
+    return result
 
 
 @router.get("/slides/{slide_id}/grids", response_model=list[GridOut])
@@ -309,3 +334,96 @@ def set_active_grid(payload: SetActiveGridRequest, slide: Slide = Depends(get_sl
     db.commit()
     db.refresh(slide)
     return slide
+
+
+@router.delete("/slides/{slide_id}/grids/{grid_key}", response_model=GridRemovalOut)
+def remove_slide_grid(grid_key: str, slide: Slide = Depends(get_slide_or_404), db: Session = Depends(get_db)):
+    """Remove one patch size from this slide. Its annotations are kept as whole-slide annotations."""
+    forbid_for_image_project(slide.project, "Removing a patch grid")
+    counts = remove_grid(db, [slide], grid_key)
+    if counts["patches"] == 0:
+        raise HTTPException(status_code=404, detail="This slide has no patches in that grid.")
+    db.commit()
+    return counts
+
+
+@router.get("/projects/{project_id}/grids", response_model=list[ProjectGridOut])
+def list_project_grids(project: Project = Depends(get_project_or_404), db: Session = Depends(get_db)):
+    """Every patch size used in the project (and the project's own, even if not generated yet)."""
+    config = db.get(ProjectConfigVersion, project.active_config_version_id) if project.active_config_version_id else None
+    if config is None or project.project_type == "image":
+        return []
+    slide_ids = [sid for (sid,) in db.query(Slide.id).filter(Slide.project_id == project.id)]
+    per_grid = {}
+    if slide_ids:
+        for key, slides_n, patches_n in (
+            db.query(Patch.grid_key, func.count(func.distinct(Patch.slide_id)), func.count(Patch.id))
+            .filter(Patch.slide_id.in_(slide_ids))
+            .group_by(Patch.grid_key)
+        ):
+            per_grid[key] = {"slide_count": slides_n, "patch_count": patches_n, "annotated_patch_count": 0, "annotation_count": 0}
+        for key, annotated_n, anns_n in (
+            db.query(Patch.grid_key, func.count(func.distinct(Patch.id)), func.count(GeometryAnnotation.id))
+            .join(GeometryAnnotation, GeometryAnnotation.patch_id == Patch.id)
+            .filter(Patch.slide_id.in_(slide_ids))
+            .group_by(Patch.grid_key)
+        ):
+            if key in per_grid:
+                per_grid[key].update(annotated_patch_count=annotated_n, annotation_count=anns_n)
+    default_key = grid_key_of(config)
+    out = []
+    for key in sorted(set(k for k in per_grid if k) | {default_key}, key=lambda k: (k != default_key, k)):
+        try:
+            spec = GridSpec.from_key(key)
+        except ValueError:
+            continue
+        counts = per_grid.get(key, {"slide_count": 0, "patch_count": 0, "annotated_patch_count": 0, "annotation_count": 0})
+        out.append(ProjectGridOut(key=key, label=spec.label, spec=spec.as_dict(), is_default=key == default_key, **counts))
+    return out
+
+
+@router.delete("/projects/{project_id}/grids/{grid_key}", response_model=GridRemovalOut)
+def remove_project_grid(grid_key: str, project: Project = Depends(get_project_or_404), db: Session = Depends(get_db)):
+    """Remove one patch size from every slide of the project. Annotations are kept as whole-slide ones."""
+    forbid_for_image_project(project, "Removing a patch grid")
+    counts = remove_grid(db, db.query(Slide).filter(Slide.project_id == project.id).all(), grid_key)
+    if counts["patches"] == 0:
+        raise HTTPException(status_code=404, detail="No slide of this project has patches in that grid.")
+    db.commit()
+    return counts
+
+
+@router.post("/projects/{project_id}/grids", response_model=AddProjectGridOut)
+def add_project_grid(payload: AddProjectGridRequest, project: Project = Depends(get_project_or_404), db: Session = Depends(get_db)):
+    """Cut every slide whose tissue has been found (detected or drawn) into another patch size. Slides keep
+    showing the size they are on (one with none yet starts on the new one); the rest are listed as
+    skipped, with why. Optionally makes it the project's grid, used by Generate Coords from then on."""
+    forbid_for_image_project(project, "Patch grids")
+    config = db.get(ProjectConfigVersion, project.active_config_version_id) if project.active_config_version_id else None
+    if config is None:
+        raise HTTPException(status_code=422, detail="This project has no configuration")
+    spec = GridSpec(**payload.grid.model_dump())
+
+    cut, patches, skipped = 0, 0, []
+    for slide in db.query(Slide).filter(Slide.project_id == project.id).order_by(Slide.id):
+        reason = None
+        if slide.status == "error" or not slide.width_l0:
+            reason = "the slide could not be read"
+        elif not slide.tissue_mask_path:
+            reason = "no tissue found yet (detect or draw it on Slide Processing)"
+        if reason is None:
+            try:
+                result = cut_grid(db, slide, config, spec, activate=False)
+                cut += 1
+                patches += result.kept
+                continue
+            except GridCutError as exc:
+                reason = exc.detail
+        skipped.append({"slide_id": slide.id, "slide": slide.filename, "reason": reason})
+
+    if payload.make_default:
+        for field in ("patch_width", "patch_height", "stride_x", "stride_y", "target_magnification", "min_tissue_fraction", "include_edge_patches", "allow_partial_patches"):
+            setattr(config, field, getattr(spec, field))
+        config.config_hash = compute_config_hash(config)
+    db.commit()
+    return AddProjectGridOut(grid_key=spec.key, grid_label=spec.label, slides=cut, patches=patches, skipped=skipped)

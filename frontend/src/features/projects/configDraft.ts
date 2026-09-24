@@ -1,9 +1,8 @@
 import type { ClassSyncItem } from "../../services/api";
 import type { ConfigVersion } from "../../types/api";
 
-/** Fields that define the patch grid. Mirrors GRID_FIELDS in backend/app/services/config_versioning.py,
- * restricted to the ones the edit form exposes. They can be changed in place (existing patches keep the
- * grid they were cut with), except on a locked version, where changing them becomes a new version. */
+/** Fields that define the patch grid (GRID_FIELDS in backend/app/services/config_versioning.py), restricted
+ * to the ones the edit form exposes. Changing them never moves existing patches: each keeps its own grid. */
 export const CRITICAL_FIELDS = [
   "patch_width",
   "patch_height",
@@ -168,12 +167,6 @@ export function validateDraft(d: ConfigDraft): string | null {
 }
 
 /** Next unused "vN.0" label, e.g. ["v1.0", "v2.0"] -> "v3.0". */
-export function suggestVersionLabel(existing: string[]): string {
-  const taken = new Set(existing);
-  let n = 2;
-  while (taken.has(`v${n}.0`)) n += 1;
-  return `v${n}.0`;
-}
 
 /** "2048 px, stride 1024, 40x, tissue >= 4%" -- the grid a configuration cuts patches with. */
 export function gridSummary(c: ConfigVersion): string {

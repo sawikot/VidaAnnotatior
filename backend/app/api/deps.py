@@ -34,7 +34,7 @@ def get_slide_or_404(slide_id: int, db: Session = Depends(get_db)) -> Slide:
 def get_config_or_404(config_id: int, db: Session = Depends(get_db)) -> ProjectConfigVersion:
     config = db.get(ProjectConfigVersion, config_id)
     if config is None:
-        raise HTTPException(status_code=404, detail=f"Config version {config_id} not found")
+        raise HTTPException(status_code=404, detail=f"Configuration {config_id} not found")
     return config
 
 

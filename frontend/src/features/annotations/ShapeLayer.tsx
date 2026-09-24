@@ -9,6 +9,7 @@ import {
   translatePoints,
 } from "../../utils/shapes";
 import { dragHandle, handlesFor, insertVertex, removeVertex, type Handle, type HandleSpot } from "../../utils/shapeEdit";
+import { CLOSE_TOLERANCE_PX, cleanPolygon, polygonClick, type LastClick } from "../../utils/polygonDraw";
 import type { AnnotationTool } from "../../stores/annotationStore";
 import type { AnnotationClass, GeometryType } from "../../types/api";
 
@@ -103,8 +104,13 @@ export function ShapeLayer({
   const [isDragging, setIsDragging] = useState(false);
   const [edit, setEdit] = useState<EditState | null>(null);
   const dragStart = useRef<Point | null>(null);
+  const lastClick = useRef<LastClick | null>(null);
 
   const active = tool !== "pan"; // "pan" leaves the pointer to whatever is underneath
+  // The drawing tool in use, which Pan does not replace: panning (holding Space, or the Pan tool) in the middle
+  // of a polygon or a drag must leave the shape as it was, to be carried on when the pointer comes back.
+  const [drawTool, setDrawTool] = useState<AnnotationTool>(tool);
+  if (tool !== "pan" && tool !== drawTool) setDrawTool(tool); // adjusting state to a prop, during render
   const px = (n: number) => n / scale;
   const unit = 1 / scale;
   const classColor = (id: number | null) => classes.find((c) => c.id === id)?.color_hex ?? PREVIEW;
@@ -159,7 +165,11 @@ export function ShapeLayer({
       return;
     }
     if (tool === "polygon") {
-      setDrawPoints((pts) => [...pts, pt]);
+      // Close on the first point or on a double-click; never leave a stray point from a double-click.
+      const decision = polygonClick(drawPoints, pt, unit, e.timeStamp, lastClick.current);
+      lastClick.current = { time: e.timeStamp, at: pt };
+      if (decision === "close") finishPolygon();
+      else if (decision === "add") setDrawPoints((pts) => [...pts, pt]);
     }
   }
 
@@ -190,15 +200,15 @@ export function ShapeLayer({
       return;
     }
 
-    if (tool === "polygon" && drawPoints.length > 0) setCursor(clampToSpace(localPoint(e)));
+    if (drawTool === "polygon" && drawPoints.length > 0) setCursor(clampToSpace(localPoint(e)));
     if (!isDragging || !dragStart.current) return;
     const pt = clampToSpace(localPoint(e));
 
-    if (tool === "rectangle" || tool === "line") {
+    if (drawTool === "rectangle" || drawTool === "line") {
       setDrawPoints([dragStart.current, pt]);
-    } else if (tool === "circle") {
+    } else if (drawTool === "circle") {
       setDrawPoints([dragStart.current, constrainCircleEdge(dragStart.current, pt, width, height)]);
-    } else if (PATH_TOOLS.includes(tool)) {
+    } else if (PATH_TOOLS.includes(drawTool)) {
       setDrawPoints((pts) => {
         const last = pts[pts.length - 1];
         if (last && Math.hypot(pt[0] - last[0], pt[1] - last[1]) < FREEHAND_MIN_DIST * unit) return pts;
@@ -221,7 +231,7 @@ export function ShapeLayer({
     if (!isDragging) return;
     setIsDragging(false);
 
-    if (tool === "rectangle" && drawPoints.length === 2) {
+    if (drawTool === "rectangle" && drawPoints.length === 2) {
       const [[x0, y0], [x1, y1]] = drawPoints;
       const corners: Point[] = [
         [Math.min(x0, x1), Math.min(y0, y1)],
@@ -230,32 +240,28 @@ export function ShapeLayer({
         [Math.min(x0, x1), Math.max(y0, y1)],
       ];
       if (isDrawnEnough("rectangle", corners, unit)) onShapeComplete("rectangle", corners);
-    } else if ((tool === "line" || tool === "circle") && drawPoints.length === 2) {
-      if (isDrawnEnough(tool, drawPoints, unit)) onShapeComplete(tool, drawPoints);
-    } else if ((tool === "freehand" || tool === "freehand_line") && isDrawnEnough(tool, drawPoints, unit)) {
-      onShapeComplete(tool, drawPoints);
+    } else if ((drawTool === "line" || drawTool === "circle") && drawPoints.length === 2) {
+      if (isDrawnEnough(drawTool, drawPoints, unit)) onShapeComplete(drawTool, drawPoints);
+    } else if ((drawTool === "freehand" || drawTool === "freehand_line") && isDrawnEnough(drawTool, drawPoints, unit)) {
+      onShapeComplete(drawTool, drawPoints);
     }
     setDrawPoints([]);
     dragStart.current = null;
   }
 
+  /** Save the polygon if it has at least 3 distinct points; otherwise keep drawing (nothing is thrown away). */
   function finishPolygon() {
-    // A double-click to finish fires two click events (each adding a point via handlePointerDown)
-    // before the dblclick handler runs, leaving a near-duplicate final vertex at the same
-    // location -- drop it before committing the shape.
-    let points = drawPoints;
-    if (points.length >= 2) {
-      const [lx, ly] = points[points.length - 1];
-      const [ax, ay] = points[points.length - 2];
-      if (Math.hypot(lx - ax, ly - ay) < 3 * unit) points = points.slice(0, -1);
-    }
-    if (isDrawnEnough("polygon", points, unit)) onShapeComplete("polygon", points);
+    const points = cleanPolygon(drawPoints, unit);
+    if (!isDrawnEnough("polygon", points, unit)) return;
+    onShapeComplete("polygon", points);
     setDrawPoints([]);
+    setCursor(null);
+    lastClick.current = null;
   }
 
   function handleDoubleClick(e: React.MouseEvent) {
     if (tool === "polygon") {
-      finishPolygon();
+      finishPolygon(); // usually already closed by the second click (see polygonClick); a no-op then
       return;
     }
     if (tool !== "select") return;
@@ -281,9 +287,11 @@ export function ShapeLayer({
 
   function cancelInProgress() {
     setDrawPoints([]);
+    setCursor(null);
     setIsDragging(false);
     setEdit(null);
     setGesture(false);
+    lastClick.current = null;
   }
 
   // Keys: Enter finishes a polygon, Escape abandons whatever is half done, Delete removes the selected shape.
@@ -291,8 +299,15 @@ export function ShapeLayer({
   // it must see the current shapes and class, or a Delete would act on how things were before the last edit.
   function handleKey(e: KeyboardEvent) {
     if (isTyping(e.target)) return;
-    if (e.key === "Enter" && tool === "polygon") finishPolygon();
+    if (e.key === "Enter" && drawTool === "polygon") finishPolygon();
     if (e.key === "Escape") cancelInProgress();
+    // While drawing a polygon, Backspace/Delete takes back the last point placed.
+    if ((e.key === "Delete" || e.key === "Backspace") && drawTool === "polygon" && drawPoints.length > 0) {
+      e.preventDefault();
+      setDrawPoints((pts) => pts.slice(0, -1));
+      lastClick.current = null;
+      return;
+    }
     if ((e.key === "Delete" || e.key === "Backspace") && selectedId != null && tool === "select") {
       e.preventDefault();
       onDeleteSelected();
@@ -306,8 +321,9 @@ export function ShapeLayer({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [active]);
 
-  // Abandon in-progress drawing when the surface changes (another patch/image) or the tool does.
-  useEffect(cancelInProgress, [resetKey, tool]);
+  // Abandon in-progress drawing when the surface changes (another patch/image) or another drawing tool is
+  // picked -- but not for panning, which only moves the view.
+  useEffect(cancelInProgress, [resetKey, drawTool]);
 
   const stroke = px(2);
   const dash = `${px(6)} ${px(4)}`;
@@ -359,16 +375,20 @@ export function ShapeLayer({
         />
       ))}
 
-      {drawPoints.length > 0 && tool === "polygon" && (
-        <>
+      {drawPoints.length > 0 && drawTool === "polygon" && (
+        <g pointerEvents="none">
           <polyline points={[...drawPoints, cursor ?? drawPoints[drawPoints.length - 1]].map((p) => p.join(",")).join(" ")} {...preview} strokeDasharray={dash} />
           {drawPoints.map((p, i) => (
             <circle key={i} cx={p[0]} cy={p[1]} r={px(4)} fill={PREVIEW} />
           ))}
-        </>
+          {drawPoints.length >= 3 && (
+            // Click here (or double-click, or Enter) to close the polygon.
+            <circle cx={drawPoints[0][0]} cy={drawPoints[0][1]} r={px(CLOSE_TOLERANCE_PX)} fill="white" fillOpacity={0.35} stroke={PREVIEW} strokeWidth={stroke} />
+          )}
+        </g>
       )}
 
-      {isDragging && tool === "rectangle" && drawPoints.length === 2 && (
+      {isDragging && drawTool === "rectangle" && drawPoints.length === 2 && (
         <rect
           x={Math.min(drawPoints[0][0], drawPoints[1][0])}
           y={Math.min(drawPoints[0][1], drawPoints[1][1])}
@@ -382,11 +402,11 @@ export function ShapeLayer({
         />
       )}
 
-      {isDragging && tool === "line" && drawPoints.length === 2 && (
+      {isDragging && drawTool === "line" && drawPoints.length === 2 && (
         <line x1={drawPoints[0][0]} y1={drawPoints[0][1]} x2={drawPoints[1][0]} y2={drawPoints[1][1]} {...preview} strokeLinecap="round" pointerEvents="none" />
       )}
 
-      {isDragging && tool === "circle" && drawPoints.length === 2 && (
+      {isDragging && drawTool === "circle" && drawPoints.length === 2 && (
         <g pointerEvents="none">
           <circle
             cx={circleGeometry(drawPoints).cx}
@@ -401,11 +421,11 @@ export function ShapeLayer({
         </g>
       )}
 
-      {isDragging && tool === "freehand" && drawPoints.length > 1 && (
+      {isDragging && drawTool === "freehand" && drawPoints.length > 1 && (
         <polyline points={[...drawPoints, drawPoints[0]].map((p) => p.join(",")).join(" ")} {...preview} pointerEvents="none" />
       )}
 
-      {isDragging && tool === "freehand_line" && drawPoints.length > 1 && (
+      {isDragging && drawTool === "freehand_line" && drawPoints.length > 1 && (
         <polyline points={drawPoints.map((p) => p.join(",")).join(" ")} {...preview} strokeLinecap="round" strokeLinejoin="round" pointerEvents="none" />
       )}
     </g>

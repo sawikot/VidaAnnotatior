@@ -246,7 +246,7 @@ def test_classes_can_still_be_edited_in_place(imgproj):
 # ----------------------------------------------------------------- guards
 
 
-def test_tiling_and_forking_are_refused_for_image_projects(imgproj):
+def test_tiling_is_refused_for_image_projects(imgproj):
     client, pid, _ = imgproj
     slide_id = add_images(client, pid, [("a.png", image_bytes())])["slides"][0]["id"]
     config_id = client.get(f"/api/projects/{pid}").json()["active_config_version_id"]
@@ -254,9 +254,6 @@ def test_tiling_and_forking_are_refused_for_image_projects(imgproj):
 
     assert client.post(f"/api/slides/{slide_id}/detect-tissue", json={}).status_code == 409
     assert client.post(f"/api/slides/{slide_id}/generate-patches", json={"config_version_id": config_id}).status_code == 409
-    assert client.post(f"/api/configs/{config_id}/fork", json={"new_version_label": "v2.0", "overrides": {}}).status_code == 409
-    assert client.post(f"/api/projects/{pid}/configs", json={"version_label": "v9"}).status_code == 409
-    assert client.put(f"/api/slides/{slide_id}/active-config", json={"config_version_id": config_id}).status_code == 409
     assert client.get(f"/api/slides/{slide_id}/patches").json()["total"] == patches_before  # the whole-image patch survived
 
 

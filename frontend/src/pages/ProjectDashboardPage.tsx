@@ -69,11 +69,6 @@ export function ProjectDashboardPage() {
         <div className="flex items-center justify-between flex-wrap gap-space-sm">
           <div className="flex items-center gap-space-sm">
             <h1 className="font-headline-lg text-headline-lg text-on-surface">{project.name}</h1>
-            {config && (
-              <span className="px-space-sm py-0.5 rounded-full bg-surface-container-high text-label-sm font-mono">
-                {config.version_label}
-              </span>
-            )}
             <StatusPill status={project.status} />
           </div>
           <div className="flex items-center gap-space-sm">

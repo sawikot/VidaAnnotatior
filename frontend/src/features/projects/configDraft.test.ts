@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ConfigVersion } from "../../types/api";
-import { diffDraft, draftFromConfig, suggestVersionLabel, validateDraft } from "./configDraft";
+import { diffDraft, draftFromConfig, validateDraft } from "./configDraft";
 
 const config = {
   id: 1,
@@ -105,13 +105,5 @@ describe("validateDraft", () => {
     expect(validateDraft({ ...base, classes: [{ name: "A", color_hex: "#000000", hotkey: "" }, { name: " a ", color_hex: "#000000", hotkey: "" }] })).toMatch(/unique/);
     expect(validateDraft({ ...base, classes: [{ name: " ", color_hex: "#000000", hotkey: "" }] })).toMatch(/blank/);
     expect(validateDraft({ ...base, classes: [{ name: "A", color_hex: "#000000", hotkey: "1" }, { name: "B", color_hex: "#000000", hotkey: "1" }] })).toMatch(/hotkeys/);
-  });
-});
-
-describe("suggestVersionLabel", () => {
-  it("picks the next unused major version", () => {
-    expect(suggestVersionLabel(["v1.0"])).toBe("v2.0");
-    expect(suggestVersionLabel(["v1.0", "v2.0", "v3.0"])).toBe("v4.0");
-    expect(suggestVersionLabel(["v1.0", "v3.0"])).toBe("v2.0");
   });
 });

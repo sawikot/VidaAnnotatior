@@ -100,3 +100,40 @@ def active_grid_filter(query, slide):  # noqa: ANN001, ANN201
     if slide.active_grid_key is not None:
         query = query.filter(Patch.grid_key == slide.active_grid_key)
     return query
+
+
+def remove_grid(db, slides, key: str) -> dict:  # noqa: ANN001
+    """Delete one grid's patches from `slides`, keeping every annotation drawn in them.
+
+    Those annotations become whole-slide annotations at the same place (their Level-0 coordinates are the
+    canonical ones anyway), so they still show in every other grid and in exports. A slide that was on
+    the removed grid moves to another grid it has -- the configuration's own if it can -- or, with none
+    left, back to the stage before patches. Not committed.
+    """
+    from app.models.annotation import GeometryAnnotation
+    from app.models.config_version import ProjectConfigVersion
+    from app.models.patch import Patch
+
+    counts = {"slides": 0, "patches": 0, "annotations_kept": 0}
+    for slide in slides:
+        ids = [pid for (pid,) in db.query(Patch.id).filter(Patch.slide_id == slide.id, Patch.grid_key == key)]
+        if not ids:
+            continue
+        counts["slides"] += 1
+        counts["patches"] += len(ids)
+        counts["annotations_kept"] += (
+            db.query(GeometryAnnotation)
+            .filter(GeometryAnnotation.patch_id.in_(ids))
+            .update({GeometryAnnotation.patch_id: None, GeometryAnnotation.coordinates_patch_local: []}, synchronize_session=False)
+        )
+        db.query(Patch).filter(Patch.id.in_(ids)).delete(synchronize_session=False)
+
+        if slide.active_grid_key == key:
+            left = sorted({k for (k,) in db.query(Patch.grid_key).filter(Patch.slide_id == slide.id).distinct() if k})
+            config = db.get(ProjectConfigVersion, slide.active_config_version_id) if slide.active_config_version_id else None
+            own = grid_key_of(config) if config else None
+            slide.active_grid_key = own if own in left else (left[0] if left else None)
+            if not left and slide.status in ("patches_generated", "annotating", "reviewed"):
+                slide.status = "tissue_detected" if slide.tissue_mask_path else "imported"
+    db.flush()
+    return counts

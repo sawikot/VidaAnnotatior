@@ -13,10 +13,6 @@ class SlideImportPathRequest(BaseModel):
     config_version_id: int | None = None
 
 
-class SlideActiveConfigRequest(BaseModel):
-    config_version_id: int
-
-
 class SlideOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -152,6 +148,45 @@ class GridOut(BaseModel):
     annotated_patch_count: int
     active: bool
     is_default: bool  # the configuration's own grid
+
+
+class ProjectGridOut(BaseModel):
+    """A patch size used somewhere in the project, with how much of it exists."""
+
+    key: str
+    label: str
+    spec: GridSpecIn
+    slide_count: int
+    patch_count: int
+    annotated_patch_count: int
+    annotation_count: int  # drawn in its patches (kept, as whole-slide annotations, if it is removed)
+    is_default: bool  # the project's grid, used by Generate Coords
+
+
+class AddProjectGridRequest(BaseModel):
+    grid: GridSpecIn
+    # Also make it the project's grid (what Generate Coords cuts from now on).
+    make_default: bool = False
+
+
+class SkippedSlideOut(BaseModel):
+    slide_id: int
+    slide: str
+    reason: str
+
+
+class AddProjectGridOut(BaseModel):
+    grid_key: str
+    grid_label: str
+    slides: int  # slides cut into it
+    patches: int
+    skipped: list[SkippedSlideOut]
+
+
+class GridRemovalOut(BaseModel):
+    slides: int
+    patches: int
+    annotations_kept: int
 
 
 class GeneratePatchesRequest(BaseModel):

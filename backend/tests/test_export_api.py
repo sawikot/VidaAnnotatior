@@ -23,7 +23,7 @@ def annotated_slide(env):  # noqa: F811
     client, pid, _ = env
     slide_id = upload(client, pid, [("Case 1 (v2).tif", SLIDE)]).json()["slides"][0]["id"]
 
-    config = client.get(f"/api/projects/{pid}/configs").json()[0]
+    config = client.get(f"/api/projects/{pid}/config").json()
     updated = client.put(
         f"/api/configs/{config['id']}",
         json={

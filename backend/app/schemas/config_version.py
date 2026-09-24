@@ -90,13 +90,6 @@ class ConfigVersionUpdate(BaseModel):
     annotation_classes: list[AnnotationClassSync] | None = None
 
 
-class ConfigVersionForkRequest(BaseModel):
-    new_version_label: str = Field(min_length=1, max_length=20)
-    overrides: dict = {}
-    created_by: str | None = None
-    annotation_classes: list[AnnotationClassSync] | None = None
-
-
 class ConfigUsageOut(BaseModel):
     patch_count: int
     annotation_count: int

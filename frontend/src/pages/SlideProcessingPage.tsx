@@ -11,7 +11,7 @@ import { TissueRegionPanel } from "../features/tissue/TissueRegionPanel";
 import { REGION_CLASSES, REGION_TOOLS, classIdOf } from "../features/tissue/regionTools";
 import { useTissueRegions } from "../features/tissue/useTissueRegions";
 import type { AnnotationTool } from "../stores/annotationStore";
-import { detectTissue, generatePatches, getConfig, getSlide, listConfigs, setSlideActiveConfig } from "../services/api";
+import { detectTissue, generatePatches, getConfig, getSlide } from "../services/api";
 import { TissueMaskOutline } from "../features/tissue/TissueMaskOutline";
 import { GridSwitcher } from "../features/grids/GridSwitcher";
 import { tissueParamsOf } from "../features/projects/configDraft";
@@ -39,7 +39,6 @@ export function SlideProcessingPage() {
 
   const [slide, setSlide] = useState<Slide | null>(null);
   const [config, setConfig] = useState<ConfigVersion | null>(null);
-  const [configs, setConfigs] = useState<ConfigVersion[]>([]);
   const [mode, setMode] = useState<ViewMode>("wsi");
   const [bbox, setBbox] = useState<ViewportBbox | null>(null);
   const [busy, setBusy] = useState(false);
@@ -135,34 +134,9 @@ export function SlideProcessingPage() {
       .then(async (s) => {
         setSlide(s);
         setActiveSlide(s);
-        const [all, active] = await Promise.all([
-          listConfigs(s.project_id),
-          s.active_config_version_id ? getConfig(s.active_config_version_id) : Promise.resolve(null),
-        ]);
-        setConfigs(all);
-        setConfig(active);
+        setConfig(s.active_config_version_id ? await getConfig(s.active_config_version_id) : null);
       })
       .catch(() => pushToast("Failed to load slide", "error"));
-  }
-
-  async function handleSwitchConfig(configId: number) {
-    setBusy(true);
-    try {
-      const updated = await setSlideActiveConfig(sid, configId);
-      const chosen = configs.find((c) => c.id === configId);
-      pushToast(
-        updated.status === "patches_generated"
-          ? `Now using ${chosen?.version_label}`
-          : `Now using ${chosen?.version_label} -- run Generate Coords to create its patches`,
-        "success",
-      );
-      setGridRefresh((n) => n + 1);
-      refresh();
-    } catch (e) {
-      pushToast(e instanceof Error ? e.message : "Failed to switch config version", "error");
-    } finally {
-      setBusy(false);
-    }
   }
 
   async function handleDetectTissue() {
@@ -188,7 +162,7 @@ export function SlideProcessingPage() {
 
   async function handleGeneratePatches() {
     if (!slide?.active_config_version_id) {
-      pushToast("No config version assigned to this slide", "error");
+      pushToast("This slide has no configuration", "error");
       return;
     }
     setBusy(true);
@@ -221,23 +195,6 @@ export function SlideProcessingPage() {
               Tissue Segmented
             </span>
           )}
-          <label className="ml-space-md flex items-center gap-1.5">
-            <span className="text-label-sm">Config version</span>
-            <select
-              value={slide.active_config_version_id ?? ""}
-              onChange={(e) => handleSwitchConfig(Number(e.target.value))}
-              disabled={busy || configs.length < 2}
-              className="bg-[#1e293b] border border-slate-700 rounded px-space-sm py-1 text-label-md text-white font-mono disabled:opacity-60"
-              title={configs.length < 2 ? "Create another version in Settings to switch" : "Which configuration this slide's patches and annotations use"}
-            >
-              {configs.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.version_label}
-                  {c.title ? ` - ${c.title}` : ""}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
 
         <div className="flex bg-[#070d1e] rounded-lg p-0.5">
@@ -453,7 +410,7 @@ export function SlideProcessingPage() {
             <div className="bg-[#0b1329] rounded p-space-sm flex flex-col gap-space-sm">
               <div className="flex items-center justify-between">
                 <span className="text-label-md text-slate-300">
-                  Patch grid <span className="font-mono text-slate-500">({config.version_label})</span>
+                  Patch grid
                 </span>
                 <Link to={`/projects/${pid}/settings`} className="text-label-sm text-sky-400 hover:underline flex items-center gap-1">
                   <MaterialIcon name="edit" className="!text-[14px]" />

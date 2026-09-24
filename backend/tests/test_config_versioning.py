@@ -4,7 +4,7 @@ from app.models.config_version import AnnotationClass, ProjectConfigVersion
 from app.models.patch import Patch
 from app.models.project import Project
 from app.models.slide import Slide
-from app.services.config_versioning import ConfigLockedError, assert_mutable, compute_config_hash, fork_config
+from app.services.config_versioning import ConfigLockedError, assert_mutable, compute_config_hash
 
 
 def _seed(db, status="draft"):
@@ -33,14 +33,6 @@ def test_mutable_when_no_patches_generated(db):
     assert_mutable(db, config, {"patch_width": 1024})  # should not raise
 
 
-def test_explicitly_locked_version_blocks_critical_edits_even_without_patches(db):
-    project, config = _seed(db, status="locked")
-    with pytest.raises(ConfigLockedError):
-        assert_mutable(db, config, {"stride_x": 256})
-    # Non-geometry settings stay editable on a locked version.
-    assert_mutable(db, config, {"allow_skip": False, "title": "Renamed"})
-
-
 def test_once_patches_exist_only_the_grid_stays_editable(db):
     project, config = _seed(db)
     slide = Slide(project_id=project.id, filename="Patient_001.svs", source_type="upload")
@@ -64,26 +56,6 @@ def test_once_patches_exist_only_the_grid_stays_editable(db):
 
     # Non-critical fields (e.g. QC flags) remain freely editable.
     assert_mutable(db, config, {"allow_skip": False})
-
-
-def test_fork_creates_new_version_with_parent_link_and_copies_classes(db):
-    project, config = _seed(db)
-    new_config = fork_config(db, config, {"patch_width": 1024, "target_magnification": 40.0}, "v2.0-RC1")
-    db.commit()
-
-    assert new_config.id != config.id
-    assert new_config.parent_version_id == config.id
-    assert new_config.version_label == "v2.0-RC1"
-    assert new_config.status == "draft"
-    assert new_config.patch_width == 1024
-    assert new_config.target_magnification == 40.0
-    # untouched fields carried over from the parent
-    assert new_config.min_tissue_fraction == config.min_tissue_fraction
-    assert len(new_config.annotation_classes) == 1
-    assert new_config.annotation_classes[0].name == "Tumor"
-
-    # original version is untouched
-    assert config.patch_width == 512
 
 
 def test_config_hash_changes_when_critical_fields_change(db):
