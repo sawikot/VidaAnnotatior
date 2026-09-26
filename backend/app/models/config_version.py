@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import JSON, Boolean, Float, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, JSON, Boolean, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base, TimestampMixin
@@ -78,6 +78,9 @@ class AnnotationClass(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(100))
     color_hex: Mapped[str] = mapped_column(String(9), default="#2563eb")
     hotkey: Mapped[str | None] = mapped_column(String(4), default=None)
+    # The class's ID in the lab's own scheme (e.g. a Cytomine term id); any size, unique in the
+    # configuration. Imports match term/category ids against it. Not the database id.
+    code: Mapped[int | None] = mapped_column(BigInteger, default=None)
     order_index: Mapped[int] = mapped_column(Integer, default=0)
 
     config_version: Mapped["ProjectConfigVersion"] = relationship(

@@ -9,6 +9,7 @@ class AnnotationClassIn(BaseModel):
     name: str
     color_hex: str = "#2563eb"
     hotkey: str | None = None
+    code: int | None = Field(default=None, ge=0)  # the lab's own class id (e.g. a Cytomine term id)
     order_index: int = 0
 
 
@@ -28,6 +29,7 @@ class AnnotationClassSync(BaseModel):
     id: int | None = None
     name: str = Field(min_length=1, max_length=100)
     color_hex: str = Field(default="#2563eb", pattern=r"^#[0-9a-fA-F]{6}$")
+    code: int | None = Field(default=None, ge=0)
     hotkey: str | None = Field(default=None, max_length=2)
 
 

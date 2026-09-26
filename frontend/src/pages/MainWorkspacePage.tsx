@@ -812,7 +812,7 @@ export function MainWorkspacePage() {
               <IconButton key={t.id} icon={t.icon} active={tool === t.id} onClick={() => setTool(t.id)} title={`${t.label} (${t.key})`} />
             ))}
             <div className="w-px h-6 bg-slate-700 mx-1" />
-            {classes.map((c) => (
+            {classes.map((c, i) => (
               <button
                 key={c.id}
                 onClick={() => setActiveClassId(c.id)}
@@ -823,7 +823,7 @@ export function MainWorkspacePage() {
                   boxShadow: activeClassId === c.id ? `inset 0 0 0 1px ${c.color_hex}80` : undefined,
                 }}
               >
-                {c.hotkey && <span className="font-mono">{c.hotkey}</span>}
+                {i < 9 && <span className="font-mono">{i + 1}</span>}
                 {c.name}
               </button>
             ))}

@@ -230,7 +230,7 @@ export function SlideProcessingPage() {
             icon="upload_file"
             onClick={() => setImportOpen(true)}
             disabled={slide.status === "imported" || slide.status === "tissue_detected"}
-            title="Import annotations from a previously exported WSI JSON file"
+            title="Import annotations from WSI JSON, GeoJSON (QuPath), COCO, ASAP/Aperio XML or CSV"
           >
             Import Annotations
           </Button>
@@ -455,8 +455,9 @@ export function SlideProcessingPage() {
         onClose={() => setImportOpen(false)}
         slideId={sid}
         onImported={() => {
-          setGridRefresh((n) => n + 1);
-          refresh();
+          // Straight to the whole-slide view, where the imported shapes can be checked in place.
+          setImportOpen(false);
+          navigate(`/projects/${pid}/slides/${sid}/workspace?mode=wsi`);
         }}
       />
     </div>

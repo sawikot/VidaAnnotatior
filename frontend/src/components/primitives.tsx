@@ -89,7 +89,7 @@ export function Modal({
       onClick={onClose}
     >
       <div
-        className={`bg-surface-container-lowest rounded-xl shadow-xl w-full ${widthClass} max-h-[90vh] overflow-y-auto`}
+        className={`bg-surface-container-lowest text-on-surface rounded-xl shadow-xl w-full ${widthClass} max-h-[90vh] overflow-y-auto`}
         onClick={(e) => e.stopPropagation()}
       >
         {children}

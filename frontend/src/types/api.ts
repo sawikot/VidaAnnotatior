@@ -81,6 +81,8 @@ export interface AnnotationClass {
   name: string;
   color_hex: string;
   hotkey: string | null;
+  /** The lab's own class id (e.g. a Cytomine term id), matched by imports; not the database id. */
+  code: number | null;
   order_index: number;
 }
 

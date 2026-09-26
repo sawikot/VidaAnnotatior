@@ -227,7 +227,36 @@ def test_importing_a_wsi_json_file_recreates_slide_level_annotations_and_is_repe
     assert len(restored) == 1 and restored[0]["patch_id"] is None and restored[0]["class_id"] == classes["Tumor"]
 
     outside = {"annotations": [{"type": "polygon", "source_patch": None, "coordinates": [[0, 0], [99999, 0], [5, 5]]}]}
-    assert client.post(f"/api/slides/{slide_id}/import-annotations", json=outside).json()["skipped_invalid_shape"] == 1
+    assert client.post(f"/api/slides/{slide_id}/import-annotations", json=outside).json()["skipped_outside_slide"] == 1
+
+
+def test_a_qupath_geojson_file_is_read_mapped_and_placed_in_patches(grid):
+    client, slide_id, _, classes, _ = grid
+    qupath = {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[[100, 100], [300, 100], [200, 300], [100, 100]]]},
+         "properties": {"objectType": "annotation", "classification": {"name": "Tumour"}}},
+        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [600, 50]}, "properties": {"classification": {"name": "stroma"}}},
+        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [700, 60]}, "properties": {"classification": {"name": "Ignore"}}},
+    ]}  # fmt: skip
+    files = {"file": ("export.geojson", json.dumps(qupath).encode(), "application/geo+json")}
+    parsed = client.post(f"/api/slides/{slide_id}/import-annotations/parse", files=files, data={"scale": "1"})
+    assert parsed.status_code == 200, parsed.text
+    body = parsed.json()
+    assert body["format"] == "geojson" and body["shape_counts"] == {"polygon": 1, "point": 2}
+    assert {l["label"]: l["class_id"] for l in body["labels"]} == {"Tumour": None, "stroma": classes["Stroma"], "Ignore": None}
+
+    result = client.post(f"/api/slides/{slide_id}/import-annotations", json={
+        "annotations": body["annotations"],
+        "label_map": {"Tumour": classes["Tumor"], "stroma": classes["Stroma"], "Ignore": "skip"},
+        "assign_to_patches": True,
+    }).json()  # fmt: skip
+    assert (result["imported_to_patches"], result["skipped_by_choice"]) == (2, 1)
+    polygon = next(a for a in client.get(f"/api/slides/{slide_id}/annotations").json() if a["type"] == "polygon")
+    assert polygon["class_id"] == classes["Tumor"] and polygon["patch_id"] is not None
+    assert polygon["coordinates_patch_local"][0] == [50.0, 50.0]  # the patch at (0, 0) is read at level 1: downsample 2
+
+    bad = client.post(f"/api/slides/{slide_id}/import-annotations/parse", files={"file": ("x.json", b'{"a": 1}', "application/json")})
+    assert bad.status_code == 422 and "Supported" in bad.json()["detail"]
 
 
 # ------------------------------------------------------------------- exports

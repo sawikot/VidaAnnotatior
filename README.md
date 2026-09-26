@@ -263,13 +263,27 @@ the ones for the current page first.
 6. **Export**: *Export* screen → pick one of five formats, preview it, download it (details in
    *Export formats* below). *Full WSI JSON* matches the spec schema exactly, including `source_patch`
    provenance and Level-0 `coordinates`.
-7. **Import annotations** (the inverse of export): on *Slide Processing*, *Import Annotations* accepts a
-   previously exported `wsi_json` file (or a bare `annotations` array) and re-creates those annotations
-   against this slide. Requires tissue detection + *Generate Coords* to have already been run with a
-   matching grid — annotations are matched to *existing* patches by exact Level-0 origin, never fabricated
-   from unverified import data. Class labels are matched by name (unrecognized ones are skipped, not
-   invented), and re-importing the same file is a safe no-op (near-identical geometry on the same patch is
-   detected and skipped).
+7. **Import annotations**: on *Slide Processing*, *Import Annotations* reads annotation files from this
+   app or other tools; the format is detected from the content (`services/annotation_import.py`):
+
+   | Format | Read as |
+   |---|---|
+   | WSI JSON (this app, or a bare `annotations` array) | As exported, with `source_patch` provenance |
+   | GeoJSON (QuPath, GIS tools, this app) | Points, lines, polygons in Level-0 px; multi-geometries split, holes dropped; label from `classification.name`, `label`, `class` or `name` |
+   | COCO | This app's export exactly (`vp_*` fields, circles restored); other COCO placed by the image's `vp_origin_level0` or a `_x<left>_y<top>` tile name; RLE masks as their boxes |
+   | Cytomine JSON (a list, or an API page's `collection`) | WKT `location` with y flipped (Cytomine counts y from the image's bottom); each `term` id is matched to a class's **Class ID** (set per class in *Settings*, any size) — with several matching terms the class listed first wins; shapes with no matching term are labelled `Term <ids>`/`No term` and skipped unless mapped |
+   | ASAP XML / Aperio ImageScope XML | Polygons, rectangles, dots/pins, rulers; Aperio ellipses as circles or 64-gons; negative regions left out |
+   | CSV / TSV | One row per shape: `x`,`y` points (also QuPath's `Centroid X µm`, converted with the slide's mpp), `xmin/ymin/xmax/ymax` or `x/y/width/height` boxes, or a WKT column; label from `label`/`class`/… |
+
+   The file is read first (`POST /slides/{id}/import-annotations/parse`, nothing saved) and the dialog shows
+   what it found: the shapes, their extent against the slide, and every label, which you map to a class,
+   *Import without a class* or *Skip* (labels matching a class name are pre-selected). A *scale* multiplies
+   every coordinate, for files drawn on a downsampled image. Shapes are then saved with
+   `POST /slides/{id}/import-annotations`: one naming its `source_patch` is matched to an *existing* patch by
+   exact Level-0 origin (never fabricated from unverified import data); any other shape goes into the
+   patch that wholly contains it (*Place each shape in the patch that contains it*; always in image
+   projects) or onto the whole slide. Shapes outside the slide are skipped, and re-importing the same file
+   is a safe no-op (near-identical geometry on the same patch is detected and skipped).
 8. **Delete a project**: from the project card's `⋮` menu, *Delete Project* requires typing the project's
    exact slug to confirm (the same pattern GitHub uses for deleting a repo) before it becomes clickable.
    Deletion removes every DB row under the project *and* all of its files on disk (`data/uploads/<project_id>/`:

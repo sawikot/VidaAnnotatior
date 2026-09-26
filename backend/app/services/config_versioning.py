@@ -110,6 +110,11 @@ def sync_annotation_classes(db: Session, config: ProjectConfigVersion, items: li
     if dupe_keys:
         raise ClassSyncError(f"Hotkeys must be unique (duplicated: {', '.join(dupe_keys)}).")
 
+    codes = [getattr(i, "code", None) for i in items if getattr(i, "code", None) is not None]
+    dupe_codes = sorted({c for c in codes if codes.count(c) > 1})
+    if dupe_codes:
+        raise ClassSyncError(f"Class IDs must be unique (duplicated: {', '.join(map(str, dupe_codes))}).")
+
     existing = {c.id: c for c in config.annotation_classes}
     unknown = [i.id for i in items if i.id is not None and i.id not in existing]
     if unknown:
@@ -139,6 +144,7 @@ def sync_annotation_classes(db: Session, config: ProjectConfigVersion, items: li
             if cls.name != name:  # the patch labels that are this class follow the rename
                 db.query(Patch).filter(Patch.label_class_id == cls.id).update({Patch.patch_label: name}, synchronize_session=False)
             cls.name, cls.color_hex, cls.hotkey, cls.order_index = name, item.color_hex, hotkey, position
+            cls.code = getattr(item, "code", None)
         else:
             db.add(
                 AnnotationClass(
@@ -146,6 +152,7 @@ def sync_annotation_classes(db: Session, config: ProjectConfigVersion, items: li
                     name=name,
                     color_hex=item.color_hex,
                     hotkey=hotkey,
+                    code=getattr(item, "code", None),
                     order_index=position,
                 )
             )

@@ -103,7 +103,7 @@ export interface ClassSyncItem {
   id?: number;
   name: string;
   color_hex: string;
-  hotkey: string | null;
+  code: number | null;
 }
 export const getConfigUsage = (id: number) => request<ConfigUsage>(`/configs/${id}/usage`);
 
@@ -353,15 +353,63 @@ export const deleteAnnotation = (id: number) => request<void>(`/annotations/${id
 export interface ImportAnnotationsResult {
   total: number;
   imported: number;
+  imported_to_patches: number;
+  imported_on_slide: number;
   skipped_no_matching_patch: number;
   skipped_unknown_class: number;
   skipped_duplicate: number;
-  /** Entries with a malformed or unknown shape (older servers don't send this). */
-  skipped_invalid_shape?: number;
+  skipped_invalid_shape: number;
+  skipped_outside_slide: number;
+  /** Their label was mapped to "skip". */
+  skipped_by_choice: number;
 }
+/** What to do with the shapes carrying one label of the file: a class id, no class, or leave them out. */
+export type ImportLabelTarget = number | "skip" | "unlabeled";
+export interface ImportEntry {
+  type: GeometryType;
+  label: string | null;
+  coordinates: number[][];
+  source_patch: { x: number; y: number } | null;
+  unsure: boolean;
+  flagged: boolean;
+}
+/** An annotation file read and converted by the server, before anything is saved. */
+export interface ParsedAnnotations {
+  format: string;
+  format_name: string;
+  annotations: ImportEntry[];
+  /** `label` is "" for shapes without one; `class_id` is the class of that name, if any. */
+  labels: { label: string; count: number; class_id: number | null }[];
+  classes: { id: number; name: string; color_hex: string; code: number | null }[];
+  shape_counts: Record<string, number>;
+  linked_to_patches: number;
+  outside_slide: number;
+  bounds: [number, number, number, number] | null;
+  slide_size: [number | null, number | null];
+  image_project: boolean;
+  /** Every coordinate was multiplied by this; `scale_note` says why when it was worked out from the file. */
+  scale: number;
+  scale_auto: boolean;
+  scale_note: string | null;
+  unreadable: Record<string, number>;
+  warnings: string[];
+}
+/** `scale` left out: the server works it out from the file (1 unless the file shows otherwise). */
+export const parseAnnotationFile = (slideId: number, file: File, scale?: number) => {
+  const form = new FormData();
+  form.append("file", file);
+  if (scale !== undefined) form.append("scale", String(scale));
+  return request<ParsedAnnotations>(`/slides/${slideId}/import-annotations/parse`, { method: "POST", body: form });
+};
 export const importAnnotations = (
   slideId: number,
-  payload: { annotations: unknown[]; config_version_id?: number; created_by?: string },
+  payload: {
+    annotations: unknown[];
+    config_version_id?: number;
+    created_by?: string;
+    label_map?: Record<string, ImportLabelTarget>;
+    assign_to_patches?: boolean;
+  },
 ) =>
   request<ImportAnnotationsResult>(`/slides/${slideId}/import-annotations`, {
     method: "POST",

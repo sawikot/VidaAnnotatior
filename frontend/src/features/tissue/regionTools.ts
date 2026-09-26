@@ -6,8 +6,8 @@ export const REGION_COLORS: Record<TissueRegionMode, string> = { add: "#22c55e",
 
 /** ShapeLayer colours shapes by class: the two region modes stand in as classes 1 and 2. */
 export const REGION_CLASSES: AnnotationClass[] = [
-  { id: 1, name: "Add", color_hex: REGION_COLORS.add, hotkey: null, order_index: 0 },
-  { id: 2, name: "Remove", color_hex: REGION_COLORS.remove, hotkey: null, order_index: 1 },
+  { id: 1, name: "Add", color_hex: REGION_COLORS.add, hotkey: null, code: null, order_index: 0 },
+  { id: 2, name: "Remove", color_hex: REGION_COLORS.remove, hotkey: null, code: null, order_index: 1 },
 ];
 export const classIdOf = (mode: TissueRegionMode) => (mode === "add" ? 1 : 2);
 

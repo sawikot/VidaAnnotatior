@@ -9,11 +9,17 @@ import { createProject } from "../services/api";
 import type { ProjectType } from "../types/api";
 import { useUiStore } from "../stores/uiStore";
 
-const DEFAULT_CLASSES = [
-  { name: "Tumor", color_hex: "#dc2626", hotkey: "1" },
-  { name: "Stroma", color_hex: "#16a34a", hotkey: "2" },
-  { name: "Necrosis", color_hex: "#eab308", hotkey: "3" },
-  { name: "Normal", color_hex: "#2563eb", hotkey: "4" },
+interface WizardClass {
+  name: string;
+  color_hex: string;
+  code?: number | null; // the lab's own Class ID (e.g. a Cytomine term id)
+}
+
+const DEFAULT_CLASSES: WizardClass[] = [
+  { name: "Tumor", color_hex: "#dc2626" },
+  { name: "Stroma", color_hex: "#16a34a" },
+  { name: "Necrosis", color_hex: "#eab308" },
+  { name: "Normal", color_hex: "#2563eb" },
 ];
 
 // Steps 2-4 only exist for whole-slide projects: an image project has no magnification,
@@ -104,7 +110,7 @@ export function NewProjectWizardPage() {
   const overlapPct = Math.round(((patchWidth - strideX) / patchWidth) * 100);
 
   function addClass() {
-    setClasses((c) => [...c, { name: "New Class", color_hex: "#64748b", hotkey: String(c.length + 1) }]);
+    setClasses((c) => [...c, { name: "New Class", color_hex: "#64748b" }]);
   }
   function updateClass(i: number, patch: Partial<(typeof classes)[0]>) {
     setClasses((c) => c.map((cls, idx) => (idx === i ? { ...cls, ...patch } : cls)));
@@ -368,27 +374,37 @@ export function NewProjectWizardPage() {
           <SectionTitle n={stepNumber("step-5")} title="Diagnostic Classes" />
           <div className="flex flex-col gap-space-sm mt-space-md">
             {classes.map((cls, i) => (
-              <div key={i} className="flex items-center gap-space-sm">
+              <div key={i} className="flex flex-col gap-1">
+                <div className="flex items-center gap-space-sm">
+                  <input
+                    type="color"
+                    value={cls.color_hex}
+                    onChange={(e) => updateClass(i, { color_hex: e.target.value })}
+                    className="w-7 h-7 rounded border-0 cursor-pointer"
+                  />
+                  <input
+                    className="input flex-1 min-w-0"
+                    value={cls.name}
+                    onChange={(e) => updateClass(i, { name: e.target.value })}
+                    aria-label="Class name"
+                  />
+                  <button onClick={() => removeClass(i)} className="text-error" aria-label={`Remove ${cls.name || "class"}`}>
+                    <MaterialIcon name="close" className="!text-[16px]" />
+                  </button>
+                </div>
+                {/* The class's own ID sits under its name: the card is too narrow for both on one line. */}
                 <input
-                  type="color"
-                  value={cls.color_hex}
-                  onChange={(e) => updateClass(i, { color_hex: e.target.value })}
-                  className="w-7 h-7 rounded border-0 cursor-pointer"
+                  className="input font-mono ml-9 mr-6 !w-auto"
+                  inputMode="numeric"
+                  value={cls.code ?? ""}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, "");
+                    updateClass(i, { code: digits ? Number(digits) : null });
+                  }}
+                  placeholder="Class ID (optional)"
+                  aria-label="Class ID"
+                  title="Optional: your own ID for this class (any length, e.g. a Cytomine term ID). Imports match term/category IDs against it."
                 />
-                <input
-                  className="input flex-1"
-                  value={cls.name}
-                  onChange={(e) => updateClass(i, { name: e.target.value })}
-                />
-                <input
-                  className="input w-12 text-center font-mono"
-                  value={cls.hotkey ?? ""}
-                  onChange={(e) => updateClass(i, { hotkey: e.target.value })}
-                  maxLength={2}
-                />
-                <button onClick={() => removeClass(i)} className="text-error">
-                  <MaterialIcon name="close" className="!text-[16px]" />
-                </button>
               </div>
             ))}
             <Button variant="ghost" icon="add" onClick={addClass}>

@@ -109,7 +109,15 @@ export function ConfigEditor({ config, projectType = "wsi", onSaved }: Props) {
               <div key={k.id ?? `new-${i}`} className="flex items-center gap-space-sm">
                 <input type="color" value={k.color_hex} onChange={(e) => updateClass(i, { color_hex: e.target.value })} className="w-8 h-8 rounded border-0 cursor-pointer" aria-label="Class color" />
                 <input className="input flex-1" value={k.name} onChange={(e) => updateClass(i, { name: e.target.value })} aria-label="Class name" />
-                <input className="input w-14 text-center font-mono" maxLength={2} value={k.hotkey} onChange={(e) => updateClass(i, { hotkey: e.target.value })} aria-label="Hotkey" placeholder="key" />
+                <input
+                  className="input w-32 font-mono"
+                  inputMode="numeric"
+                  value={k.code ?? ""}
+                  onChange={(e) => updateClass(i, { code: e.target.value.replace(/\D/g, "") })}
+                  aria-label="Class ID"
+                  placeholder="Class ID (optional)"
+                  title="Optional: your own ID for this class (any length, e.g. a Cytomine term ID). Imports match term/category IDs against it."
+                />
                 <button
                   type="button"
                   className="text-error"
@@ -124,7 +132,7 @@ export function ConfigEditor({ config, projectType = "wsi", onSaved }: Props) {
               <Button
                 variant="ghost"
                 icon="add"
-                onClick={() => set("classes", [...draft.classes, { name: "", color_hex: "#64748b", hotkey: String(draft.classes.length + 1) }])}
+                onClick={() => set("classes", [...draft.classes, { name: "", color_hex: "#64748b" }])}
               >
                 Add class
               </Button>

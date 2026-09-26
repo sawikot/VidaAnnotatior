@@ -32,8 +32,8 @@ const config = {
   created_at: "",
   updated_at: "",
   annotation_classes: [
-    { id: 10, name: "Tumor", color_hex: "#dc2626", hotkey: "1", order_index: 0 },
-    { id: 11, name: "Stroma", color_hex: "#16a34a", hotkey: null, order_index: 1 },
+    { id: 10, name: "Tumor", color_hex: "#dc2626", hotkey: "1", code: null, order_index: 0 },
+    { id: 11, name: "Stroma", color_hex: "#16a34a", hotkey: null, code: null, order_index: 1 },
   ],
 } as ConfigVersion;
 
@@ -64,20 +64,32 @@ describe("diffDraft", () => {
   it("sends the full class list, keeping ids, only when classes changed", () => {
     const draft = draftFromConfig(config);
     draft.classes[0].name = "Invasive Tumor";
-    draft.classes.push({ name: "Normal", color_hex: "#2563eb", hotkey: "3" });
+    draft.classes.push({ name: "Normal", color_hex: "#2563eb" });
     const d = diffDraft(draft, config);
     expect(d.changed).toBe(true);
     expect(d.touchedCritical).toEqual([]);
     expect(d.classes).toEqual([
-      { id: 10, name: "Invasive Tumor", color_hex: "#dc2626", hotkey: "1" },
-      { id: 11, name: "Stroma", color_hex: "#16a34a", hotkey: null },
-      { id: undefined, name: "Normal", color_hex: "#2563eb", hotkey: "3" },
+      { id: 10, name: "Invasive Tumor", color_hex: "#dc2626", code: null },
+      { id: 11, name: "Stroma", color_hex: "#16a34a", code: null },
+      { id: undefined, name: "Normal", color_hex: "#2563eb", code: null },
     ]);
   });
 
-  it("does not report a change when a blank hotkey stays blank", () => {
+  it("sends Class IDs of any size as numbers and rejects duplicates", () => {
     const draft = draftFromConfig(config);
-    draft.classes[1].hotkey = "  ";
+    draft.classes[0].code = "904558";
+    expect(diffDraft(draft, config).classes?.[0].code).toBe(904558);
+    expect(validateDraft(draft)).toBeNull();
+    draft.classes[1].code = "904558";
+    expect(validateDraft(draft)).toBe("Class IDs must be unique.");
+    draft.classes[1].code = "12a";
+    expect(validateDraft(draft)).toBe("Class IDs must be whole numbers.");
+  });
+
+  it("does not report a change when a blank Class ID stays blank (it is optional)", () => {
+    const draft = draftFromConfig(config);
+    draft.classes[1].code = "  ";
+    expect(validateDraft(draft)).toBeNull();
     expect(diffDraft(draft, config).classes).toBeNull();
   });
 });
@@ -99,11 +111,10 @@ describe("validateDraft", () => {
     expect(validateDraft({ ...draftFromConfig(config), ...patch })).toMatch(message);
   });
 
-  it("rejects empty, duplicate, and blank classes and duplicate hotkeys", () => {
+  it("rejects empty, duplicate, and blank classes", () => {
     const base = draftFromConfig(config);
     expect(validateDraft({ ...base, classes: [] })).toMatch(/At least one/);
-    expect(validateDraft({ ...base, classes: [{ name: "A", color_hex: "#000000", hotkey: "" }, { name: " a ", color_hex: "#000000", hotkey: "" }] })).toMatch(/unique/);
-    expect(validateDraft({ ...base, classes: [{ name: " ", color_hex: "#000000", hotkey: "" }] })).toMatch(/blank/);
-    expect(validateDraft({ ...base, classes: [{ name: "A", color_hex: "#000000", hotkey: "1" }, { name: "B", color_hex: "#000000", hotkey: "1" }] })).toMatch(/hotkeys/);
+    expect(validateDraft({ ...base, classes: [{ name: "A", color_hex: "#000000" }, { name: " a ", color_hex: "#000000" }] })).toMatch(/unique/);
+    expect(validateDraft({ ...base, classes: [{ name: " ", color_hex: "#000000" }] })).toMatch(/blank/);
   });
 });

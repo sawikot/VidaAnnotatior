@@ -25,7 +25,8 @@ export interface ClassDraft {
   id?: number;
   name: string;
   color_hex: string;
-  hotkey: string;
+  /** Class ID as typed (digits); blank for none. */
+  code?: string;
 }
 
 export interface ConfigDraft {
@@ -85,7 +86,7 @@ export function draftFromConfig(c: ConfigVersion): ConfigDraft {
       id: k.id,
       name: k.name,
       color_hex: k.color_hex,
-      hotkey: k.hotkey ?? "",
+      code: k.code == null ? "" : String(k.code),
     })),
   };
 }
@@ -95,7 +96,7 @@ export function toClassSync(classes: ClassDraft[]): ClassSyncItem[] {
     id: k.id,
     name: k.name.trim(),
     color_hex: k.color_hex,
-    hotkey: k.hotkey.trim() || null,
+    code: k.code?.trim() ? Number(k.code.trim()) : null,
   }));
 }
 
@@ -161,8 +162,9 @@ export function validateDraft(d: ConfigDraft): string | null {
   const names = d.classes.map((k) => k.name.trim().toLowerCase());
   if (names.some((n) => !n)) return "Class names cannot be blank.";
   if (new Set(names).size !== names.length) return "Class names must be unique.";
-  const keys = d.classes.map((k) => k.hotkey.trim()).filter(Boolean);
-  if (new Set(keys).size !== keys.length) return "Class hotkeys must be unique.";
+  const codes = d.classes.map((k) => (k.code ?? "").trim()).filter(Boolean);
+  if (codes.some((c) => !/^\d+$/.test(c) || !Number.isSafeInteger(Number(c)))) return "Class IDs must be whole numbers.";
+  if (new Set(codes.map(Number)).size !== codes.length) return "Class IDs must be unique.";
   return null;
 }
 

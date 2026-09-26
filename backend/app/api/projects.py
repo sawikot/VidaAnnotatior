@@ -67,6 +67,7 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db), user: 
                 name=cls.name,
                 color_hex=cls.color_hex,
                 hotkey=cls.hotkey,
+                code=cls.code,
                 order_index=cls.order_index or i,
             )
         )

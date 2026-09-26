@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -52,7 +53,8 @@ class GeometryAnnotationUpdate(BaseModel):
 
 
 class ImportAnnotationEntry(BaseModel):
-    """One entry from a previously exported WSI JSON `annotations[]` array."""
+    """One shape to import, in Level-0 coordinates: an entry of a WSI JSON export's `annotations[]`,
+    or what `/import-annotations/parse` made of another format."""
 
     type: str
     label: str | None = None
@@ -63,6 +65,11 @@ class ImportAnnotationEntry(BaseModel):
     coordinates: list[list[float]]
 
 
+# What to do with every shape carrying one label of the file: give it this class (by id), import it
+# without a class, or leave it out.
+LabelTarget = int | Literal["skip", "unlabeled"]
+
+
 class ImportAnnotationsRequest(BaseModel):
     """Body shape matches the WSI JSON export's top level loosely -- only
     `annotations` is required, so a full previously-exported file can be
@@ -71,15 +78,59 @@ class ImportAnnotationsRequest(BaseModel):
     config_version_id: int | None = None
     created_by: str | None = None
     annotations: list[ImportAnnotationEntry]
+    # File label ("" for shapes without one) -> target. Labels not listed are matched to a class by
+    # name, and skipped when no class has that name.
+    label_map: dict[str, LabelTarget] | None = None
+    # Put each shape that names no patch into the patch that wholly contains it (patch annotations
+    # count toward the patch's status); shapes no patch contains stay on the whole slide.
+    assign_to_patches: bool = False
 
 
 class ImportAnnotationsResponse(BaseModel):
     total: int
     imported: int
+    imported_to_patches: int = 0
+    imported_on_slide: int = 0
     skipped_no_matching_patch: int
     skipped_unknown_class: int
     skipped_duplicate: int
     skipped_invalid_shape: int = 0
+    skipped_outside_slide: int = 0
+    skipped_by_choice: int = 0  # their label was mapped to "skip"
+
+
+class ImportLabelOut(BaseModel):
+    label: str  # "" for shapes without a label
+    count: int
+    class_id: int | None  # the class of that name, if the configuration has one
+
+
+class ImportClassOut(BaseModel):
+    id: int
+    name: str
+    color_hex: str
+    code: int | None = None
+
+
+class ParsedAnnotationsOut(BaseModel):
+    """An annotation file read and converted, before anything is saved."""
+
+    format: str
+    format_name: str
+    annotations: list[ImportAnnotationEntry]
+    labels: list[ImportLabelOut]
+    classes: list[ImportClassOut]  # the slide configuration's classes, to map labels onto
+    shape_counts: dict[str, int]
+    linked_to_patches: int  # shapes that name the patch they were drawn in
+    outside_slide: int  # shapes reaching outside the slide (usually a wrong scale)
+    bounds: list[float] | None  # [min_x, min_y, max_x, max_y] of all shapes, Level-0
+    slide_size: list[int | None]  # [width, height], Level-0
+    image_project: bool  # every shape must go in the image's patch
+    scale: float  # every coordinate was multiplied by this
+    scale_auto: bool  # the scale was worked out from the file, not given
+    scale_note: str | None = None  # why it is not 1, when worked out
+    unreadable: dict[str, int]  # reason -> shapes in the file that could not be converted
+    warnings: list[str]
 
 
 class OwnerPatchOut(BaseModel):
