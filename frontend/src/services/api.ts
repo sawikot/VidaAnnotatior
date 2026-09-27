@@ -512,3 +512,43 @@ export const removeMember = (projectId: number, userId: number) =>
 
 /** The address a password link opens (shown to the administrator to pass on). */
 export const passwordLinkUrl = (token: string) => `${window.location.origin}/set-password?token=${encodeURIComponent(token)}`;
+
+// ---- The app's version, switching versions (administrators; needs the Docker install) ----
+export interface ReleaseInfo {
+  version: string;
+  name: string;
+  notes: string;
+  published_at: string | null;
+  prerelease: boolean;
+  url: string | null;
+}
+
+export interface DataBackup {
+  id: string;
+  from_version: string | null;
+  to_version: string;
+  created_at: string;
+}
+
+export interface UpdaterStatus {
+  state: "idle" | "pulling" | "switching" | "done" | "failed";
+  target: string | null;
+  message: string;
+  log: string[];
+  current_version: string | null;
+  has_token: boolean;
+  repo: string;
+  backups: DataBackup[];
+}
+
+export interface SystemVersion {
+  version: string;
+  can_update: boolean;
+  updater: UpdaterStatus | null;
+  updater_error: string | null;
+}
+
+export const getSystemVersion = () => request<SystemVersion>("/system/version");
+export const listReleases = () => request<ReleaseInfo[]>("/system/releases");
+export const switchVersion = (version: string, restoreBackup: string | null) =>
+  post<UpdaterStatus>("/system/update", { version, restore_backup: restoreBackup });

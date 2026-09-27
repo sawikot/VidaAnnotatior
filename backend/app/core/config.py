@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     session_days: int = 14
     cookie_secure: bool = False
 
+    # The released version this is (set in the Docker image; "dev" when run from the source).
+    app_version: str = "dev"
+
+    # The updater service that switches versions (docker-compose.yml). Empty: not running under
+    # Docker, so versions are not switched from the app. The secret is written by the updater.
+    updater_url: str = ""
+    updater_secret_file: Path = Path("/run/vida/updater-secret")
+
     # The built frontend (npm run build). When it exists the backend serves it too, so the whole app
     # is one address -- which is also what lets the sign-in cookie reach every request.
     frontend_dist: Path = PROJECT_ROOT / "frontend" / "dist"

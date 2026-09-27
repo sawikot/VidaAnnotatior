@@ -59,7 +59,10 @@ export function UserMenu() {
             <div className="text-label-sm text-on-surface-variant">{user.email}</div>
           </div>
           {user.role === "admin" && (
-            <MenuButton icon="group" label="Users" onClick={() => (setOpen(false), navigate("/admin/users"))} />
+            <>
+              <MenuButton icon="group" label="Users" onClick={() => (setOpen(false), navigate("/admin/users"))} />
+              <MenuButton icon="deployed_code" label="Version & updates" onClick={() => (setOpen(false), navigate("/admin/version"))} />
+            </>
           )}
           <MenuButton icon="key" label="Change password" onClick={() => (setOpen(false), setPasswordOpen(true))} />
           <MenuButton

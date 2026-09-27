@@ -4,7 +4,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from app.api import annotations, auth, configs, export, images, patches, processing, projects, slides
+from app.api import annotations, auth, configs, export, images, patches, processing, projects, slides, system
 from app.api.access import authorize
 from app.core.config import get_settings
 from app.database.session import SessionLocal, init_db
@@ -39,12 +39,13 @@ def on_startup() -> None:
 
 @app.get(f"{settings.api_prefix}/health")
 def health() -> dict:
-    return {"status": "ok", "app": settings.app_name}
+    return {"status": "ok", "app": settings.app_name, "version": settings.app_version}
 
 
 # Signing in, users and members check access themselves; every other route needs a signed-in user
 # with access to what it touches (api/access.py).
 app.include_router(auth.router, prefix=settings.api_prefix)
+app.include_router(system.router, prefix=settings.api_prefix)  # administrators only
 for module in (projects, configs, slides, processing, patches, annotations, export, images):
     app.include_router(module.router, prefix=settings.api_prefix, dependencies=[Depends(authorize)])
 

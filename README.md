@@ -144,7 +144,48 @@ Tests: `backend/tests/test_coordinate_transform.py` and `frontend/src/utils/coor
 same fixture values (including the spec's own worked example: origin `(20000, 15000)` + local `(100, 80)`
 at 1:1 resolution → `(20100, 15080)`), so the two implementations can't silently drift apart.
 
-## Setup
+## Installing with Docker (DGX, servers, Windows)
+
+The usual way to install the app: one Docker image, built for Intel/AMD and ARM (e.g. DGX Spark).
+After the one-time install, administrators install new versions, or go back to older ones, from the
+app itself (**menu → Version & updates**). Nobody touches Docker again.
+
+**Install once**, on a machine with Docker (Linux: Docker Engine + compose plugin; Windows: Docker Desktop):
+
+```bash
+git clone https://github.com/sawikot/VidaAnnotatior.git
+cd VidaAnnotatior
+bash install.sh                                        # Windows: powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+The script creates `.env`, asks for a GitHub token while the repository is private (a *classic* token
+with the `repo` and `read:packages` scopes; press Enter once the repository is public), downloads the
+latest version and starts it on `http://<machine>:8088`. Slides and the database live in `data/` next
+to it and survive every version change. `SLIDES_DIR` in `.env` makes an existing slide folder available
+to *import from a path*.
+
+**Releasing a version** (developers): push a tag.
+
+```bash
+git tag v1.2.0 && git push origin v1.2.0
+```
+
+`.github/workflows/release.yml` builds the image, publishes it to `ghcr.io/sawikot/vidaannotatior`, and
+then creates the GitHub release. Its notes are what administrators read on the Version page. A tag
+with a hyphen (`v1.3.0-beta.1`) is a pre-release and does not become `latest`. When the repository
+becomes public, also make the package public (GitHub → Packages → vidaannotatior → Package settings),
+so installs without a token can download it.
+
+**How switching works:** `docker-compose.yml` runs the image twice: the app, and a small updater
+(`updater/updater.py`) that alone may control Docker, has no open port, and answers only the app
+(through a secret the two share on a volume). On *Install*, the updater downloads the version while
+the app keeps running, stops the app, copies the database to `data/backups/`, starts the same
+container on the new version and waits for it to answer. If it does not start, the previous version
+and database come back by themselves. When going back to an older version, the administrator can also
+restore the data as it was when that version was last used. The choice is written to `APP_VERSION` in
+`.env`, so a restart keeps it.
+
+## Setup (from the source code, for development)
 
 ### Prerequisites
 

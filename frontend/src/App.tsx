@@ -14,6 +14,7 @@ import { ImageAnnotateRedirect } from "./pages/ImageAnnotateRedirect";
 import { ImageGalleryPage } from "./pages/ImageGalleryPage";
 import { LoginPage, SetPasswordPage, SetupPage } from "./pages/AuthPages";
 import { UsersPage } from "./pages/UsersPage";
+import { VersionPage } from "./pages/VersionPage";
 import { useAuthStore } from "./stores/authStore";
 
 export default function App() {
@@ -46,6 +47,7 @@ export default function App() {
           <Route path="/projects/:projectId/export" element={<ProjectExportPage />} />
           <Route path="/projects/:projectId/slides/:slideId/export" element={<ExportRedirect />} />
           <Route path="/admin/users" element={<UsersPage />} />
+          <Route path="/admin/version" element={<VersionPage />} />
           <Route path="*" element={<Navigate to="/projects" replace />} />
         </Route>
         </Route>

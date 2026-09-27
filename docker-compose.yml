@@ -1,0 +1,43 @@
+# VidaAnnotator with Docker. Install once with install.sh (Linux / DGX) or install.ps1 (Windows);
+# after that, new versions are installed from the app itself (menu -> Version & updates).
+#
+# Settings come from .env next to this file (see .env.example). APP_VERSION is kept up to date by
+# the updater, so `docker compose up -d` always starts the version chosen in the app.
+
+services:
+  app:
+    image: ${IMAGE:-ghcr.io/sawikot/vidaannotatior}:${APP_VERSION:-latest}
+    restart: unless-stopped
+    labels:
+      com.vida.role: app
+    ports:
+      - "${PORT:-8088}:8088"
+    environment:
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      SESSION_DAYS: ${SESSION_DAYS:-14}
+      UPDATER_URL: http://updater:9000
+    volumes:
+      - ./data:/app/data
+      # Folder the "import from a path" option may read slides from (default: data/watch).
+      - ${SLIDES_DIR:-./data/watch}:/app/data/watch
+      - updater-secret:/run/vida:ro
+
+  # Switches the app to another version when an administrator asks for it in the app. It is the only
+  # part that can control Docker, and it is not reachable from outside (no ports).
+  updater:
+    image: ${IMAGE:-ghcr.io/sawikot/vidaannotatior}:${UPDATER_VERSION:-latest}
+    restart: unless-stopped
+    command: ["python", "/app/updater/updater.py"]
+    environment:
+      GITHUB_REPO: ${GITHUB_REPO:-sawikot/VidaAnnotatior}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_USER: ${GITHUB_USER:-}
+      IMAGE: ${IMAGE:-ghcr.io/sawikot/vidaannotatior}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/data
+      - ./.env:/config/.env
+      - updater-secret:/run/vida
+
+volumes:
+  updater-secret:
