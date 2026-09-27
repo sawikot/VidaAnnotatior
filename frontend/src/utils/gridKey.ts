@@ -11,12 +11,29 @@ export function gridKey(g: GridSpec): string {
   );
 }
 
+/** The grid a key stands for (the inverse of `gridKey`, as GridSpec.from_key on the server), or null. */
+export function parseGridKey(key: string): GridSpec | null {
+  const m = /^(\d+)x(\d+)_s(\d+)x(\d+)_m([0-9.]+|auto)_t([0-9.]+)(_e)?(_p)?$/.exec(key);
+  if (!m) return null;
+  return {
+    patch_width: Number(m[1]),
+    patch_height: Number(m[2]),
+    stride_x: Number(m[3]),
+    stride_y: Number(m[4]),
+    target_magnification: m[5] === "auto" ? null : Number(m[5]),
+    min_tissue_fraction: Number(m[6]),
+    include_edge_patches: !!m[7],
+    allow_partial_patches: !!m[8],
+  };
+}
+
 /** "2048 px, stride 1024, 40x, tissue >= 4%" */
 export function gridLabel(g: GridSpec): string {
   const size = g.patch_width === g.patch_height ? `${g.patch_width}` : `${g.patch_width}x${g.patch_height}`;
   const stride = g.stride_x === g.stride_y ? `${g.stride_x}` : `${g.stride_x}x${g.stride_y}`;
   const mag = g.target_magnification ? `${g.target_magnification}x` : "default magnification";
-  return `${size} px, stride ${stride}, ${mag}, tissue >= ${Math.round(g.min_tissue_fraction * 100)}%`;
+  const area = g.min_tissue_fraction <= 0 ? "whole slide" : `tissue >= ${Math.round(g.min_tissue_fraction * 100)}%`;
+  return `${size} px, stride ${stride}, ${mag}, ${area}`;
 }
 
 /** Problems that would make the server refuse the grid, or null. */

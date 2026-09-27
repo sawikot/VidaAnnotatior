@@ -76,8 +76,10 @@ export function PatchSizesPanel({ projectId, config, onConfigChanged }: Props) {
     try {
       const res = await removeProjectGrid(projectId, g.key);
       pushToast(
-        `Removed ${res.patches.toLocaleString()} patches from ${res.slides} slide${res.slides === 1 ? "" : "s"}` +
-          (res.annotations_kept ? `; ${res.annotations_kept} annotations kept on the whole slide` : ""),
+        res.patches
+          ? `Removed ${g.label}: ${res.patches.toLocaleString()} patches from ${res.slides} slide${res.slides === 1 ? "" : "s"}` +
+              (res.annotations_kept ? `; ${res.annotations_kept} annotations kept on the whole slide` : "")
+          : `Removed ${g.label} from the list`,
         "success",
       );
       setRemoving(null);
@@ -97,8 +99,9 @@ export function PatchSizesPanel({ projectId, config, onConfigChanged }: Props) {
         <div className="flex-1 min-w-[16rem]">
           <h2 className="font-headline-sm text-headline-sm">Patch sizes</h2>
           <p className="text-body-sm text-on-surface-variant">
-            The patch sizes slides are cut into. The default is what <em>Generate Coords</em> cuts; a slide can hold several
-            and switch between them in the workspace. Every annotation shows in every patch size.
+            Patch sizes made in this project stay here to pick again, on any slide, until you remove them. The default is
+            the size last picked, and what <em>Generate Coords</em> cuts on a slide with no patches. Each slide has one
+            patch size: cutting another replaces its patches, keeping their annotations on the whole slide.
           </p>
         </div>
         <Button
@@ -147,7 +150,7 @@ export function PatchSizesPanel({ projectId, config, onConfigChanged }: Props) {
                   {g.is_default && <span className="ml-1.5 px-1.5 rounded-full bg-primary-fixed text-label-sm">default</span>}
                 </td>
                 <td className="py-1.5 pr-space-md text-right font-mono">{g.slide_count}</td>
-                <td className="py-1.5 pr-space-md text-right font-mono">{g.patch_count ? g.patch_count.toLocaleString() : "not made yet"}</td>
+                <td className="py-1.5 pr-space-md text-right font-mono">{g.patch_count ? g.patch_count.toLocaleString() : "none now"}</td>
                 <td className="py-1.5 pr-space-md text-right font-mono">{g.annotated_patch_count.toLocaleString()}</td>
                 <td className="py-1.5 text-right whitespace-nowrap">
                   {!g.is_default && (
@@ -155,7 +158,7 @@ export function PatchSizesPanel({ projectId, config, onConfigChanged }: Props) {
                       Use as default
                     </button>
                   )}
-                  {g.patch_count > 0 && (
+                  {(g.patch_count > 0 || !g.is_default) && (
                     <button className="text-error hover:underline disabled:opacity-40" disabled={busy} onClick={() => setRemoving(g)}>
                       Remove
                     </button>
@@ -177,8 +180,9 @@ export function PatchSizesPanel({ projectId, config, onConfigChanged }: Props) {
               </button>
             </div>
             <p className="text-body-md text-on-surface-variant">
-              Cuts every slide whose tissue has been found into this patch size, from its tissue mask. Slides keep showing
-              the size they are on; the new one is in their patch-size menu. Nothing already drawn changes.
+              Cuts every slide whose tissue has been found (every slide, for a whole-slide size) into this patch size,
+              <strong> replacing</strong> the patches each has. Annotations drawn in those patches are kept, on the whole slide
+              at the same place; their patch status, labels and notes are removed.
             </p>
             <GridForm value={adding} onChange={setAdding} />
             <Toggle label="Make it the default (what Generate Coords cuts)" checked={makeDefaultToo} onChange={setMakeDefaultToo} />
@@ -205,25 +209,32 @@ export function PatchSizesPanel({ projectId, config, onConfigChanged }: Props) {
             <p className="text-body-md">
               <strong>{removing.label}</strong>
             </p>
-            <ul className="text-body-md list-disc pl-space-lg flex flex-col gap-1">
-              <li>
-                Deletes its <strong>{removing.patch_count.toLocaleString()}</strong> patches from{" "}
-                <strong>
-                  {removing.slide_count} slide{removing.slide_count === 1 ? "" : "s"}
-                </strong>
-                , with their status, flags and notes.
-              </li>
-              {removing.annotation_count > 0 ? (
+            {removing.patch_count === 0 ? (
+              <p className="text-body-md text-on-surface-variant">
+                No slide has patches of this size now, so nothing else changes: it is only taken off the list. You can make
+                it again at any time.
+              </p>
+            ) : (
+              <ul className="text-body-md list-disc pl-space-lg flex flex-col gap-1">
                 <li>
-                  {removing.annotation_count === 1 ? "Its annotation is" : <>Its <strong>{removing.annotation_count.toLocaleString()}</strong> annotations are</>}{" "}
-                  <strong>kept</strong>, as
-                  whole-slide annotations at the same place: they still show in every other patch size and in exports.
+                  Deletes its <strong>{removing.patch_count.toLocaleString()}</strong> patches from{" "}
+                  <strong>
+                    {removing.slide_count} slide{removing.slide_count === 1 ? "" : "s"}
+                  </strong>
+                  , with their status, flags and notes.
                 </li>
-              ) : (
-                <li>No annotations were drawn in it.</li>
-              )}
-              <li>Slides using it switch to another patch size they have. You can make it again at any time.</li>
-            </ul>
+                {removing.annotation_count > 0 ? (
+                  <li>
+                    {removing.annotation_count === 1 ? "Its annotation is" : <>Its <strong>{removing.annotation_count.toLocaleString()}</strong> annotations are</>}{" "}
+                    <strong>kept</strong>, as
+                    whole-slide annotations at the same place: they still show in every other patch size and in exports.
+                  </li>
+                ) : (
+                  <li>No annotations were drawn in it.</li>
+                )}
+                <li>Slides using it go back to generating patches, and the size is taken off the list. You can make it again at any time.</li>
+              </ul>
+            )}
             <div className="flex justify-end gap-space-sm">
               <Button variant="ghost" onClick={() => setRemoving(null)} disabled={busy}>
                 Cancel

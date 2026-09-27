@@ -8,6 +8,7 @@ from app.database.session import get_db
 from app.models.config_version import ProjectConfigVersion
 from app.models.project import Project
 from app.schemas.config_version import ConfigUsageOut, ConfigVersionOut, ConfigVersionUpdate
+from app.services.patch_grid import grid_key_of, remember_grid
 from app.services.config_versioning import (
     ClassSyncError,
     ConfigLockedError,
@@ -53,8 +54,12 @@ def update_config(
         db.rollback()
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
+    before = grid_key_of(config)
     for field, value in changes.items():
         setattr(config, field, value)
+    if grid_key_of(config) != before:  # a new default size: the old one stays pickable
+        remember_grid(config, before)
+        remember_grid(config, grid_key_of(config))
     config.config_hash = compute_config_hash(config)
     db.commit()
     db.refresh(config)

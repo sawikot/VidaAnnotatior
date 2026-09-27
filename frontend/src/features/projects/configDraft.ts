@@ -175,6 +175,7 @@ export function gridSummary(c: ConfigVersion): string {
   const size = c.patch_width === c.patch_height ? `${c.patch_width}` : `${c.patch_width}x${c.patch_height}`;
   const stride = c.stride_x === c.stride_y ? `${c.stride_x}` : `${c.stride_x}x${c.stride_y}`;
   const mag = c.target_magnification ? `${c.target_magnification}x` : "default magnification";
-  return `${size} px, stride ${stride}, ${mag}, tissue >= ${Math.round(c.min_tissue_fraction * 100)}%`;
+  const area = c.min_tissue_fraction <= 0 ? "whole slide" : `tissue >= ${Math.round(c.min_tissue_fraction * 100)}%`;
+  return `${size} px, stride ${stride}, ${mag}, ${area}`;
 }
 

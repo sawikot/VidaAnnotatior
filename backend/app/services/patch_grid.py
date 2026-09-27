@@ -10,7 +10,7 @@ The key is a short readable string that identifies a grid exactly, e.g. ``2048x2
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 
 IMAGE_GRID_KEY = "image"  # image projects: every image is one whole-image patch
 
@@ -74,7 +74,25 @@ class GridSpec:
         size = f"{self.patch_width}" if self.patch_width == self.patch_height else f"{self.patch_width}x{self.patch_height}"
         stride = f"{self.stride_x}" if self.stride_x == self.stride_y else f"{self.stride_x}x{self.stride_y}"
         mag = f"{self.target_magnification:g}x" if self.target_magnification else "default magnification"
-        return f"{size} px, stride {stride}, {mag}, tissue >= {self.min_tissue_fraction:.0%}"
+        area = "whole slide" if self.whole_slide else f"tissue >= {self.min_tissue_fraction:.0%}"
+        return f"{size} px, stride {stride}, {mag}, {area}"
+
+    @property
+    def whole_slide(self) -> bool:
+        """No tissue threshold: every patch of the slide is kept, glass included."""
+        return self.min_tissue_fraction <= 0
+
+    def over_whole_slide(self) -> "GridSpec":
+        """The same patch size covering the whole slide, up to its edges, whatever the tissue."""
+        return replace(self, min_tissue_fraction=0.0, include_edge_patches=True)
+
+    def over_tissue(self, config) -> "GridSpec":  # noqa: ANN001 - a ProjectConfigVersion
+        """The same patch size over the tissue only: a whole-slide grid takes the configuration's
+        threshold (or 50% when that is none either)."""
+        if not self.whole_slide:
+            return self
+        own = GridSpec.from_config(config)
+        return replace(self, min_tissue_fraction=own.min_tissue_fraction if not own.whole_slide else 0.5, include_edge_patches=own.include_edge_patches)
 
     # generate_patch_grid reads these attribute names (the same as a config version's).
     target_level = None
@@ -85,6 +103,40 @@ class GridSpec:
 
 def grid_key_of(config) -> str:  # noqa: ANN001
     return GridSpec.from_config(config).key
+
+
+GRID_SPEC_FIELDS = ("patch_width", "patch_height", "stride_x", "stride_y", "target_magnification", "min_tissue_fraction", "include_edge_patches", "allow_partial_patches")
+
+
+def saved_grid_keys(config) -> list[str]:  # noqa: ANN001
+    """The patch sizes remembered for the project (made, or once the default), oldest first."""
+    return list(config.saved_grids or [])
+
+
+def remember_grid(config, key: str) -> None:  # noqa: ANN001
+    keys = saved_grid_keys(config)
+    if key not in keys:
+        config.saved_grids = keys + [key]  # a new list, so the JSON column is seen as changed
+
+
+def forget_grid(config, key: str) -> bool:  # noqa: ANN001
+    keys = saved_grid_keys(config)
+    if key not in keys:
+        return False
+    config.saved_grids = [k for k in keys if k != key]
+    return True
+
+
+def make_grid_default(config, spec: GridSpec) -> None:  # noqa: ANN001
+    """Make `spec` the project's patch size (what Generate Coords cuts a slide with none); the size it
+    replaces stays remembered, so it can be picked again."""
+    from app.services.config_versioning import compute_config_hash  # (it imports the models; kept lazy)
+
+    remember_grid(config, grid_key_of(config))
+    remember_grid(config, spec.key)
+    for field in GRID_SPEC_FIELDS:
+        setattr(config, field, getattr(spec, field))
+    config.config_hash = compute_config_hash(config)
 
 
 def active_grid_filter(query, slide):  # noqa: ANN001, ANN201
@@ -116,17 +168,20 @@ def remove_grid(db, slides, key: str) -> dict:  # noqa: ANN001
 
     counts = {"slides": 0, "patches": 0, "annotations_kept": 0}
     for slide in slides:
-        ids = [pid for (pid,) in db.query(Patch.id).filter(Patch.slide_id == slide.id, Patch.grid_key == key)]
-        if not ids:
+        # Selected by the database, never as a list of ids: a grid can have tens of thousands of patches,
+        # more than SQLite takes variables in one statement.
+        in_grid = db.query(Patch.id).filter(Patch.slide_id == slide.id, Patch.grid_key == key)
+        n = in_grid.count()
+        if not n:
             continue
         counts["slides"] += 1
-        counts["patches"] += len(ids)
+        counts["patches"] += n
         counts["annotations_kept"] += (
             db.query(GeometryAnnotation)
-            .filter(GeometryAnnotation.patch_id.in_(ids))
+            .filter(GeometryAnnotation.patch_id.in_(in_grid.scalar_subquery()))
             .update({GeometryAnnotation.patch_id: None, GeometryAnnotation.coordinates_patch_local: []}, synchronize_session=False)
         )
-        db.query(Patch).filter(Patch.id.in_(ids)).delete(synchronize_session=False)
+        db.query(Patch).filter(Patch.slide_id == slide.id, Patch.grid_key == key).delete(synchronize_session=False)
 
         if slide.active_grid_key == key:
             left = sorted({k for (k,) in db.query(Patch.grid_key).filter(Patch.slide_id == slide.id).distinct() if k})

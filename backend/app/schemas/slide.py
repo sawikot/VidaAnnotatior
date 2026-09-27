@@ -194,6 +194,9 @@ class GeneratePatchesRequest(BaseModel):
     # Another grid than the configuration's own (a different patch size, stride ...). The slide
     # switches to it; its other grids -- and every annotation -- stay as they are.
     grid: GridSpecIn | None = None
+    # True: cover the whole slide (every patch up to its edges, whatever the tissue; needs no tissue
+    # detection). False: only the tissue, by the configuration's threshold. None: as the grid is.
+    whole_slide: bool | None = None
 
 
 class GeneratePatchesResponse(BaseModel):
@@ -205,6 +208,11 @@ class GeneratePatchesResponse(BaseModel):
     # Annotated patches of an earlier run of this grid that no longer meet the threshold: kept, so no
     # annotation is ever lost by regenerating.
     preserved: int = 0
+    # The other patch grids this one replaced, their patches, and the annotations drawn in those
+    # patches -- kept, as whole-slide annotations at the same place.
+    replaced_grids: int = 0
+    replaced_patches: int = 0
+    annotations_moved_to_slide: int = 0
 
 
 class SetActiveGridRequest(BaseModel):

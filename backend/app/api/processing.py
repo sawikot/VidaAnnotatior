@@ -35,8 +35,7 @@ from app.schemas.slide import (
 from app.services import reader_cache
 from app.services.geometry import validate_shape
 from app.services.patch_generator import generate_patch_grid
-from app.services.config_versioning import compute_config_hash
-from app.services.patch_grid import GridSpec, grid_key_of, remove_grid
+from app.services.patch_grid import GridSpec, forget_grid, grid_key_of, make_grid_default, remember_grid, remove_grid, saved_grid_keys
 from app.services.tissue_detector import get_detector
 from app.services.tissue_mask import DETECTION_MAX_SIZE, auto_mask_path, load_mask, mask_outline, rebuild_slide_mask, save_mask
 
@@ -150,11 +149,15 @@ class GridCutError(Exception):
         self.status, self.detail = status, detail
 
 
-def cut_grid(db: Session, slide: Slide, config: ProjectConfigVersion, spec: GridSpec, activate: bool = True) -> GeneratePatchesResponse:
-    """Cut `slide` into patches of `spec` (from its tissue mask), or update that grid if it exists: a patch
-    at the same place keeps its id, status and annotations, and an annotated patch that no longer meets
-    the threshold is kept. With `activate`, the slide switches to this grid (a slide with no grid always
-    does). Not committed; raises GridCutError when nothing can be cut."""
+def cut_grid(db: Session, slide: Slide, config: ProjectConfigVersion, spec: GridSpec) -> GeneratePatchesResponse:
+    """Cut `slide` into patches of `spec` (from its tissue mask, or all of it for a whole-slide grid).
+
+    A slide has one patch grid: cutting a new size *replaces* the grids it had. Their patches go, but no
+    annotation is lost -- one drawn in them becomes a whole-slide annotation at the same place (see
+    ``remove_grid``), which every patch view still shows. Cutting the same grid again updates it in place:
+    a patch at the same place keeps its id, status and annotations, and an annotated patch that no longer
+    meets the threshold is kept. Not committed; raises GridCutError when nothing can be cut (and then
+    nothing is removed)."""
     settings = get_settings()
     try:
         reader = reader_cache.get_reader_for_slide(slide)
@@ -193,11 +196,10 @@ def cut_grid(db: Session, slide: Slide, config: ProjectConfigVersion, spec: Grid
         (p.x, p.y, p.width_l0, p.height_l0): p
         for p in db.query(Patch).filter(Patch.slide_id == slide.id, Patch.config_version_id == config.id, Patch.grid_key == key)
     }
+    # A subquery, not a list of ids: a grid can have far more patches than SQLite takes variables.
+    grid_patch_ids = db.query(Patch.id).filter(Patch.slide_id == slide.id, Patch.config_version_id == config.id, Patch.grid_key == key)
     annotated_ids = {
-        pid
-        for (pid,) in db.query(GeometryAnnotation.patch_id).filter(
-            GeometryAnnotation.patch_id.in_([p.id for p in existing.values()])
-        )
+        pid for (pid,) in db.query(GeometryAnnotation.patch_id).filter(GeometryAnnotation.patch_id.in_(grid_patch_ids.scalar_subquery()))
     } if existing else set()
 
     seen = set()
@@ -238,12 +240,25 @@ def cut_grid(db: Session, slide: Slide, config: ProjectConfigVersion, spec: Grid
         else:
             db.delete(patch)
 
+    remember_grid(config, key)  # a size once made stays pickable until removed on purpose
+
+    # The new grid replaces every other grid of the slide.
+    replaced = {"grids": 0, "patches": 0, "annotations_kept": 0}
+    db.flush()
+    for (other,) in db.query(Patch.grid_key).filter(Patch.slide_id == slide.id, Patch.grid_key != key).distinct().all():
+        counts = remove_grid(db, [slide], other)
+        replaced["grids"] += 1
+        replaced["patches"] += counts["patches"]
+        replaced["annotations_kept"] += counts["annotations_kept"]
+
     slide.active_config_version_id = config.id
-    if activate or slide.active_grid_key is None:
-        slide.active_grid_key = key
-    slide.status = "patches_generated" if slide.status in ("imported", "tissue_detected") or activate else slide.status
+    slide.active_grid_key = key
+    slide.status = "patches_generated" if slide.status in ("imported", "tissue_detected", "patches_generated") else slide.status
 
     return GeneratePatchesResponse(
+        replaced_grids=replaced["grids"],
+        replaced_patches=replaced["patches"],
+        annotations_moved_to_slide=replaced["annotations_kept"],
         total_candidates=len(candidates),
         kept=len(kept),
         excluded=len(candidates) - len(kept),
@@ -266,11 +281,26 @@ def generate_patches(
     if not slide.width_l0:
         raise HTTPException(status_code=422, detail="Slide metadata is not available; re-import the slide.")
 
-    spec = GridSpec(**payload.grid.model_dump()) if payload.grid else GridSpec.from_config(config)
+    # Without a grid given, the slide is re-cut at the patch size it is on now; the configuration's
+    # own grid is for a slide that has none yet.
+    if payload.grid:
+        spec = GridSpec(**payload.grid.model_dump())
+    else:
+        spec = GridSpec.from_config(config)
+        if slide.active_grid_key and slide.active_config_version_id == config.id:
+            try:
+                spec = GridSpec.from_key(slide.active_grid_key)
+            except ValueError:
+                pass  # not a patch grid key (an image project's whole image)
+    if payload.whole_slide is True:
+        spec = spec.over_whole_slide()
+    elif payload.whole_slide is False:
+        spec = spec.over_tissue(config)
     try:
         result = cut_grid(db, slide, config, spec)
     except GridCutError as exc:
         raise HTTPException(status_code=exc.status, detail=exc.detail) from exc
+    make_grid_default(config, spec)  # the size picked for a slide becomes the project's
     db.commit()
     return result
 
@@ -297,7 +327,7 @@ def list_grids(slide: Slide = Depends(get_slide_or_404), db: Session = Depends(g
         .all()
     )
     counts = {k: n for k, n in rows if k}
-    keys = sorted(set(counts) | {default_key}, key=lambda k: (k != default_key, k))
+    keys = sorted(set(counts) | set(saved_grid_keys(config)) | {default_key}, key=lambda k: (k != default_key, k))
     out = []
     for k in keys:
         try:
@@ -320,7 +350,8 @@ def list_grids(slide: Slide = Depends(get_slide_or_404), db: Session = Depends(g
 
 @router.put("/slides/{slide_id}/active-grid", response_model=SlideOut)
 def set_active_grid(payload: SetActiveGridRequest, slide: Slide = Depends(get_slide_or_404), db: Session = Depends(get_db)):
-    """Show (annotate, export) another grid this slide already has. To make a new one, generate it."""
+    """Keep only this one of the grids the slide has (a slide cut into several sizes before a slide had
+    one): the others are removed, their annotations kept on the whole slide. To make a new size, generate it."""
     forbid_for_image_project(slide.project, "Switching patch grids")
     has = (
         db.query(Patch.id)
@@ -330,6 +361,13 @@ def set_active_grid(payload: SetActiveGridRequest, slide: Slide = Depends(get_sl
     if has is None:
         raise HTTPException(status_code=404, detail="This slide has no patches in that grid yet; generate it first.")
     slide.active_grid_key = payload.grid_key
+    config = db.get(ProjectConfigVersion, slide.active_config_version_id)
+    try:
+        make_grid_default(config, GridSpec.from_key(payload.grid_key))
+    except ValueError:
+        pass
+    for (other,) in db.query(Patch.grid_key).filter(Patch.slide_id == slide.id, Patch.grid_key != payload.grid_key).distinct().all():
+        remove_grid(db, [slide], other)
     slide.status = "patches_generated" if slide.status in ("imported", "tissue_detected") else slide.status
     db.commit()
     db.refresh(slide)
@@ -372,7 +410,7 @@ def list_project_grids(project: Project = Depends(get_project_or_404), db: Sessi
                 per_grid[key].update(annotated_patch_count=annotated_n, annotation_count=anns_n)
     default_key = grid_key_of(config)
     out = []
-    for key in sorted(set(k for k in per_grid if k) | {default_key}, key=lambda k: (k != default_key, k)):
+    for key in sorted(set(k for k in per_grid if k) | set(saved_grid_keys(config)) | {default_key}, key=lambda k: (k != default_key, k)):
         try:
             spec = GridSpec.from_key(key)
         except ValueError:
@@ -384,20 +422,24 @@ def list_project_grids(project: Project = Depends(get_project_or_404), db: Sessi
 
 @router.delete("/projects/{project_id}/grids/{grid_key}", response_model=GridRemovalOut)
 def remove_project_grid(grid_key: str, project: Project = Depends(get_project_or_404), db: Session = Depends(get_db)):
-    """Remove one patch size from every slide of the project. Annotations are kept as whole-slide ones."""
+    """Remove one patch size from the project: its patches on every slide (annotations are kept as
+    whole-slide ones), and the size from the list. The default size stays listed, as the default."""
     forbid_for_image_project(project, "Removing a patch grid")
     counts = remove_grid(db, db.query(Slide).filter(Slide.project_id == project.id).all(), grid_key)
-    if counts["patches"] == 0:
-        raise HTTPException(status_code=404, detail="No slide of this project has patches in that grid.")
+    config = db.get(ProjectConfigVersion, project.active_config_version_id) if project.active_config_version_id else None
+    forgotten = forget_grid(config, grid_key) if config is not None and grid_key != grid_key_of(config) else False
+    if counts["patches"] == 0 and not forgotten:
+        raise HTTPException(status_code=404, detail="This project has no such patch size.")
     db.commit()
     return counts
 
 
 @router.post("/projects/{project_id}/grids", response_model=AddProjectGridOut)
 def add_project_grid(payload: AddProjectGridRequest, project: Project = Depends(get_project_or_404), db: Session = Depends(get_db)):
-    """Cut every slide whose tissue has been found (detected or drawn) into another patch size. Slides keep
-    showing the size they are on (one with none yet starts on the new one); the rest are listed as
-    skipped, with why. Optionally makes it the project's grid, used by Generate Coords from then on."""
+    """Cut every slide whose tissue has been found (detected or drawn) -- every readable slide, for a
+    whole-slide grid -- into this patch size, replacing the patch size each had (annotations are kept on
+    the whole slide). The rest are listed as skipped, with why. Optionally makes it the project's grid,
+    used by Generate Coords from then on."""
     forbid_for_image_project(project, "Patch grids")
     config = db.get(ProjectConfigVersion, project.active_config_version_id) if project.active_config_version_id else None
     if config is None:
@@ -409,11 +451,11 @@ def add_project_grid(payload: AddProjectGridRequest, project: Project = Depends(
         reason = None
         if slide.status == "error" or not slide.width_l0:
             reason = "the slide could not be read"
-        elif not slide.tissue_mask_path:
+        elif not slide.tissue_mask_path and not spec.whole_slide:
             reason = "no tissue found yet (detect or draw it on Slide Processing)"
         if reason is None:
             try:
-                result = cut_grid(db, slide, config, spec, activate=False)
+                result = cut_grid(db, slide, config, spec)
                 cut += 1
                 patches += result.kept
                 continue
@@ -421,9 +463,8 @@ def add_project_grid(payload: AddProjectGridRequest, project: Project = Depends(
                 reason = exc.detail
         skipped.append({"slide_id": slide.id, "slide": slide.filename, "reason": reason})
 
+    remember_grid(config, spec.key)  # listed even if no slide could be cut yet
     if payload.make_default:
-        for field in ("patch_width", "patch_height", "stride_x", "stride_y", "target_magnification", "min_tissue_fraction", "include_edge_patches", "allow_partial_patches"):
-            setattr(config, field, getattr(spec, field))
-        config.config_hash = compute_config_hash(config)
+        make_grid_default(config, spec)
     db.commit()
     return AddProjectGridOut(grid_key=spec.key, grid_label=spec.label, slides=cut, patches=patches, skipped=skipped)

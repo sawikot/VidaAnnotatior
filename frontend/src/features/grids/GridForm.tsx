@@ -16,6 +16,8 @@ export function GridForm({ value: g, onChange }: Props) {
   const square = g.patch_width === g.patch_height;
   const overlap = g.stride_x === g.patch_width && g.stride_y === g.patch_height ? "none" : g.stride_x * 2 === g.patch_width && g.stride_y * 2 === g.patch_height ? "half" : "custom";
   const pickSize = (s: number) => set({ patch_width: s, patch_height: s, stride_x: overlap === "half" ? s / 2 : s, stride_y: overlap === "half" ? s / 2 : s });
+  // No tissue threshold means the grid covers the whole slide, glass included, up to its edges.
+  const wholeSlide = g.min_tissue_fraction <= 0;
 
   return (
     <div className="flex flex-col gap-space-md">
@@ -46,6 +48,27 @@ export function GridForm({ value: g, onChange }: Props) {
               type="button"
               onClick={() => set({ stride_x: Math.max(1, Math.round(g.patch_width / div)), stride_y: Math.max(1, Math.round(g.patch_height / div)) })}
               className={`h-8 px-space-sm rounded text-label-md ${overlap === id ? "bg-primary text-on-primary" : "bg-surface-container-low hover:bg-surface-container"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-label-md text-on-surface-variant mr-1">Patch area</span>
+          {(
+            [
+              [false, "Tissue only"],
+              [true, "Whole slide"],
+            ] as const
+          ).map(([whole, label]) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() =>
+                set(whole ? { min_tissue_fraction: 0, include_edge_patches: true } : { min_tissue_fraction: wholeSlide ? 0.5 : g.min_tissue_fraction })
+              }
+              title={whole ? "Every patch of the slide, glass included -- no tissue detection needed" : "Only patches with enough tissue"}
+              className={`h-8 px-space-sm rounded text-label-md ${wholeSlide === whole ? "bg-primary text-on-primary" : "bg-surface-container-low hover:bg-surface-container"}`}
             >
               {label}
             </button>
@@ -82,16 +105,18 @@ export function GridForm({ value: g, onChange }: Props) {
               ))}
           </select>
         </Field>
-        <Field label="Minimum tissue (%)">
-          <input
-            type="number"
-            className="input"
-            min={0}
-            max={100}
-            value={Number.isNaN(g.min_tissue_fraction) ? "" : Math.round(g.min_tissue_fraction * 1000) / 10}
-            onChange={(e) => set({ min_tissue_fraction: e.target.value === "" ? NaN : Math.round(Number(e.target.value) * 10) / 1000 })}
-          />
-        </Field>
+        {!wholeSlide && (
+          <Field label="Minimum tissue (%)">
+            <input
+              type="number"
+              className="input"
+              min={0}
+              max={100}
+              value={Number.isNaN(g.min_tissue_fraction) ? "" : Math.round(g.min_tissue_fraction * 1000) / 10}
+              onChange={(e) => set({ min_tissue_fraction: e.target.value === "" ? NaN : Math.round(Number(e.target.value) * 10) / 1000 })}
+            />
+          </Field>
+        )}
       </div>
       <Toggle label="Include patches at the slide's edge" checked={g.include_edge_patches} onChange={(v) => set({ include_edge_patches: v })} />
     </div>

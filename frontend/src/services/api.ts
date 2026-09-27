@@ -241,10 +241,24 @@ export const detectTissue = (
     { method: "POST", body: JSON.stringify(params) },
   );
 /** Cut the slide's patches -- with the configuration's grid, or with `grid` (another patch size ...). */
-export const generatePatches = (slideId: number, configVersionId: number, grid?: GridSpec) =>
-  request<{ total_candidates: number; kept: number; excluded: number; grid_key: string; grid_label: string; preserved: number }>(`/slides/${slideId}/generate-patches`, {
+/** Without `grid` the slide is re-cut at the patch size it is on (the project's for a slide with none).
+ * `wholeSlide`: true -- the entire slide up to its edges, whatever the tissue (no tissue detection needed);
+ * false -- only the tissue; left out -- as the grid is. */
+export const generatePatches = (slideId: number, configVersionId: number, grid?: GridSpec, wholeSlide?: boolean) =>
+  request<{
+    total_candidates: number;
+    kept: number;
+    excluded: number;
+    grid_key: string;
+    grid_label: string;
+    preserved: number;
+    /** The slide's earlier grids this one replaced, and the annotations moved from their patches to the whole slide. */
+    replaced_grids: number;
+    replaced_patches: number;
+    annotations_moved_to_slide: number;
+  }>(`/slides/${slideId}/generate-patches`, {
     method: "POST",
-    body: JSON.stringify({ config_version_id: configVersionId, ...(grid ? { grid } : {}) }),
+    body: JSON.stringify({ config_version_id: configVersionId, ...(grid ? { grid } : {}), ...(wholeSlide !== undefined ? { whole_slide: wholeSlide } : {}) }),
   });
 
 // ---- Images (image projects) ----

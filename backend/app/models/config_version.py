@@ -47,6 +47,9 @@ class ProjectConfigVersion(Base, TimestampMixin):
     # --- Tissue segmentation ---
     tissue_method: Mapped[str] = mapped_column(String(40), default="hsv_otsu")
     tissue_params: Mapped[dict] = mapped_column(JSON, default=dict)
+    # Patch sizes made in this project (grid keys), listed for picking again even when no slide has
+    # patches of that size now; they go only when removed on purpose (see services/patch_grid.py).
+    saved_grids: Mapped[list] = mapped_column(JSON, default=list)
 
     # --- Annotation settings ---
     enabled_tools: Mapped[list] = mapped_column(

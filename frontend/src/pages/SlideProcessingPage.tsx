@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { MaterialIcon } from "../components/MaterialIcon";
-import { Button, Card } from "../components/primitives";
+import { Button, Card, Modal } from "../components/primitives";
 import { WsiViewer, type ViewportBbox } from "../features/viewer/WsiViewer";
 import { PatchGridOverlay } from "../features/viewer/PatchGridOverlay";
 import { ImportAnnotationsModal } from "../features/annotations/ImportAnnotationsModal";
@@ -13,6 +13,7 @@ import { useTissueRegions } from "../features/tissue/useTissueRegions";
 import type { AnnotationTool } from "../stores/annotationStore";
 import { detectTissue, generatePatches, getConfig, getSlide } from "../services/api";
 import { TissueMaskOutline } from "../features/tissue/TissueMaskOutline";
+import { parseGridKey } from "../utils/gridKey";
 import { GridSwitcher } from "../features/grids/GridSwitcher";
 import { tissueParamsOf } from "../features/projects/configDraft";
 import type { ConfigVersion, Slide, TissueRegionMode, TissueRegionType } from "../types/api";
@@ -44,6 +45,13 @@ export function SlideProcessingPage() {
   const [busy, setBusy] = useState(false);
   const [gridRefresh, setGridRefresh] = useState(0);
   const [importOpen, setImportOpen] = useState(false);
+  // Which part of the slide Generate Coords cuts: the tissue (by the configuration's threshold) or all of it.
+  const [patchArea, setPatchArea] = useState<"tissue" | "whole">("tissue");
+  // Start from what the slide's current patches cover (a whole-slide grid has no tissue threshold: "_t0").
+  useEffect(() => {
+    if (slide?.active_grid_key) setPatchArea(/_t0(_|$)/.test(slide.active_grid_key) ? "whole" : "tissue");
+  }, [slide?.active_grid_key]);
+  const [confirmReplace, setConfirmReplace] = useState(false);
 
   const [otsuSensitivity, setOtsuSensitivity] = useState(0.65);
   const [morphOpen, setMorphOpen] = useState(3);
@@ -160,15 +168,27 @@ export function SlideProcessingPage() {
     }
   }
 
-  async function handleGeneratePatches() {
+  async function handleGeneratePatches(confirmed = false) {
     if (!slide?.active_config_version_id) {
       pushToast("This slide has no configuration", "error");
       return;
     }
+    if (!confirmed && slide.active_grid_key) {
+      setConfirmReplace(true); // the slide has patches: generating replaces them
+      return;
+    }
+    setConfirmReplace(false);
     setBusy(true);
     try {
-      const res = await generatePatches(sid, slide.active_config_version_id);
-      pushToast(`Generated ${res.kept} patches (${res.excluded} excluded by tissue threshold)`, "success");
+      const res = await generatePatches(sid, slide.active_config_version_id, undefined, patchArea === "whole");
+      pushToast(
+        (patchArea === "whole"
+          ? `Generated ${res.kept} patches over the whole slide`
+          : `Generated ${res.kept} patches (${res.excluded} excluded by tissue threshold)`) +
+          (res.replaced_grids ? `; replaced ${res.replaced_patches} earlier patches` : "") +
+          (res.annotations_moved_to_slide ? `, ${res.annotations_moved_to_slide} annotations kept on the whole slide` : ""),
+        "success",
+      );
       setMode("grid");
       setGridRefresh((n) => n + 1);
       refresh();
@@ -222,7 +242,27 @@ export function SlideProcessingPage() {
           <Button variant="secondary" icon="autorenew" onClick={handleDetectTissue} disabled={busy}>
             {busy ? "Working..." : "Re-run Detection"}
           </Button>
-          <Button variant="secondary" icon="tune" onClick={handleGeneratePatches} disabled={busy || !slide.tissue_mask_path}>
+          <select
+            className="h-8 rounded bg-[#1e293b] text-white text-label-md px-space-sm border border-[#334155]"
+            value={patchArea}
+            onChange={(e) => setPatchArea(e.target.value as "tissue" | "whole")}
+            aria-label="Patch area"
+            title="Which part of the slide Generate Coords cuts into patches"
+          >
+            <option value="tissue">Tissue only</option>
+            <option value="whole">Whole slide</option>
+          </select>
+          <Button
+            variant="secondary"
+            icon="tune"
+            onClick={() => void handleGeneratePatches()}
+            disabled={busy || (patchArea === "tissue" && !slide.tissue_mask_path)}
+            title={
+              patchArea === "whole"
+                ? "Cut the entire slide into patches, glass included (no tissue detection needed)"
+                : "Cut the detected tissue into patches"
+            }
+          >
             Generate Coords
           </Button>
           <Button
@@ -417,20 +457,39 @@ export function SlideProcessingPage() {
                   Edit configuration
                 </Link>
               </div>
-              <div className="grid grid-cols-4 gap-space-sm text-center">
-                <GridStat label="Width" value={config.patch_width} />
-                <GridStat label="Height" value={config.patch_height} />
-                <GridStat label="Stride" value={config.stride_x} />
-                <GridStat label="Min tissue" value={`${Math.round(config.min_tissue_fraction * 100)}%`} />
-              </div>
-              <span className="text-label-sm text-slate-500">
-                The project's grid, used by Generate Coords. The slide can hold other patch sizes too:
-              </span>
+              {(() => {
+                // The slide's own patches when it has them; the project's default (what it will get) until then.
+                const current = slide.active_grid_key ? parseGridKey(slide.active_grid_key) : null;
+                const shown = current ?? config;
+                const whole = shown.min_tissue_fraction <= 0;
+                const stride = shown.stride_x === shown.stride_y ? shown.stride_x : `${shown.stride_x}×${shown.stride_y}`;
+                return (
+                  <>
+                    <div className="grid grid-cols-4 gap-space-sm text-center">
+                      <GridStat label="Width" value={shown.patch_width} />
+                      <GridStat label="Height" value={shown.patch_height} />
+                      <GridStat label="Stride" value={stride} />
+                      <GridStat label={whole ? "Area" : "Min tissue"} value={whole ? "Whole" : `${Math.round(shown.min_tissue_fraction * 100)}%`} />
+                    </div>
+                    <span className="text-label-sm text-slate-500">
+                      {current ? (
+                        <>
+                          This slide's patches. Generate Coords re-cuts at this size; pick another size below to replace them.
+                          Project default: {config.patch_width} px
+                          {config.min_tissue_fraction <= 0 ? ", whole slide" : `, tissue ≥ ${Math.round(config.min_tissue_fraction * 100)}%`}.
+                        </>
+                      ) : (
+                        "The project's default size: no patches yet, Generate Coords cuts this size."
+                      )}
+                    </span>
+                  </>
+                );
+              })()}
               <GridSwitcher
                 slideId={sid}
                 configVersionId={slide.active_config_version_id}
                 refreshKey={`${gridRefresh}:${slide.active_grid_key}`}
-                disabled={busy || !slide.tissue_mask_path}
+                disabled={busy}
                 onChanged={() => {
                   setGridRefresh((n) => n + 1);
                   setMode("grid");
@@ -449,6 +508,31 @@ export function SlideProcessingPage() {
           </Card>
         </div>
       </div>
+
+      <Modal open={confirmReplace} onClose={() => setConfirmReplace(false)} widthClass="max-w-lg">
+        <div className="p-space-lg flex flex-col gap-space-md">
+          <h2 className="font-headline-md text-headline-md">Replace this slide's patches?</h2>
+          <p className="text-body-md">
+            Generate Coords cuts the slide again ({patchArea === "whole" ? "the whole slide" : "the tissue"}, at its current
+            patch size) and <strong>replaces</strong> the patches it has now.
+          </p>
+          <ul className="text-body-md list-disc pl-space-lg flex flex-col gap-1">
+            <li>
+              Annotations drawn in the current patches are <strong>kept</strong>, on the whole slide at the same place.
+            </li>
+            <li>The current patches' status, labels and notes are removed.</li>
+            <li>Regenerating the same size and area just updates it; nothing is removed.</li>
+          </ul>
+          <div className="flex justify-end gap-space-sm">
+            <Button variant="ghost" onClick={() => setConfirmReplace(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" icon="tune" onClick={() => void handleGeneratePatches(true)}>
+              Generate and replace
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <ImportAnnotationsModal
         open={importOpen}
