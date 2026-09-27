@@ -52,6 +52,17 @@ export function SlideProcessingPage() {
     if (slide?.active_grid_key) setPatchArea(/_t0(_|$)/.test(slide.active_grid_key) ? "whole" : "tissue");
   }, [slide?.active_grid_key]);
   const [confirmReplace, setConfirmReplace] = useState(false);
+  // Whole slide: tissue plays no part, so its outline, its drawing tools and its settings are put away
+  // (kept as they are, for when Tissue only is picked again).
+  const wholeSlide = patchArea === "whole";
+  const wholeSlideRef = useRef(wholeSlide);
+  wholeSlideRef.current = wholeSlide;
+  useEffect(() => {
+    if (wholeSlide) {
+      setMode((m) => (m === "mask" ? "wsi" : m));
+      setSelectedRegion(null);
+    }
+  }, [wholeSlide]);
 
   const [otsuSensitivity, setOtsuSensitivity] = useState(0.65);
   const [morphOpen, setMorphOpen] = useState(3);
@@ -85,7 +96,7 @@ export function SlideProcessingPage() {
       })),
     [tissue.data],
   );
-  const effectiveTool = spaceHeld ? "pan" : tool;
+  const effectiveTool = spaceHeld || wholeSlide ? "pan" : tool;
   const effectiveToolRef = useRef(effectiveTool);
   effectiveToolRef.current = effectiveTool;
   const blockPan = () => {
@@ -102,6 +113,7 @@ export function SlideProcessingPage() {
         setSpaceHeld(true);
         return;
       }
+      if (wholeSlideRef.current) return; // no tissue regions to draw or undo
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         if (e.shiftKey) tissue.redo();
@@ -224,7 +236,7 @@ export function SlideProcessingPage() {
               ["mask", "Tissue Mask", "contrast"],
               ["grid", "Patch Grid", "grid_4x4"],
             ] as const
-          ).map(([m, label, icon]) => (
+          ).filter(([m]) => !(wholeSlide && m === "mask")).map(([m, label, icon]) => (
             <button
               key={m}
               onClick={() => setMode(m)}
@@ -239,9 +251,11 @@ export function SlideProcessingPage() {
         </div>
 
         <div className="flex items-center gap-space-sm">
-          <Button variant="secondary" icon="autorenew" onClick={handleDetectTissue} disabled={busy}>
-            {busy ? "Working..." : "Re-run Detection"}
-          </Button>
+          {!wholeSlide && (
+            <Button variant="secondary" icon="autorenew" onClick={handleDetectTissue} disabled={busy}>
+              {busy ? "Working..." : "Re-run Detection"}
+            </Button>
+          )}
           <select
             className="h-8 rounded bg-[#1e293b] text-white text-label-md px-space-sm border border-[#334155]"
             value={patchArea}
@@ -323,11 +337,11 @@ export function SlideProcessingPage() {
               setScale(s);
             }}
           >
-            {mode === "mask" && slide.tissue_mask_path && (
+            {mode === "mask" && slide.tissue_mask_path && !wholeSlide && (
               <TissueMaskOutline slideId={sid} refreshKey={maskCacheBust} opacity={maskOpacity} />
             )}
             {mode === "grid" && <PatchGridOverlay slideId={sid} bbox={bbox} refreshKey={gridRefresh} />}
-            {slide.width_l0 && slide.height_l0 && (
+            {slide.width_l0 && slide.height_l0 && !wholeSlide && (
               <ShapeLayer
                 width={slide.width_l0}
                 height={slide.height_l0}
@@ -353,7 +367,7 @@ export function SlideProcessingPage() {
           <div className="absolute top-3 left-3 px-space-sm py-1 rounded bg-black/50 text-label-sm text-slate-300 pointer-events-none">
             {effectiveTool === "pan" ? "Drag to move around \u00b7 scroll to zoom" : "Hold Space to move around \u00b7 scroll to zoom"}
           </div>
-          {!slide.tissue_mask_path && (
+          {!slide.tissue_mask_path && !wholeSlide && (
             <div className="absolute bottom-4 left-4 bg-[#0f172a]/90 backdrop-blur px-space-md py-space-sm rounded-lg text-body-sm text-amber-300 flex items-center gap-2">
               <MaterialIcon name="info" className="!text-[16px]" />
               {slide.tissue_source === "manual"
@@ -364,6 +378,19 @@ export function SlideProcessingPage() {
         </div>
 
         <div className="w-96 bg-[#0f172a] border-l border-[#1e293b] p-space-md flex flex-col gap-space-md overflow-y-auto">
+          {wholeSlide ? (
+            <div className="bg-[#0b1329] rounded p-space-md flex flex-col gap-space-sm">
+              <div className="flex items-center gap-space-sm text-label-lg">
+                <MaterialIcon name="select_all" className="!text-[18px] text-sky-400" />
+                Whole slide
+              </div>
+              <p className="text-body-sm text-slate-400">
+                Patches cover the entire slide, glass included, so tissue detection and tissue areas are not used. Your tissue
+                settings and drawn areas are kept; pick <strong className="text-slate-200">Tissue only</strong> to see and edit them.
+              </p>
+            </div>
+          ) : (
+          <>
           <div className="flex items-center justify-between">
             <h2 className="font-headline-sm text-headline-sm">Segmentation Pipeline</h2>
             <span className="text-label-sm text-slate-500">HSV + Otsu</span>
@@ -444,6 +471,8 @@ export function SlideProcessingPage() {
               saving={tissue.saving}
               disabled={busy}
             />
+          )}
+          </>
           )}
 
           {config && (
