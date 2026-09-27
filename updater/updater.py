@@ -208,13 +208,29 @@ def github(path: str):
             raise RuntimeError(f"GitHub did not find {GITHUB_REPO}. {hint}") from e
         if e.code == 401:
             raise RuntimeError("GitHub refused the GITHUB_TOKEN in .env (expired or wrong).") from e
+        if e.code in (403, 429) and e.headers.get("X-RateLimit-Remaining") == "0":
+            reset = int(e.headers.get("X-RateLimit-Reset") or time.time())
+            minutes = max(1, round((reset - time.time()) / 60))
+            hint = "" if GITHUB_TOKEN else " Without a GITHUB_TOKEN in .env, GitHub allows 60 requests an hour per internet address; any token (no scopes needed) raises that to 5000."
+            raise RuntimeError(f"GitHub's request limit is used up; try again in about {minutes} min.{hint}") from e
         raise RuntimeError(f"GitHub answered {e.code}.") from e
     except OSError as e:
         raise RuntimeError(f"Could not reach GitHub: {e}") from e
 
 
+_releases_cache: dict = {"at": 0.0, "items": None}
+
+
 def releases() -> list[dict]:
+    """The published versions, remembered for a few minutes (GitHub limits requests without a token)."""
+    if _releases_cache["items"] is not None and time.time() - _releases_cache["at"] < 300:
+        return _releases_cache["items"]
     items = github(f"/repos/{GITHUB_REPO}/releases?per_page=50")
+    _releases_cache.update(at=time.time(), items=_releases(items))
+    return _releases_cache["items"]
+
+
+def _releases(items: list[dict]) -> list[dict]:
     return [
         {
             "version": r["tag_name"],
