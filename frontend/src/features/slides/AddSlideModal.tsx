@@ -11,10 +11,26 @@ import {
 } from "../../services/api";
 import { useUiStore } from "../../stores/uiStore";
 import type { ProjectType, SlideBatchImportResult, WsiFormats } from "../../types/api";
-import { IMAGE_EXTENSIONS, extensionOf, findProblems, formatBytes, mergeSelections, summarize, toUploadItem } from "./uploadSelection";
+import {
+  IMAGE_EXTENSIONS,
+  extensionOf,
+  findProblems,
+  formatBytes,
+  mergeSelections,
+  planUploads,
+  summarize,
+  toUploadItem,
+} from "./uploadSelection";
 
 type Tab = "upload" | "path";
 type Phase = "idle" | "uploading" | "processing" | "done";
+/** Which upload request is running, and whether its bytes are all sent (the server is then reading it). */
+interface Step {
+  index: number;
+  count: number;
+  names: string[];
+  serverWork: boolean;
+}
 
 const MAX_LISTED = 40;
 
@@ -37,6 +53,7 @@ export function AddSlideModal({ open, onClose, projectId, projectType = "wsi", c
   const [phase, setPhase] = useState<Phase>("idle");
   const [items, setItems] = useState<UploadItem[]>([]);
   const [progress, setProgress] = useState({ sent: 0, total: 0 });
+  const [step, setStep] = useState<Step | null>(null);
   const [result, setResult] = useState<SlideBatchImportResult | null>(null);
   const [path, setPath] = useState("");
   const [formats, setFormats] = useState<WsiFormats | null>(null);
@@ -49,13 +66,20 @@ export function AddSlideModal({ open, onClose, projectId, projectType = "wsi", c
   const busy = phase === "uploading" || phase === "processing";
   const summary = useMemo(() => summarize(items), [items]);
   const problems = useMemo(() => (isImage ? [] : findProblems(items)), [items, isImage]);
-  const tooBig = formats ? summary.bytes > formats.max_upload_bytes : false;
+  const plan = useMemo(() => planUploads(items, isImage), [items, isImage]);
+  // Every request is its own upload, so the limit applies to each slide (or zip), not to the whole selection.
+  const oversized = useMemo(
+    () => (formats ? plan.batches.filter((b) => b.bytes > formats.max_upload_bytes) : []),
+    [plan, formats],
+  );
+  const tooBig = oversized.length > 0;
 
   function reset() {
     setPhase("idle");
     setItems([]);
     setResult(null);
     setProgress({ sent: 0, total: 0 });
+    setStep(null);
   }
 
   function requestClose() {
@@ -64,21 +88,16 @@ export function AddSlideModal({ open, onClose, projectId, projectType = "wsi", c
     onClose();
   }
 
-  function finish(res: SlideBatchImportResult) {
+  function finish(res: SlideBatchImportResult, refresh = true) {
     setResult(res);
     setPhase("done");
+    setStep(null);
     if (res.slides.length > 0) {
       pushToast(`Imported ${res.slides.length} ${noun}${res.slides.length === 1 ? "" : "s"}`, "success");
-      onImported();
+      if (refresh) onImported();
     } else {
       pushToast(`No ${noun}s were imported -- see the details below`, "error");
     }
-  }
-
-  function fail(e: unknown) {
-    setPhase("idle");
-    if (e instanceof UploadAborted) return;
-    pushToast(e instanceof Error ? e.message : "Import failed", "error");
   }
 
   function pick(fileList: FileList | null) {
@@ -91,21 +110,64 @@ export function AddSlideModal({ open, onClose, projectId, projectType = "wsi", c
   }
 
   async function handleUpload() {
+    const { batches, ignored } = plan;
+    const total = batches.reduce((n, b) => n + b.bytes, 0);
+    const combined: SlideBatchImportResult = { slides: [], skipped: [], ignored_file_count: ignored, warnings: [] };
     setPhase("uploading");
-    setProgress({ sent: 0, total: summary.bytes });
-    const { promise, abort } = uploadSlides(projectId, items, {
-      configVersionId: configVersionId ?? undefined,
-      onProgress: (sent, total) => setProgress({ sent, total }),
-      onSent: () => setPhase("processing"),
-    });
-    abortRef.current = abort;
-    try {
-      finish(await promise);
-    } catch (e) {
-      fail(e);
-    } finally {
-      abortRef.current = null;
+    setProgress({ sent: 0, total });
+
+    let done = 0; // bytes of the batches already finished
+    let stoppedAt = -1; // first batch that was never (completely) sent
+    let cancelled = false;
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      setStep({ index: i, count: batches.length, names: batch.names, serverWork: false });
+      const { promise, abort } = uploadSlides(projectId, batch.items, {
+        configVersionId: configVersionId ?? undefined,
+        // The request also carries multipart headers, so its byte count runs slightly past the files'.
+        onProgress: (sent) => setProgress({ sent: done + Math.min(sent, batch.bytes), total }),
+        onSent: () => setStep((s) => (s ? { ...s, serverWork: true } : s)),
+      });
+      abortRef.current = abort;
+      try {
+        const res = await promise;
+        combined.slides.push(...res.slides);
+        combined.skipped.push(...res.skipped);
+        combined.ignored_file_count += res.ignored_file_count;
+        combined.warnings.push(...res.warnings);
+        if (res.slides.length > 0) onImported(); // show each slide as soon as it is in
+      } catch (e) {
+        if (e instanceof UploadAborted) {
+          cancelled = true;
+          stoppedAt = i;
+          break;
+        }
+        if (!(e instanceof ApiError)) {
+          // The connection itself failed: the server is gone, so the remaining uploads would fail too.
+          stoppedAt = i;
+          combined.warnings.push(e instanceof Error ? e.message : "The upload failed");
+          break;
+        }
+        combined.skipped.push(...batch.names.map((name) => ({ name, reason: `upload refused: ${e.message}` })));
+      } finally {
+        abortRef.current = null;
+      }
+      done += batch.bytes;
+      setProgress({ sent: done, total });
     }
+
+    if (stoppedAt >= 0) {
+      const left = batches.slice(stoppedAt).reduce((n, b) => n + b.names.length, 0);
+      if (cancelled && combined.slides.length === 0 && combined.skipped.length === 0) {
+        setPhase("idle"); // cancelled before anything happened: back to the selection, as before
+        setStep(null);
+        return;
+      }
+      combined.warnings.push(
+        `${cancelled ? "Cancelled" : "Stopped"} -- ${left.toLocaleString()} ${left === 1 ? "item was" : "items were"} not uploaded.`,
+      );
+    }
+    finish(combined, false);
   }
 
   async function handlePathImport() {
@@ -157,6 +219,8 @@ export function AddSlideModal({ open, onClose, projectId, projectType = "wsi", c
             tooBig={tooBig}
             phase={phase}
             progress={progress}
+            step={step}
+            oversized={oversized}
             onPick={pick}
             onRemove={(i) => setItems((cur) => cur.filter((_, idx) => idx !== i))}
             onClear={() => setItems([])}
@@ -197,6 +261,8 @@ function UploadTab({
   tooBig,
   phase,
   progress,
+  step,
+  oversized,
   onPick,
   onRemove,
   onClear,
@@ -211,6 +277,8 @@ function UploadTab({
   tooBig: boolean;
   phase: Phase;
   progress: { sent: number; total: number };
+  step: Step | null;
+  oversized: { names: string[]; bytes: number }[];
   onPick: (files: FileList | null) => void;
   onRemove: (index: number) => void;
   onClear: () => void;
@@ -339,7 +407,9 @@ function UploadTab({
       )}
       {tooBig && formats && (
         <div className="rounded bg-error-container text-on-error-container px-space-md py-space-sm text-body-sm" role="alert">
-          This selection ({formatBytes(summary.bytes)}) is over the {formatBytes(formats.max_upload_bytes)} upload limit.
+          {oversized.map((b) => `${b.names.join(", ")} (${formatBytes(b.bytes)})`).join("; ")}{" "}
+          {oversized.length === 1 ? "is" : "are"} over the {formatBytes(formats.max_upload_bytes)} limit for one upload. Remove{" "}
+          {oversized.length === 1 ? "it" : "them"}, or import from a server path instead.
         </div>
       )}
 
@@ -352,13 +422,23 @@ function UploadTab({
               <div className="h-full w-1/3 bg-primary animate-pulse" />
             )}
           </div>
-          <div className="flex items-center justify-between text-body-sm text-on-surface-variant">
-            <span>
-              {phase === "uploading"
-                ? `Uploading ${pct}% (${formatBytes(progress.sent)} of ${formatBytes(progress.total)})`
-                : isImage
-                  ? "Unpacking and checking images on the server..."
-                  : "Unpacking and reading slides on the server -- large slides can take a minute..."}
+          <div className="flex items-center justify-between gap-space-sm text-body-sm text-on-surface-variant">
+            <span className="flex flex-col min-w-0">
+              <span>
+                {phase === "uploading"
+                  ? `Uploading ${pct}% (${formatBytes(progress.sent)} of ${formatBytes(progress.total)})`
+                  : isImage
+                    ? "Unpacking and checking images on the server..."
+                    : "Unpacking and reading slides on the server -- large slides can take a minute..."}
+              </span>
+              {phase === "uploading" && step && (
+                <span className="truncate" title={step.names.join(", ")}>
+                  {step.count > 1 && `${step.index + 1} of ${step.count}: `}
+                  {step.serverWork ? "reading " : ""}
+                  <span className="font-mono">{step.names.length === 1 ? step.names[0] : `${step.names[0]} and ${step.names.length - 1} more`}</span>
+                  {step.serverWork ? " on the server..." : ""}
+                </span>
+              )}
             </span>
             {phase === "uploading" && (
               <Button variant="ghost" onClick={onCancel}>

@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from fastapi import HTTPException, Request
+from starlette.concurrency import run_in_threadpool
 
 try:  # python-multipart >= 0.0.13 renamed its module
     from python_multipart.exceptions import MultipartParseError
@@ -28,6 +29,7 @@ except ImportError:  # pragma: no cover - depends on the installed version
 
 MAX_FIELD_BYTES = 16 * 1024 * 1024  # a manifest for 20,000 files is a few MB; anything near this is abuse
 _WRITE_BUFFER = 1024 * 1024
+_HANDOFF_BYTES = 4 * 1024 * 1024  # request bytes gathered before each hand-over to the worker thread
 
 
 @dataclass
@@ -158,9 +160,19 @@ async def receive_multipart(
     directory.mkdir(parents=True, exist_ok=True)
     receiver = _Receiver(directory, max_files, max_fields, max_bytes)
     parser = MultipartParser(boundary, receiver.callbacks())
+    # Parsing writes the file bytes to disk, which on a slow disk (a Windows folder shared into
+    # Docker manages ~20 MB/s) would stall every other request for as long as the upload lasts.
+    # So the bytes are gathered into large pieces and parsed and written in a worker thread; one
+    # hand-over per few MB keeps the thread round trips out of the upload speed.
+    pending = bytearray()
     try:
         async for chunk in request.stream():
-            parser.write(chunk)
+            pending += chunk
+            if len(pending) >= _HANDOFF_BYTES:
+                await run_in_threadpool(parser.write, bytes(pending))
+                pending.clear()
+        if pending:
+            await run_in_threadpool(parser.write, bytes(pending))
         parser.finalize()
         if receiver.part_unfinished:
             raise HTTPException(status_code=400, detail="The upload ended before its last file was complete")
