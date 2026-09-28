@@ -5,6 +5,7 @@ import { Button, Card, IconButton, StatusPill } from "../components/primitives";
 import { ExportAllMenu } from "../features/export/ExportAllMenu";
 import { EditProjectModal } from "../features/projects/EditProjectModal";
 import { AddSlideModal } from "../features/slides/AddSlideModal";
+import { DeleteSlideModal, type DeleteTarget } from "../features/slides/DeleteSlideModal";
 import { ProjectChecklist } from "../features/projects/ProjectChecklist";
 import { slideNextStep } from "../utils/nextStep";
 import { getProject, listSlides } from "../services/api";
@@ -24,6 +25,7 @@ export function ProjectDashboardPage() {
   const [slides, setSlides] = useState<Slide[]>([]);
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [filterTab, setFilterTab] = useState<"all" | "needs_annotation" | "needs_review" | "completed">("all");
 
   useEffect(() => {
@@ -231,7 +233,7 @@ export function ProjectDashboardPage() {
               </thead>
               <tbody>
                 {filteredSlides.map((s) => (
-                  <SlideRow key={s.id} slide={s} projectId={pid} />
+                  <SlideRow key={s.id} slide={s} projectId={pid} onDelete={() => setDeleteTarget(slideDeleteTarget(s))} />
                 ))}
               </tbody>
             </table>
@@ -250,6 +252,8 @@ export function ProjectDashboardPage() {
           setActiveProject(p);
         }}
       />
+
+      <DeleteSlideModal target={deleteTarget} noun="slide" onClose={() => setDeleteTarget(null)} onDeleted={refresh} />
 
       <AddSlideModal
         open={addOpen}
@@ -287,7 +291,17 @@ function Metric({ label, value, sub }: { label: string; value: string; sub: stri
   );
 }
 
-function SlideRow({ slide, projectId }: { slide: Slide; projectId: number }) {
+function slideDeleteTarget(s: Slide): DeleteTarget {
+  const patches = s.patch_count ?? 0;
+  const annotated = s.annotated_patch_count ?? 0;
+  return {
+    id: s.id,
+    filename: s.filename,
+    detail: patches ? `${patches.toLocaleString()} patches, ${annotated.toLocaleString()} of them annotated` : undefined,
+  };
+}
+
+function SlideRow({ slide, projectId, onDelete }: { slide: Slide; projectId: number; onDelete: () => void }) {
   const navigate = useNavigate();
   const canManage = useCan().manage;
   const canAnnotate = ["patches_generated", "annotating", "reviewed"].includes(slide.status);
@@ -325,6 +339,7 @@ function SlideRow({ slide, projectId }: { slide: Slide; projectId: number }) {
           {canManage && <IconButton icon="tune" onClick={() => open("processing")} title="Slide processing: tissue and patches" />}
           <IconButton icon="edit" onClick={() => open("workspace")} disabled={!canAnnotate} title={canAnnotate ? "Annotation workspace" : "Generate patches first"} />
           <IconButton icon="file_download" onClick={() => open("export")} disabled={!canAnnotate} title={canAnnotate ? "Export this slide" : "Generate patches first"} />
+          {canManage && <IconButton icon="delete" onClick={onDelete} title="Delete this slide and all its data" className="hover:!text-error" />}
         </div>
       </td>
     </tr>

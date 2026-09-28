@@ -1,8 +1,10 @@
 """End-to-end import tests: real HTTP multipart requests against the real app,
 with real (tiny) tiled pyramidal TIFFs that OpenSlide genuinely opens. Only the
 storage/database locations are redirected to a temp directory."""
+import errno
 import io
 import json
+import shutil
 import zipfile
 
 import numpy as np
@@ -347,3 +349,30 @@ def test_import_path_rejects_outside_missing_and_unsupported(env):
     assert status(settings.wsi_watch_dir / ".." / "elsewhere.tif") == 400
     assert status(settings.wsi_watch_dir / "missing.tif") == 404
     assert status(settings.wsi_watch_dir / "notes.txt") == 415
+
+
+def test_an_upload_the_disk_cannot_hold_is_refused_before_it_is_stored(env, monkeypatch):
+    client, pid, settings = env
+    monkeypatch.setattr("app.api.slides.shutil.disk_usage", lambda _: shutil._ntuple_diskusage(10**12, 10**12 - 100_000_000, 100_000_000))
+    res = upload(client, pid, [("a.tif", SLIDE)])
+    assert res.status_code == 507
+    assert "Not enough disk space on the server: 0.1 GB free" in res.json()["detail"]
+    assert no_staging_left(settings) and stored_files(settings, pid) == []
+
+
+def test_a_disk_that_fills_up_during_the_upload_gives_a_clear_error(env, monkeypatch):
+    client, pid, settings = env
+
+    def full(*_args, **_kwargs):
+        raise OSError(errno.EIO, "Input/output error")  # what Docker on Windows reports for a full disk
+
+    real_usage = shutil.disk_usage
+    usage = iter([real_usage(settings.wsi_storage_dir)])  # plenty free when the upload starts...
+    monkeypatch.setattr(
+        "app.api.slides.shutil.disk_usage",
+        lambda p: next(usage, shutil._ntuple_diskusage(10**12, 10**12 - 1000, 1000)),  # ...none left after
+    )
+    monkeypatch.setattr("app.services.multipart_stream._Receiver.on_part_data", full)
+    res = upload(client, pid, [("a.tif", SLIDE)])
+    assert res.status_code == 507 and "disk is full" in res.json()["detail"]
+    assert no_staging_left(settings)

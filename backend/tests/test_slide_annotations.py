@@ -371,3 +371,21 @@ def test_circles_wholly_inside_a_patch_stay_circles_in_coco_masks_and_projection
     (piece,) = coco["annotations"]
     assert piece["vp_shape_type"] == "circle" and not piece["vp_clipped"]
     assert piece["area"] == pytest.approx(math.pi * 40**2, rel=0.005)  # radius 40 in patch pixels (level 1)
+
+
+def test_deleting_a_slide_removes_its_patches_and_every_annotation_and_nothing_else(grid):
+    client, slide_id, patches, classes, _ = grid
+    pid = client.get(f"/api/slides/{slide_id}").json()["project_id"]
+    other = upload(client, pid, [("Other.tif", SLIDE)]).json()["slides"][0]["id"]
+    kept = make(client, other, "point", [[5, 5]]).json()
+    on_slide = make(client, slide_id, "polygon", [[100, 100], [300, 100], [300, 300]], classes["Tumor"]).json()
+    on_patch = client.post(f"/api/patches/{patches[0]['id']}/annotations", json={"type": "point", "coordinates_patch_local": [[5, 5]]}).json()
+
+    assert client.delete(f"/api/slides/{slide_id}").status_code == 204
+    assert client.get(f"/api/slides/{slide_id}").status_code == 404
+    assert all(client.get(f"/api/patches/{p['id']}").status_code == 404 for p in patches)
+    edit = {"notes": "x"}
+    assert client.put(f"/api/annotations/{on_slide['id']}", json=edit).status_code == 404
+    assert client.put(f"/api/annotations/{on_patch['id']}", json=edit).status_code == 404
+    assert client.put(f"/api/annotations/{kept['id']}", json=edit).status_code == 200
+    assert [s["id"] for s in client.get(f"/api/projects/{pid}/slides").json()] == [other]

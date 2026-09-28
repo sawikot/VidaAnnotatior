@@ -3,7 +3,6 @@ import { MaterialIcon } from "../../components/MaterialIcon";
 import { Button, Modal } from "../../components/primitives";
 import {
   ApiError,
-  UploadAborted,
   getWsiFormats,
   importSlideByPath,
   uploadSlides,
@@ -21,6 +20,7 @@ import {
   summarize,
   toUploadItem,
 } from "./uploadSelection";
+import { sendBatch } from "./uploadRetry";
 
 type Tab = "upload" | "path";
 type Phase = "idle" | "uploading" | "processing" | "done";
@@ -30,6 +30,8 @@ interface Step {
   count: number;
   names: string[];
   serverWork: boolean;
+  /** Why it is waiting, e.g. before trying a stuck upload again. */
+  note: string | null;
 }
 
 const MAX_LISTED = 40;
@@ -57,7 +59,7 @@ export function AddSlideModal({ open, onClose, projectId, projectType = "wsi", c
   const [result, setResult] = useState<SlideBatchImportResult | null>(null);
   const [path, setPath] = useState("");
   const [formats, setFormats] = useState<WsiFormats | null>(null);
-  const abortRef = useRef<(() => void) | null>(null);
+  const cancelRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (open && !formats) getWsiFormats().then(setFormats).catch(() => setFormats(null));
@@ -113,48 +115,62 @@ export function AddSlideModal({ open, onClose, projectId, projectType = "wsi", c
     const { batches, ignored } = plan;
     const total = batches.reduce((n, b) => n + b.bytes, 0);
     const combined: SlideBatchImportResult = { slides: [], skipped: [], ignored_file_count: ignored, warnings: [] };
+    const cancel = new AbortController();
+    cancelRef.current = cancel;
     setPhase("uploading");
     setProgress({ sent: 0, total });
 
     let done = 0; // bytes of the batches already finished
     let stoppedAt = -1; // first batch that was never (completely) sent
     let cancelled = false;
+    let failedInARow = 0;
+    let stopReason = "";
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i];
-      setStep({ index: i, count: batches.length, names: batch.names, serverWork: false });
-      const { promise, abort } = uploadSlides(projectId, batch.items, {
-        configVersionId: configVersionId ?? undefined,
+      setStep({ index: i, count: batches.length, names: batch.names, serverWork: false, note: null });
+      const outcome = await sendBatch({
+        items: batch.items,
+        signal: cancel.signal,
+        start: ({ onProgress, onSent }) =>
+          uploadSlides(projectId, batch.items, {
+            configVersionId: configVersionId ?? undefined,
+            onProgress: (sent) => onProgress(sent),
+            onSent,
+          }),
         // The request also carries multipart headers, so its byte count runs slightly past the files'.
         onProgress: (sent) => setProgress({ sent: done + Math.min(sent, batch.bytes), total }),
         onSent: () => setStep((s) => (s ? { ...s, serverWork: true } : s)),
+        onNote: (note) => setStep((s) => (s ? { ...s, serverWork: false, note } : s)),
       });
-      abortRef.current = abort;
-      try {
-        const res = await promise;
+
+      if (outcome.kind === "cancelled") {
+        cancelled = true;
+        stoppedAt = i;
+        break;
+      }
+      if (outcome.kind === "ok") {
+        failedInARow = 0;
+        const res = outcome.result;
         combined.slides.push(...res.slides);
         combined.skipped.push(...res.skipped);
         combined.ignored_file_count += res.ignored_file_count;
         combined.warnings.push(...res.warnings);
         if (res.slides.length > 0) onImported(); // show each slide as soon as it is in
-      } catch (e) {
-        if (e instanceof UploadAborted) {
-          cancelled = true;
-          stoppedAt = i;
+      } else {
+        combined.skipped.push(...batch.names.map((name) => ({ name, reason: outcome.reason })));
+        // Two in a row that even retrying could not get through: the server itself is the problem,
+        // and the rest would only fail the same way, one slow timeout at a time.
+        failedInARow = outcome.retried ? failedInARow + 1 : 0;
+        if ((outcome.fatal || failedInARow >= 2) && i < batches.length - 1) {
+          stoppedAt = i + 1;
+          stopReason = outcome.fatal ? "the server is out of disk space" : "two uploads in a row failed";
           break;
         }
-        if (!(e instanceof ApiError)) {
-          // The connection itself failed: the server is gone, so the remaining uploads would fail too.
-          stoppedAt = i;
-          combined.warnings.push(e instanceof Error ? e.message : "The upload failed");
-          break;
-        }
-        combined.skipped.push(...batch.names.map((name) => ({ name, reason: `upload refused: ${e.message}` })));
-      } finally {
-        abortRef.current = null;
       }
       done += batch.bytes;
       setProgress({ sent: done, total });
     }
+    cancelRef.current = null;
 
     if (stoppedAt >= 0) {
       const left = batches.slice(stoppedAt).reduce((n, b) => n + b.names.length, 0);
@@ -164,7 +180,9 @@ export function AddSlideModal({ open, onClose, projectId, projectType = "wsi", c
         return;
       }
       combined.warnings.push(
-        `${cancelled ? "Cancelled" : "Stopped"} -- ${left.toLocaleString()} ${left === 1 ? "item was" : "items were"} not uploaded.`,
+        cancelled
+          ? `Cancelled -- ${left.toLocaleString()} ${left === 1 ? "item was" : "items were"} not uploaded.`
+          : `Stopped because ${stopReason} -- the other ${left.toLocaleString()} ${left === 1 ? "item was" : "items were"} not tried. Fix the problem above, then upload them again.`,
       );
     }
     finish(combined, false);
@@ -225,7 +243,7 @@ export function AddSlideModal({ open, onClose, projectId, projectType = "wsi", c
             onRemove={(i) => setItems((cur) => cur.filter((_, idx) => idx !== i))}
             onClear={() => setItems([])}
             onUpload={handleUpload}
-            onCancel={() => abortRef.current?.()}
+            onCancel={() => cancelRef.current?.abort()}
           />
         )}
 
@@ -431,6 +449,7 @@ function UploadTab({
                     ? "Unpacking and checking images on the server..."
                     : "Unpacking and reading slides on the server -- large slides can take a minute..."}
               </span>
+              {phase === "uploading" && step?.note && <span className="text-amber-700">{step.note}</span>}
               {phase === "uploading" && step && (
                 <span className="truncate" title={step.names.join(", ")}>
                   {step.count > 1 && `${step.index + 1} of ${step.count}: `}

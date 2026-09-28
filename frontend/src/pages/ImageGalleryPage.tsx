@@ -5,6 +5,7 @@ import { MaterialIcon } from "../components/MaterialIcon";
 import { Pagination } from "../components/Pagination";
 import { Button, Card, StatusPill } from "../components/primitives";
 import { AddSlideModal } from "../features/slides/AddSlideModal";
+import { DeleteSlideModal, type DeleteTarget } from "../features/slides/DeleteSlideModal";
 import { getProject, listImages, thumbnailUrl } from "../services/api";
 import { useContextStore } from "../stores/contextStore";
 import type { ImageSummary, PatchStatus, ProjectDetail } from "../types/api";
@@ -30,6 +31,7 @@ export function ImageGalleryPage() {
     window.scrollTo({ top: 0 }); // in braces: newer browsers return a Promise here, and an effect may only return a cleanup
   }, [page, pageSize]);
   const [addOpen, setAddOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
   function load() {
     getProject(pid).then((p) => {
@@ -138,6 +140,23 @@ export function ImageGalleryPage() {
                 <div className="absolute top-1.5 right-1.5">
                   <StatusPill status={img.status} />
                 </div>
+                {canManage && (
+                  <button
+                    title="Delete this image and its annotations"
+                    aria-label={`Delete ${img.filename}`}
+                    className="absolute top-1.5 left-1.5 z-10 w-7 h-7 rounded-full bg-surface-container-lowest/90 text-error shadow-sm flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                    onClick={(e) => {
+                      e.stopPropagation(); // the card itself opens the image
+                      setDeleteTarget({
+                        id: img.slide_id,
+                        filename: img.filename,
+                        detail: img.annotation_count ? `${img.annotation_count} object${img.annotation_count === 1 ? "" : "s"}` : undefined,
+                      });
+                    }}
+                  >
+                    <MaterialIcon name="delete" className="!text-[16px]" />
+                  </button>
+                )}
                 <div className="absolute inset-0 bg-on-background/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   <span className="px-space-md py-1.5 rounded bg-primary text-on-primary text-label-md flex items-center gap-1">
                     <MaterialIcon name="edit" className="!text-[16px]" />
@@ -162,6 +181,8 @@ export function ImageGalleryPage() {
       )}
 
       <Pagination page={shownPage} pageSize={pageSize} total={visible.length} onPage={setPage} onPageSize={setPageSize} noun="images" />
+
+      <DeleteSlideModal target={deleteTarget} noun="image" onClose={() => setDeleteTarget(null)} onDeleted={load} />
 
       <AddSlideModal
         open={addOpen}

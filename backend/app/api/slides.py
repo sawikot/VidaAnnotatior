@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import json
 import os
 import re
@@ -16,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import forbid_for_image_project, get_project_or_404, get_slide_or_404
 from app.core.config import get_settings
 from app.database.session import get_db
+from app.models.annotation import GeometryAnnotation
 from app.models.config_version import ProjectConfigVersion
 from app.models.patch import Patch
 from app.models.project import Project
@@ -339,12 +341,16 @@ async def upload_slides(
     next to the .mrxs file).
     """
     settings = get_settings()
+    _check_free_space(settings.wsi_storage_dir, int(request.headers.get("content-length") or 0))
     staging = settings.wsi_storage_dir / "_staging" / uuid.uuid4().hex
     try:
         # Streamed to disk as it arrives (see multipart_stream for why not request.form()).
-        form = await receive_multipart(
-            request, staging / "received", max_files=settings.max_upload_files, max_bytes=settings.max_upload_bytes
-        )
+        try:
+            form = await receive_multipart(
+                request, staging / "received", max_files=settings.max_upload_files, max_bytes=settings.max_upload_bytes
+            )
+        except OSError as exc:
+            raise _storage_error(settings.wsi_storage_dir, exc) from exc
         uploads = form.files
         if not uploads:
             raise HTTPException(status_code=422, detail="No files were uploaded")
@@ -360,9 +366,51 @@ async def upload_slides(
                 raise HTTPException(status_code=422, detail="manifest must list one path per uploaded file")
             names = manifest
 
-        return await run_in_threadpool(_ingest_uploads, db, project, uploads, names, config_version_id, staging)
+        try:
+            return await run_in_threadpool(_ingest_uploads, db, project, uploads, names, config_version_id, staging)
+        except OSError as exc:  # unpacking a zip can fill the disk too
+            raise _storage_error(settings.wsi_storage_dir, exc) from exc
     finally:
         shutil.rmtree(staging, ignore_errors=True)
+
+
+# Kept free beyond the upload itself, so the database and tissue masks can still be written.
+_DISK_RESERVE_BYTES = 512 * 1024 * 1024
+
+
+def _gb(n: int) -> str:
+    return f"{n / 1024**3:.1f} GB"
+
+
+def _check_free_space(storage: Path, incoming: int) -> None:
+    """Refuse an upload the disk can't hold before any of it is read -- otherwise it fails partway,
+    and the browser, still sending, sees only a dropped connection. 507 = Insufficient Storage."""
+    try:
+        free = shutil.disk_usage(storage).free
+    except OSError:
+        return  # can't tell: let the upload try
+    if incoming + _DISK_RESERVE_BYTES > free:
+        raise HTTPException(
+            status_code=507,
+            detail=f"Not enough disk space on the server: {_gb(free)} free, and this upload needs {_gb(incoming + _DISK_RESERVE_BYTES)} "
+            "(with a small reserve). Free up space on the server, or move its data folder to a bigger disk, then upload again.",
+        )
+
+
+def _storage_error(storage: Path, exc: OSError) -> HTTPException:
+    """A write failed while storing an upload. A full disk is by far the likeliest cause (Docker on
+    Windows reports it as an I/O error), so say so when space is low."""
+    try:
+        free = shutil.disk_usage(storage).free
+    except OSError:
+        free = None
+    if exc.errno in (errno.ENOSPC, errno.EDQUOT) or (free is not None and free < _DISK_RESERVE_BYTES):
+        return HTTPException(
+            status_code=507,
+            detail=f"The server's disk is full ({_gb(free or 0)} free), so the upload could not be saved. "
+            "Free up space on the server, or move its data folder to a bigger disk, then upload again.",
+        )
+    return HTTPException(status_code=500, detail=f"The server could not save the upload: {exc.strerror or exc}")
 
 
 def _import_images_from_path(db: Session, project: Project, src: Path) -> SlideBatchImportResult:
@@ -454,24 +502,39 @@ def get_slide(slide: Slide = Depends(get_slide_or_404)):
 
 @router.delete("/slides/{slide_id}", status_code=204, response_model=None)
 def delete_slide(slide: Slide = Depends(get_slide_or_404), db: Session = Depends(get_db)):
+    """Delete a slide or image and everything under it: its patches, annotations, tissue masks,
+    cached tiles and stored files. Files it was imported from (a server path) are never touched."""
+    # Close the open file first: Windows will not delete a file that is still open.
     reader_cache.invalidate(slide.id)
     purge_slide_tiles(slide.id)
     settings = get_settings()
     storage = settings.wsi_storage_dir.resolve()
     project_dir = (storage / str(slide.project_id)).resolve()
+    doomed_dirs: list[Path] = []
+    doomed_files = [auto_mask_path(settings.wsi_storage_dir, slide)]
     if slide.file_path:
         primary = (storage / slide.file_path).resolve()
         slide_dir = primary.parent
         if slide_dir != project_dir and project_dir in slide_dir.parents:
             # Current layout: each slide owns a directory (a .mrxs slide keeps its data folder in it).
-            shutil.rmtree(slide_dir, ignore_errors=True)
-        elif project_dir in primary.parents and primary.exists():
-            primary.unlink()  # older layout: one flat file per slide
+            doomed_dirs.append(slide_dir)
+        elif project_dir in primary.parents:
+            doomed_files.append(primary)  # older layout: one flat file per slide
     if slide.tissue_mask_path:
-        (settings.wsi_storage_dir / slide.tissue_mask_path).unlink(missing_ok=True)
-    auto_mask_path(settings.wsi_storage_dir, slide).unlink(missing_ok=True)
+        doomed_files.append(settings.wsi_storage_dir / slide.tissue_mask_path)
+
+    # In bulk: a slide can have hundreds of thousands of patches, which the ORM cascade would load
+    # one by one. Annotations first, as they point at patches.
+    db.query(GeometryAnnotation).filter(GeometryAnnotation.slide_id == slide.id).delete(synchronize_session=False)
+    db.query(Patch).filter(Patch.slide_id == slide.id).delete(synchronize_session=False)
     db.delete(slide)
     db.commit()
+
+    # Only once the rows are gone: a failed commit must not leave a slide whose files were deleted.
+    for directory in doomed_dirs:
+        shutil.rmtree(directory, ignore_errors=True)
+    for path in doomed_files:
+        path.unlink(missing_ok=True)
 
 
 def image_headers(slide: Slide, v: str | None) -> dict[str, str]:
