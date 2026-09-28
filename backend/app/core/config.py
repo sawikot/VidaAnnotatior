@@ -33,7 +33,7 @@ class Settings(BaseSettings):
 
     # Ceilings for one upload request / one unpacked archive. Uploaded bytes and
     # unpacked bytes are each capped by max_upload_bytes.
-    max_upload_bytes: int = 20 * 1024 * 1024 * 1024  # 20 GB
+    max_upload_bytes: int = 500 * 1024 * 1024 * 1024  # 500 GB
     max_upload_files: int = 20_000  # files in one request, and entries in one zip
 
     # Image projects annotate ordinary images as-is, so each one is decoded whole into

@@ -281,7 +281,7 @@ the ones for the current page first.
    - Every candidate is checked by OpenSlide itself, so plain TIFFs, masks or corrupt files are *reported
      with a reason*, not imported as broken slides. The import report lists what was imported, skipped and ignored.
    - Uploads are unpacked defensively (zip-slip, symlinks, encrypted zips and decompression bombs are
-     refused). Limits: 20 GB and 20,000 files per request/zip (`max_upload_bytes`, `max_upload_files`).
+     refused). Limits: 500 GB and 20,000 files per request/zip (`max_upload_bytes`, `max_upload_files`).
    - Not supported: DICOM WSI, and archive formats other than `.zip` (`.7z`, `.tar.gz`); nested zips are
      reported, not unpacked.
 3. **Process**: open *Slide Processing* → *Re-run Detection* (HSV+Otsu tissue mask, tunable via sliders)
