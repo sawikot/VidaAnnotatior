@@ -21,13 +21,45 @@ export function useAnnotationHistory() {
     setCanRedo(redoStack.current.length > 0);
   }, []);
 
+  const batching = useRef<Command[] | null>(null);
+
   const push = useCallback(
     (cmd: Command) => {
+      if (batching.current) {
+        batching.current.push(cmd);
+        return;
+      }
       undoStack.current.push(cmd);
       redoStack.current = [];
       sync();
     },
     [sync],
+  );
+
+  /** Everything pushed while `work` runs becomes one step: undone together, last first. */
+  const batch = useCallback(
+    async (label: string, work: () => Promise<void>) => {
+      const cmds: Command[] = [];
+      batching.current = cmds;
+      try {
+        await work();
+      } finally {
+        batching.current = null;
+        if (cmds.length === 1) push(cmds[0]);
+        else if (cmds.length > 1) {
+          push({
+            label,
+            do: async () => {
+              for (const cmd of cmds) await cmd.do();
+            },
+            undo: async () => {
+              for (const cmd of [...cmds].reverse()) await cmd.undo();
+            },
+          });
+        }
+      }
+    },
+    [push],
   );
 
   const reset = useCallback(() => {
@@ -52,5 +84,5 @@ export function useAnnotationHistory() {
     sync();
   }, [sync]);
 
-  return { push, reset, undo, redo, canUndo, canRedo };
+  return { push, batch, reset, undo, redo, canUndo, canRedo };
 }

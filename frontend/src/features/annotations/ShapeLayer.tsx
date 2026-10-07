@@ -4,13 +4,25 @@ import {
   circleGeometry,
   clampTranslation,
   constrainCircleEdge,
+  isAreaShape,
   isDrawnEnough,
   isLineShape,
   translatePoints,
 } from "../../utils/shapes";
 import { dragHandle, handlesFor, insertVertex, removeVertex, type Handle, type HandleSpot } from "../../utils/shapeEdit";
 import { CLOSE_TOLERANCE_PX, cleanPolygon, polygonClick, type LastClick } from "../../utils/polygonDraw";
-import type { AnnotationTool } from "../../stores/annotationStore";
+import {
+  addToShapes,
+  brushedType,
+  containsPoint,
+  eraseFromShape,
+  paintShape,
+  shapePaint,
+  touchesShape,
+  type BrushChange,
+  type BrushStroke,
+} from "../../utils/brush";
+import { useAnnotationStore, type AnnotationTool } from "../../stores/annotationStore";
 import type { AnnotationClass, GeometryType } from "../../types/api";
 
 /** What the layer needs to know about a shape to draw it. */
@@ -21,6 +33,8 @@ export interface LayerShape {
   class_id: number | null;
   unsure: boolean;
   excluded: boolean;
+  /** The fill of a patch label: it stands for the whole patch, so the brush leaves it alone. */
+  label?: boolean;
   /** Where moves and reshapes must keep it, in this layer's units. Default: the whole layer. A shape that
    * belongs to an overlapping patch is kept inside that patch, which can reach past this one's edge. */
   bounds?: { x0: number; y0: number; x1: number; y1: number };
@@ -45,6 +59,10 @@ interface Props {
   /** A shape's new points once the Select tool finishes moving or reshaping it. */
   onShapeEdit: (id: number, points: Point[]) => void;
   onDeleteSelected: () => void;
+  /** What a brush stroke did: shapes reshaped, cut into pieces, removed or painted new. Without it there is no brush. */
+  onBrush?: (changes: BrushChange[]) => void;
+  /** The class the brush paints with, where that is not the annotation class picked in the workspace. */
+  brushClassId?: number | null;
   /** True while a gesture that started on this layer is in progress, so a viewer underneath can hold still. */
   gestureRef?: React.MutableRefObject<boolean>;
   /** Anything that changes when in-progress drawing should be abandoned (another image, another patch). */
@@ -57,6 +75,8 @@ const FREEHAND_MIN_DIST = 4; // screen px
 const PREVIEW = "#38bdf8";
 const DRAG_TOOLS: AnnotationTool[] = ["rectangle", "line", "circle"];
 const PATH_TOOLS: AnnotationTool[] = ["freehand", "freehand_line"];
+const ERASER = "#f87171";
+const AREA_TOOLS: AnnotationTool[] = ["rectangle", "circle", "polygon", "freehand"];
 
 /** A shape being moved (no handle) or reshaped (a handle), previewed before it is saved. */
 interface EditState {
@@ -94,10 +114,17 @@ export function ShapeLayer({
   onShapeComplete,
   onShapeEdit,
   onDeleteSelected,
+  onBrush,
+  brushClassId,
   gestureRef,
   resetKey,
   fillOpacity,
 }: Props) {
+  const brush = useAnnotationStore((s) => s.brush);
+  const setBrush = useAnnotationStore((s) => s.setBrush);
+  const shapeMode = useAnnotationStore((s) => s.shapeMode);
+  const workspaceClassId = useAnnotationStore((s) => s.activeClassId);
+  const activeClassId = brushClassId !== undefined ? brushClassId : workspaceClassId;
   const rootRef = useRef<SVGGElement>(null);
   const [drawPoints, setDrawPoints] = useState<Point[]>([]);
   const [cursor, setCursor] = useState<Point | null>(null);
@@ -105,6 +132,8 @@ export function ShapeLayer({
   const [edit, setEdit] = useState<EditState | null>(null);
   const dragStart = useRef<Point | null>(null);
   const lastClick = useRef<LastClick | null>(null);
+  /** The brush stroke being painted: whether it erases, and (adding) the shape it started on, if any. */
+  const [painting, setPainting] = useState<{ erase: boolean; targetId: number | null } | null>(null);
 
   const active = tool !== "pan"; // "pan" leaves the pointer to whatever is underneath
   // The drawing tool in use, which Pan does not replace: panning (holding Space, or the Pan tool) in the middle
@@ -123,6 +152,61 @@ export function ShapeLayer({
     return svg ? screenToSvgPoint(svg, e.clientX, e.clientY) : [0, 0];
   }
   const clampToSpace = ([x, y]: Point): Point => [Math.max(0, Math.min(width, x)), Math.max(0, Math.min(height, y))];
+  const brushRadius = px(brush.size / 2);
+  const brushable = (shape: LayerShape) => isAreaShape(shape.type) && !shape.label;
+  const extent = { x0: 0, y0: 0, x1: width, y1: height };
+
+  /** The paint joined onto `first` and the shapes of `touched` kept where it is kept, as changes; none if it adds nothing. */
+  function joinChanges(first: LayerShape, touched: LayerShape[], paint: BrushStroke, type: GeometryType): BrushChange[] {
+    // Shapes kept in different places (this patch, a neighbour, the slide) are not joined to each other.
+    const home = JSON.stringify(first.bounds ?? null);
+    const group = [first, ...touched.filter((s) => s.id !== first.id && JSON.stringify(s.bounds ?? null) === home)];
+    const points = addToShapes(group, paint);
+    if (!points) return [];
+    return [{ kind: "edit", id: first.id, type, points }, ...group.slice(1).map((taken): BrushChange => ({ kind: "delete", id: taken.id }))];
+  }
+
+  /** The paint cut out of every shape it crosses (of the active class only, if erasing is limited to it), as changes. */
+  function eraseChanges(paint: BrushStroke): BrushChange[] {
+    const changes: BrushChange[] = [];
+    for (const shape of shapes) {
+      if (!brushable(shape) || (brush.eraseScope === "class" && shape.class_id !== activeClassId)) continue;
+      const pieces = eraseFromShape(shape, paint);
+      if (!pieces) continue;
+      if (pieces.length === 0) {
+        changes.push({ kind: "delete", id: shape.id });
+        continue;
+      }
+      // The largest piece stays the shape it was; the others become shapes like it.
+      changes.push({ kind: "edit", id: shape.id, type: brushedType(shape.type), points: pieces[0] });
+      for (const points of pieces.slice(1)) changes.push({ kind: "create", points, like: shape.id });
+    }
+    return changes;
+  }
+
+  /**
+   * A shape has been drawn. In the "add" mode an area shape joins the shapes of the active class it
+   * touches (several become one) instead of being a shape of its own; drawn inside one, it adds nothing.
+   * In the "erase" mode it is not kept at all: it is cut out of the shapes it crosses.
+   */
+  function completeShape(type: GeometryType, points: Point[]) {
+    if (shapeMode === "erase" && onBrush && isAreaShape(type)) {
+      const changes = eraseChanges(shapePaint(type, points, unit, extent));
+      if (changes.length > 0) onBrush(changes);
+      return;
+    }
+    if (shapeMode === "add" && onBrush && isAreaShape(type)) {
+      const paint = shapePaint(type, points, unit, extent);
+      const touched = shapes.filter((s) => brushable(s) && s.class_id === activeClassId && touchesShape(s, paint));
+      if (touched.length > 0) {
+        // Straight-edged shapes make a polygon; anything joined onto a freehand outline stays one.
+        const changes = joinChanges(touched[0], touched, paint, touched[0].type === "freehand" || type === "freehand" ? "freehand" : "polygon");
+        if (changes.length > 0) onBrush(changes);
+        return;
+      }
+    }
+    onShapeComplete(type, points);
+  }
 
   // A gesture (drawing a shape, dragging a handle) is followed on the window, not through pointer capture:
   // a viewer underneath (OpenSeadragon) captures the pointer for itself, and its move/up events would
@@ -154,6 +238,23 @@ export function ShapeLayer({
     }
     if (tool === "point") {
       onShapeComplete("point", [pt]);
+      return;
+    }
+    if (tool === "brush") {
+      // Not held to the space: the stroke may run over the edge, where its paint is cut off.
+      const at = localPoint(e);
+      const erase = brush.mode === "erase" || e.shiftKey;
+      // Adding grows the shape the stroke starts on (the selected one if it is there, else the one on top)
+      // and, wherever it starts, the shapes of that class it touches: see finishBrush.
+      const under = shapes.filter((s) => brushable(s) && containsPoint(s.type, s.points, at));
+      const target = under.find((s) => s.id === selectedId) ?? under[under.length - 1];
+      setPainting({ erase, targetId: !erase && brush.mode === "add" ? (target?.id ?? null) : null });
+      setGesture(true);
+      setIsDragging(true);
+      dragStart.current = at;
+      setDrawPoints([at]);
+      setCursor(at);
+      trackPointer();
       return;
     }
     if (DRAG_TOOLS.includes(tool) || PATH_TOOLS.includes(tool)) {
@@ -201,6 +302,17 @@ export function ShapeLayer({
     }
 
     if (drawTool === "polygon" && drawPoints.length > 0) setCursor(clampToSpace(localPoint(e)));
+    if (drawTool === "brush") {
+      const at = localPoint(e);
+      setCursor(at); // the ring that shows the brush's size
+      if (!isDragging) return;
+      setDrawPoints((pts) => {
+        const last = pts[pts.length - 1];
+        const step = Math.max(1.5, brush.size / 10) * unit; // finer than the brush is wide
+        return last && Math.hypot(at[0] - last[0], at[1] - last[1]) < step ? pts : [...pts, at];
+      });
+      return;
+    }
     if (!isDragging || !dragStart.current) return;
     const pt = clampToSpace(localPoint(e));
 
@@ -239,21 +351,51 @@ export function ShapeLayer({
         [Math.max(x0, x1), Math.max(y0, y1)],
         [Math.min(x0, x1), Math.max(y0, y1)],
       ];
-      if (isDrawnEnough("rectangle", corners, unit)) onShapeComplete("rectangle", corners);
+      if (isDrawnEnough("rectangle", corners, unit)) completeShape("rectangle", corners);
     } else if ((drawTool === "line" || drawTool === "circle") && drawPoints.length === 2) {
-      if (isDrawnEnough(drawTool, drawPoints, unit)) onShapeComplete(drawTool, drawPoints);
+      if (isDrawnEnough(drawTool, drawPoints, unit)) completeShape(drawTool, drawPoints);
     } else if ((drawTool === "freehand" || drawTool === "freehand_line") && isDrawnEnough(drawTool, drawPoints, unit)) {
-      onShapeComplete(drawTool, drawPoints);
+      completeShape(drawTool, drawPoints);
+    } else if (drawTool === "brush") {
+      finishBrush();
     }
     setDrawPoints([]);
     dragStart.current = null;
+  }
+
+  /** Works out what the stroke did to the shapes and hands that over to be saved. */
+  function finishBrush() {
+    const done = painting;
+    setPainting(null);
+    if (!done || !onBrush) return;
+    const painted: BrushStroke = { path: drawPoints, radius: brushRadius, unit, extent };
+    const changes: BrushChange[] = [];
+    if (done.erase) {
+      changes.push(...eraseChanges(painted));
+    } else {
+      // Adding: the stroke grows the shape it starts on and every shape of that class it touches (of the
+      // active class, when it starts on empty space); shapes it connects become one. Touching nothing, or
+      // in the "new" mode, it is a shape of its own.
+      const start = shapes.find((s) => s.id === done.targetId);
+      const classId = start ? start.class_id : activeClassId;
+      const touched =
+        brush.mode === "add" ? shapes.filter((s) => s.id !== start?.id && brushable(s) && s.class_id === classId && touchesShape(s, painted)) : [];
+      const first = start ?? touched[0];
+      if (first) {
+        changes.push(...joinChanges(first, touched, painted, brushedType(first.type)));
+      } else {
+        const points = paintShape(painted);
+        if (points) changes.push({ kind: "create", points, like: null });
+      }
+    }
+    if (changes.length > 0) onBrush(changes);
   }
 
   /** Save the polygon if it has at least 3 distinct points; otherwise keep drawing (nothing is thrown away). */
   function finishPolygon() {
     const points = cleanPolygon(drawPoints, unit);
     if (!isDrawnEnough("polygon", points, unit)) return;
-    onShapeComplete("polygon", points);
+    completeShape("polygon", points);
     setDrawPoints([]);
     setCursor(null);
     lastClick.current = null;
@@ -290,6 +432,7 @@ export function ShapeLayer({
     setCursor(null);
     setIsDragging(false);
     setEdit(null);
+    setPainting(null);
     setGesture(false);
     lastClick.current = null;
   }
@@ -301,6 +444,10 @@ export function ShapeLayer({
     if (isTyping(e.target)) return;
     if (e.key === "Enter" && drawTool === "polygon") finishPolygon();
     if (e.key === "Escape") cancelInProgress();
+    if (drawTool === "brush" && (e.key === "[" || e.key === "]")) {
+      const step = Math.max(2, Math.round(brush.size * 0.2));
+      setBrush({ size: brush.size + (e.key === "]" ? step : -step) });
+    }
     // While drawing a polygon, Backspace/Delete takes back the last point placed.
     if ((e.key === "Delete" || e.key === "Backspace") && drawTool === "polygon" && drawPoints.length > 0) {
       e.preventDefault();
@@ -327,12 +474,15 @@ export function ShapeLayer({
 
   const stroke = px(2);
   const dash = `${px(6)} ${px(4)}`;
-  const preview = { stroke: PREVIEW, strokeWidth: stroke, fill: "none" } as const;
+  // What is being drawn is shown in red while it is going to be cut out of the shapes, not kept.
+  const tint = shapeMode === "erase" && !!onBrush && AREA_TOOLS.includes(drawTool) ? ERASER : PREVIEW;
+  const preview = { stroke: tint, strokeWidth: stroke, fill: "none" } as const;
 
   return (
     <g
       ref={rootRef}
       onPointerMove={active ? (e) => !tracking.current && handlePointerMove(e) : undefined} // hovering (a polygon's rubber band)
+      onPointerLeave={active && tool === "brush" ? () => !tracking.current && setCursor(null) : undefined}
       onDoubleClick={active ? handleDoubleClick : undefined}
       style={{ touchAction: "none", pointerEvents: active ? "auto" : "none" }}
     >
@@ -379,11 +529,11 @@ export function ShapeLayer({
         <g pointerEvents="none">
           <polyline points={[...drawPoints, cursor ?? drawPoints[drawPoints.length - 1]].map((p) => p.join(",")).join(" ")} {...preview} strokeDasharray={dash} />
           {drawPoints.map((p, i) => (
-            <circle key={i} cx={p[0]} cy={p[1]} r={px(4)} fill={PREVIEW} />
+            <circle key={i} cx={p[0]} cy={p[1]} r={px(4)} fill={tint} />
           ))}
           {drawPoints.length >= 3 && (
             // Click here (or double-click, or Enter) to close the polygon.
-            <circle cx={drawPoints[0][0]} cy={drawPoints[0][1]} r={px(CLOSE_TOLERANCE_PX)} fill="white" fillOpacity={0.35} stroke={PREVIEW} strokeWidth={stroke} />
+            <circle cx={drawPoints[0][0]} cy={drawPoints[0][1]} r={px(CLOSE_TOLERANCE_PX)} fill="white" fillOpacity={0.35} stroke={tint} strokeWidth={stroke} />
           )}
         </g>
       )}
@@ -394,9 +544,9 @@ export function ShapeLayer({
           y={Math.min(drawPoints[0][1], drawPoints[1][1])}
           width={Math.abs(drawPoints[1][0] - drawPoints[0][0])}
           height={Math.abs(drawPoints[1][1] - drawPoints[0][1])}
-          fill={PREVIEW}
+          fill={tint}
           fillOpacity={0.2}
-          stroke={PREVIEW}
+          stroke={tint}
           strokeWidth={stroke}
           pointerEvents="none"
         />
@@ -412,12 +562,12 @@ export function ShapeLayer({
             cx={circleGeometry(drawPoints).cx}
             cy={circleGeometry(drawPoints).cy}
             r={circleGeometry(drawPoints).r}
-            fill={PREVIEW}
+            fill={tint}
             fillOpacity={0.2}
-            stroke={PREVIEW}
+            stroke={tint}
             strokeWidth={stroke}
           />
-          <circle cx={drawPoints[0][0]} cy={drawPoints[0][1]} r={px(3)} fill={PREVIEW} />
+          <circle cx={drawPoints[0][0]} cy={drawPoints[0][1]} r={px(3)} fill={tint} />
         </g>
       )}
 
@@ -427,6 +577,42 @@ export function ShapeLayer({
 
       {isDragging && drawTool === "freehand_line" && drawPoints.length > 1 && (
         <polyline points={drawPoints.map((p) => p.join(",")).join(" ")} {...preview} strokeLinecap="round" strokeLinejoin="round" pointerEvents="none" />
+      )}
+
+      {active && drawTool === "brush" && (
+        <BrushPreview
+          path={isDragging ? drawPoints : []}
+          cursor={cursor}
+          radius={brushRadius}
+          color={painting?.erase || brush.mode === "erase" ? ERASER : classColor(shapes.find((s) => s.id === painting?.targetId)?.class_id ?? activeClassId)}
+          px={px}
+        />
+      )}
+    </g>
+  );
+}
+
+/** The paint of the stroke so far, and a ring the size of the brush under the pointer. */
+function BrushPreview({ path, cursor, radius, color, px }: { path: Point[]; cursor: Point | null; radius: number; color: string; px: (n: number) => number }) {
+  return (
+    <g pointerEvents="none">
+      {path.length === 1 && <circle cx={path[0][0]} cy={path[0][1]} r={radius} fill={color} fillOpacity={0.35} />}
+      {path.length > 1 && (
+        <polyline
+          points={path.map((p) => p.join(",")).join(" ")}
+          fill="none"
+          stroke={color}
+          strokeOpacity={0.35}
+          strokeWidth={radius * 2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
+      {cursor && (
+        <>
+          <circle cx={cursor[0]} cy={cursor[1]} r={radius} fill="none" stroke="black" strokeOpacity={0.5} strokeWidth={px(3)} />
+          <circle cx={cursor[0]} cy={cursor[1]} r={radius} fill="none" stroke={color} strokeWidth={px(1.5)} />
+        </>
       )}
     </g>
   );

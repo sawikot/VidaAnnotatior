@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { MaterialIcon } from "../components/MaterialIcon";
 import { IconButton } from "../components/primitives";
 import { AnnotationCanvas } from "../features/annotations/AnnotationCanvas";
+import { ToolOptions } from "../features/annotations/BrushOptions";
 import { useAnnotationHistory } from "../features/annotations/useAnnotationHistory";
 import { neighbour, progress, type ImageFilter } from "../features/images/imageNav";
 import { AnnotationModeSwitch, rememberMode, rememberedMode, type AnnotationMode } from "../features/annotations/AnnotationModeSwitch";
@@ -37,11 +38,12 @@ import { useContextStore } from "../stores/contextStore";
 import { useUiStore } from "../stores/uiStore";
 import type { ConfigVersion, GeometryAnnotation, GeometryType, ImageSummary, OverlappingAnnotation, Patch, Slide } from "../types/api";
 import type { Point } from "../utils/coordinates";
+import type { BrushChange } from "../utils/brush";
 import type { LayerShape } from "../features/annotations/ShapeLayer";
 import { level0ToLocal, localToLevel0, localToLocal, projectSlideShapes } from "../utils/slideProjection";
 
 type AnnotationFields = Partial<
-  Pick<GeometryAnnotation, "class_id" | "unsure" | "flagged" | "notes" | "coordinates_patch_local" | "coordinates_level0">
+  Pick<GeometryAnnotation, "type" | "class_id" | "unsure" | "flagged" | "notes" | "coordinates_patch_local" | "coordinates_level0">
 >;
 
 /** Patch-label fills first, so they are drawn beneath -- and picked after -- the shapes inside them. */
@@ -89,6 +91,23 @@ export function MainWorkspacePage() {
   const [area, setArea] = useState({ w: 0, h: 0 });
 
   const history = useAnnotationHistory();
+  // Undoing a delete (or redoing a create) makes the annotation again, under another id. So the steps of
+  // the history name annotations by a key that stays, and look the id of the moment up when they run.
+  const keys = useRef({ idOf: new Map<number, number>(), keyOf: new Map<number, number>(), next: 1 });
+  const bind = (key: number, id: number) => {
+    keys.current.idOf.set(key, id);
+    keys.current.keyOf.set(id, key);
+  };
+  /** `fresh`: just created -- whatever had this id before is gone (the database hands ids out again). */
+  const keyOf = (id: number, fresh = false) => {
+    let key = fresh ? undefined : keys.current.keyOf.get(id);
+    if (key === undefined) {
+      key = keys.current.next++;
+      bind(key, id);
+    }
+    return key;
+  };
+  const idOf = (key: number) => keys.current.idOf.get(key) as number;
 
   // Annotate one patch at a time ("patch"), or directly on the whole slide ("wsi"). Image projects have
   // no whole slide to speak of: an image is its own patch.
@@ -442,6 +461,7 @@ export function MainWorkspacePage() {
       });
       setAnnotations((prev) => [...prev, created]);
       setSaveState("saved");
+      const key = keyOf(created.id, true);
       history.push({
         label: `create ${type}`,
         do: async () => {
@@ -451,11 +471,13 @@ export function MainWorkspacePage() {
             coordinates_patch_local: points,
             created_by: annotatorName,
           });
-          setAnnotations((prev) => [...prev.filter((a) => a.id !== created.id), recreated]);
+          bind(key, recreated.id);
+          setAnnotations((prev) => [...prev, recreated]);
         },
         undo: async () => {
-          await deleteAnnotation(created.id);
-          setAnnotations((prev) => prev.filter((a) => a.id !== created.id));
+          const id = idOf(key);
+          await deleteAnnotation(id);
+          setAnnotations((prev) => prev.filter((a) => a.id !== id));
         },
       });
       setPatch((p) => (p && p.status === "unannotated" ? { ...p, status: "annotated" } : p));
@@ -474,8 +496,9 @@ export function MainWorkspacePage() {
     const target = annotations.find((a) => a.id === id);
     if (!target || patch?.slide_id !== sid) return;
     const before = Object.fromEntries(Object.keys(fields).map((key) => [key, target[key as keyof AnnotationFields]])) as AnnotationFields;
-    const replace = (updated: GeometryAnnotation) => setAnnotations((prev) => prev.map((a) => (a.id === id ? updated : a)));
-    const send = async (f: AnnotationFields) => replace(await updateAnnotation(id, f));
+    const replace = (updated: GeometryAnnotation) => setAnnotations((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+    const key = keyOf(id);
+    const send = async (f: AnnotationFields) => replace(await updateAnnotation(idOf(key), f));
 
     setSaveState("saving");
     replace({ ...target, ...fields });
@@ -498,8 +521,9 @@ export function MainWorkspacePage() {
     const target = entry.annotation;
     const before = Object.fromEntries(Object.keys(fields).map((key) => [key, target[key as keyof AnnotationFields]])) as AnnotationFields;
     const replace = (updated: GeometryAnnotation) =>
-      setBorrowed((prev) => prev.map((o) => (o.annotation.id === id ? { ...o, annotation: updated } : o)));
-    const send = async (f: AnnotationFields) => replace(await updateAnnotation(id, f));
+      setBorrowed((prev) => prev.map((o) => (o.annotation.id === updated.id ? { ...o, annotation: updated } : o)));
+    const key = keyOf(id);
+    const send = async (f: AnnotationFields) => replace(await updateAnnotation(idOf(key), f));
 
     const shown = { ...target, ...fields };
     if (fields.coordinates_patch_local) {
@@ -523,8 +547,9 @@ export function MainWorkspacePage() {
     const target = slideLevel(id);
     if (!target || patch?.slide_id !== sid) return;
     const before = Object.fromEntries(Object.keys(fields).map((key) => [key, target[key as keyof AnnotationFields]])) as AnnotationFields;
-    const replace = (updated: GeometryAnnotation) => setSlideAnnotations((prev) => prev.map((a) => (a.id === id ? updated : a)));
-    const send = async (f: AnnotationFields) => replace(await updateAnnotation(id, f));
+    const replace = (updated: GeometryAnnotation) => setSlideAnnotations((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+    const key = keyOf(id);
+    const send = async (f: AnnotationFields) => replace(await updateAnnotation(idOf(key), f));
 
     setSaveState("saving");
     replace({ ...target, ...fields });
@@ -542,42 +567,117 @@ export function MainWorkspacePage() {
   const editAny = (id: number, fields: AnnotationFields, label: string) =>
     borrowedEntry(id) ? editBorrowed(id, fields, label) : slideLevel(id) ? editSlideLevel(id, fields, label) : editAnnotation(id, fields, label);
 
-  const handleShapeEdit = (id: number, points: Point[]) => {
+  /** A shape's new points -- and, when the brush reworked it into another kind of shape, its new type. */
+  const handleShapeEdit = (id: number, points: Point[], type?: GeometryType) => {
+    const kind = type ? { type } : {};
     const entry = borrowedEntry(id);
     if (entry && patch) {
       // Drawn in this patch's pixels; stored in the pixels of the patch it belongs to.
-      editBorrowed(id, { coordinates_patch_local: points.map((pt) => localToLocal(patch, entry.owner, pt)) }, "edit shape");
-    } else if (slideLevel(id) && patch) {
-      editSlideLevel(id, { coordinates_level0: points.map((pt) => localToLevel0(patch, pt)) }, "edit shape");
-    } else {
-      editAnnotation(id, { coordinates_patch_local: points }, "edit shape");
+      return editBorrowed(id, { ...kind, coordinates_patch_local: points.map((pt) => localToLocal(patch, entry.owner, pt)) }, "edit shape");
     }
+    if (slideLevel(id) && patch) {
+      return editSlideLevel(id, { ...kind, coordinates_level0: points.map((pt) => localToLevel0(patch, pt)) }, "edit shape");
+    }
+    return editAnnotation(id, { ...kind, coordinates_patch_local: points }, "edit shape");
   };
 
-  async function handleDeleteSelected() {
-    if (!selectedAnnId) return;
-    const onWholeSlide = slideLevel(selectedAnnId);
+  /** A piece the eraser cut off a shape: a shape like the one it came from, kept where that one is kept. */
+  async function createLike(sourceId: number, points: Point[]) {
+    if (!patch || patch.slide_id !== sid) return;
+    const entry = borrowedEntry(sourceId);
+    const onWholeSlide = slideLevel(sourceId);
+    const source = entry?.annotation ?? onWholeSlide ?? annotations.find((a) => a.id === sourceId);
+    if (!source) return;
+    const common = {
+      type: "freehand" as const,
+      class_id: source.class_id,
+      created_by: annotatorName,
+      notes: source.notes ?? undefined,
+      unsure: source.unsure,
+      flagged: source.flagged,
+    };
+    const make = () =>
+      onWholeSlide
+        ? createSlideAnnotation(sid, { ...common, coordinates_level0: points.map((pt) => localToLevel0(patch, pt)) })
+        : entry
+          ? createAnnotation(entry.owner.id, { ...common, coordinates_patch_local: points.map((pt) => localToLocal(patch, entry.owner, pt)) })
+          : createAnnotation(patch.id, { ...common, coordinates_patch_local: points });
+    const add = (a: GeometryAnnotation) =>
+      onWholeSlide
+        ? setSlideAnnotations((prev) => [...prev, a])
+        : entry
+          ? setBorrowed((prev) => [...prev, { owner: entry.owner, annotation: a }])
+          : setAnnotations((prev) => [...prev, a]);
+    const drop = (id: number) =>
+      onWholeSlide
+        ? setSlideAnnotations((prev) => prev.filter((a) => a.id !== id))
+        : entry
+          ? setBorrowed((prev) => prev.filter((o) => o.annotation.id !== id))
+          : setAnnotations((prev) => prev.filter((a) => a.id !== id));
+    setSaveState("saving");
+    try {
+      const created = await make();
+      add(created);
+      setSaveState("saved");
+      const key = keyOf(created.id, true);
+      history.push({
+        label: "split shape",
+        do: async () => {
+          const recreated = await make();
+          bind(key, recreated.id);
+          add(recreated);
+        },
+        undo: async () => {
+          const id = idOf(key);
+          await deleteAnnotation(id);
+          drop(id);
+        },
+      });
+    } catch (e) {
+      setSaveState("error");
+      pushToast(e instanceof Error ? e.message : "Failed to save annotation", "error");
+    }
+  }
+
+  /** One brush stroke: it may reshape, split or remove several shapes, and is undone as one step. */
+  async function handleBrush(changes: BrushChange[]) {
+    await history.batch("brush stroke", async () => {
+      for (const change of changes) {
+        if (change.kind === "edit") await handleShapeEdit(change.id, change.points, change.type);
+        else if (change.kind === "delete") await deleteById(change.id);
+        else if (change.like === null) await handleShapeComplete("freehand", change.points);
+        else await createLike(change.like, change.points);
+      }
+    });
+  }
+
+  const handleDeleteSelected = () => (selectedAnnId ? deleteById(selectedAnnId) : undefined);
+
+  async function deleteById(id: number) {
+    const onWholeSlide = slideLevel(id);
     if (onWholeSlide) return deleteSlideLevel(onWholeSlide);
-    const entry = borrowedEntry(selectedAnnId); // an overlapping patch's annotation, deleted from that patch
-    const target = entry?.annotation ?? annotations.find((a) => a.id === selectedAnnId);
+    const entry = borrowedEntry(id); // an overlapping patch's annotation, deleted from that patch
+    const target = entry?.annotation ?? annotations.find((a) => a.id === id);
     const patchId = target?.patch_id; // the patch view only ever holds patch-drawn annotations
     if (!target || patchId == null) return;
     const drop = (id: number) =>
       entry ? setBorrowed((prev) => prev.filter((o) => o.annotation.id !== id)) : setAnnotations((prev) => prev.filter((a) => a.id !== id));
     const add = (a: GeometryAnnotation) =>
       entry ? setBorrowed((prev) => [...prev, { owner: entry.owner, annotation: a }]) : setAnnotations((prev) => [...prev, a]);
+    const key = keyOf(target.id); // undo recreates it under another id; redo must delete that one
     setSaveState("saving");
     try {
       await deleteAnnotation(target.id);
       drop(target.id);
       if (target.whole_patch && !entry) syncPatchLabel();
-      setSelectedAnnId(null);
+      setSelectedAnnId((selected) => (selected === target.id ? null : selected));
       setSaveState("saved");
       history.push({
         label: "delete annotation",
         do: async () => {
-          await deleteAnnotation(target.id);
-          drop(target.id);
+          const gone = idOf(key);
+          await deleteAnnotation(gone);
+          drop(gone);
         },
         undo: async () => {
           const recreated = await createAnnotation(patchId, {
@@ -586,6 +686,7 @@ export function MainWorkspacePage() {
             coordinates_patch_local: target.coordinates_patch_local,
             created_by: target.created_by ?? annotatorName,
           });
+          bind(key, recreated.id);
           add(recreated);
         },
       });
@@ -606,22 +707,23 @@ export function MainWorkspacePage() {
       unsure: target.unsure,
       flagged: target.flagged,
     };
-    let currentId = target.id; // undo recreates it with a new id; redo must delete that one
+    const key = keyOf(target.id); // undo recreates it under another id; redo must delete that one
     setSaveState("saving");
     try {
       await deleteAnnotation(target.id);
       setSlideAnnotations((prev) => prev.filter((a) => a.id !== target.id));
-      setSelectedAnnId(null);
+      setSelectedAnnId((selected) => (selected === target.id ? null : selected));
       setSaveState("saved");
       history.push({
         label: "delete annotation",
         do: async () => {
-          await deleteAnnotation(currentId);
-          setSlideAnnotations((prev) => prev.filter((a) => a.id !== currentId));
+          const gone = idOf(key);
+          await deleteAnnotation(gone);
+          setSlideAnnotations((prev) => prev.filter((a) => a.id !== gone));
         },
         undo: async () => {
           const recreated = await createSlideAnnotation(sid, copy);
-          currentId = recreated.id;
+          bind(key, recreated.id);
           setSlideAnnotations((prev) => [...prev, recreated]);
         },
       });
@@ -837,6 +939,7 @@ export function MainWorkspacePage() {
               {Math.round(effectiveZoom * 100)}%
             </span>
           </div>
+          <ToolOptions tool={tool} />
 
           <div ref={setAreaEl} className="relative flex-1 min-h-0 overflow-auto flex p-space-lg" style={{ scrollbarGutter: "stable both-edges" }}>
             <div ref={canvasWrapRef} className="m-auto shrink-0">
@@ -858,6 +961,7 @@ export function MainWorkspacePage() {
               onShapeComplete={handleShapeComplete}
               onShapeEdit={handleShapeEdit}
               onDeleteSelected={handleDeleteSelected}
+              onBrush={handleBrush}
             />
             )}
             </div>

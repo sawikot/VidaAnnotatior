@@ -11,6 +11,6 @@ export const REGION_CLASSES: AnnotationClass[] = [
 ];
 export const classIdOf = (mode: TissueRegionMode) => (mode === "add" ? 1 : 2);
 
-const AREA_TOOL_IDS: AnnotationTool[] = ["select", "rectangle", "polygon", "freehand", "circle"];
+const AREA_TOOL_IDS: AnnotationTool[] = ["select", "rectangle", "polygon", "freehand", "circle", "brush"];
 /** Only area tools make sense for marking tissue. */
 export const REGION_TOOLS: ToolDef[] = [PAN_TOOL, ...TOOLS.filter((t) => AREA_TOOL_IDS.includes(t.id))];

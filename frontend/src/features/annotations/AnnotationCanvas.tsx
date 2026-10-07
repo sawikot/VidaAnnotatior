@@ -1,6 +1,7 @@
 import type { Point } from "../../utils/coordinates";
 import type { AnnotationTool } from "../../stores/annotationStore";
 import type { AnnotationClass, GeometryAnnotation, GeometryType } from "../../types/api";
+import type { BrushChange } from "../../utils/brush";
 import { ShapeLayer, type LayerShape } from "./ShapeLayer";
 
 interface Props {
@@ -22,6 +23,8 @@ interface Props {
   /** A shape's new points once the Select tool finishes moving or reshaping it. */
   onShapeEdit: (id: number, points: Point[]) => void;
   onDeleteSelected: () => void;
+  /** What a brush stroke did to the shapes. */
+  onBrush: (changes: BrushChange[]) => void;
 }
 
 /** One patch: its image with the drawing/editing layer on top, in the patch's own pixels. */
@@ -41,6 +44,7 @@ export function AnnotationCanvas({
   onShapeComplete,
   onShapeEdit,
   onDeleteSelected,
+  onBrush,
 }: Props) {
   const shapes: LayerShape[] = [
     ...borrowed,
@@ -51,6 +55,7 @@ export function AnnotationCanvas({
       class_id: a.class_id,
       unsure: a.unsure,
       excluded: a.excluded,
+      label: a.whole_patch,
     })),
   ];
 
@@ -86,6 +91,7 @@ export function AnnotationCanvas({
           onShapeComplete={onShapeComplete}
           onShapeEdit={onShapeEdit}
           onDeleteSelected={onDeleteSelected}
+          onBrush={onBrush}
           resetKey={imageUrl}
         />
       </svg>

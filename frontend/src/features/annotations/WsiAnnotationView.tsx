@@ -6,6 +6,7 @@ import {
   createAnnotation,
   createSlideAnnotation,
   deleteAnnotation,
+  getPatch,
   listSlideAnnotations,
   updateAnnotation,
 } from "../../services/api";
@@ -13,11 +14,13 @@ import { useAnnotationStore } from "../../stores/annotationStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { ConfigVersion, GeometryAnnotation, GeometryType, Slide } from "../../types/api";
 import type { Point } from "../../utils/coordinates";
+import type { BrushChange } from "../../utils/brush";
 import { shapeBounds } from "../../utils/shapes";
-import { toLevel0Shape } from "../../utils/slideProjection";
+import { level0ToLocal, toLevel0Shape } from "../../utils/slideProjection";
 import { PatchGridOverlay } from "../viewer/PatchGridOverlay";
 import { WsiViewer, type ViewportBbox } from "../viewer/WsiViewer";
 import { AnnotationModeSwitch, type AnnotationMode } from "./AnnotationModeSwitch";
+import { ToolOptions } from "./BrushOptions";
 import { ShapeLayer } from "./ShapeLayer";
 import { HOTKEYS, PAN_TOOL, visibleTools } from "./tools";
 import { useAnnotationHistory } from "./useAnnotationHistory";
@@ -40,7 +43,7 @@ interface Props {
   onOpenPatch: (patchId: number, annotationId: number) => void;
 }
 
-type Fields = Partial<Pick<GeometryAnnotation, "class_id" | "unsure" | "flagged" | "notes" | "coordinates_level0">>;
+type Fields = Partial<Pick<GeometryAnnotation, "type" | "class_id" | "unsure" | "flagged" | "notes" | "coordinates_level0">>;
 
 function isTyping(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
@@ -222,9 +225,9 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
     }
   }
 
-  async function deleteSelected() {
-    const target = selected;
-    if (!target) return;
+  const deleteSelected = () => (selected ? deleteOne(selected) : undefined);
+
+  async function deleteOne(target: GeometryAnnotation) {
     const patchId = target.patch_id;
     const setList = patchId != null ? setPatchDrawn : setSlideAnnotations;
     const key = keyOf(target.id);
@@ -244,7 +247,7 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
     await guarded("delete annotation", async () => {
       await deleteAnnotation(target.id);
       setList((prev) => prev.filter((a) => a.id !== target.id));
-      setSelectedId(null);
+      setSelectedId((id) => (id === target.id ? null : id));
       history.push({
         label: "delete annotation",
         do: async () => {
@@ -258,6 +261,62 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
           setList((prev) => [...prev, again]);
         },
       });
+    });
+  }
+
+  /** A piece the eraser cut off a shape: a shape like the one it came from, kept where that one is kept. */
+  async function createLike(source: GeometryAnnotation, points: Point[]) {
+    const patchId = source.patch_id;
+    const setList = patchId != null ? setPatchDrawn : setSlideAnnotations;
+    const common = {
+      type: "freehand" as const,
+      class_id: source.class_id,
+      created_by: annotatorName,
+      notes: source.notes ?? undefined,
+      unsure: source.unsure,
+      flagged: source.flagged,
+    };
+    await guarded("save annotation", async () => {
+      // A piece of a patch's shape stays in that patch, in that patch's pixels.
+      const owner = patchId != null ? await getPatch(patchId) : null;
+      const make = () =>
+        owner
+          ? createAnnotation(owner.id, { ...common, coordinates_patch_local: points.map((pt) => level0ToLocal(owner, pt)) })
+          : createSlideAnnotation(slide.id, { ...common, coordinates_level0: points });
+      const created = await make();
+      setList((prev) => [...prev, created]);
+      const key = keyOf(created.id);
+      history.push({
+        label: "split shape",
+        do: async () => {
+          const again = await make();
+          rebind(key, again.id);
+          setList((prev) => [...prev, again]);
+        },
+        undo: async () => {
+          const id = idOf(key);
+          await deleteAnnotation(id);
+          setList((prev) => prev.filter((a) => a.id !== id));
+        },
+      });
+    });
+  }
+
+  /** One brush stroke: it may reshape, split or remove several shapes, and is undone as one step. */
+  async function applyBrush(changes: BrushChange[]) {
+    const find = (id: number) => slideAnnotations.find((a) => a.id === id) ?? patchDrawn.find((a) => a.id === id);
+    await history.batch("brush stroke", async () => {
+      for (const change of changes) {
+        if (change.kind === "create" && change.like === null) {
+          await createShape("freehand", change.points);
+          continue;
+        }
+        const target = find(change.kind === "create" ? (change.like as number) : change.id);
+        if (!target) continue;
+        if (change.kind === "edit") await editAnnotation(target.id, { type: change.type, coordinates_level0: change.points }, "brush");
+        else if (change.kind === "delete") await deleteOne(target);
+        else await createLike(target, change.points);
+      }
     });
   }
 
@@ -322,7 +381,7 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
       <div className="flex-1 flex overflow-hidden">
         {/* Center: toolbar + the slide */}
         <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-[#070d1e]">
-          <div className="mx-auto my-space-sm max-w-[calc(100%-1rem)] shrink-0 z-20 bg-[#0f172a]/95 rounded-xl shadow-2xl flex flex-wrap items-center justify-center gap-1 p-1">
+          <div className="mx-auto mt-space-sm max-w-[calc(100%-1rem)] shrink-0 z-20 bg-[#0f172a]/95 rounded-xl shadow-2xl flex flex-wrap items-center justify-center gap-1 p-1">
             {tools.map((t) => (
               <IconButton key={t.id} icon={t.icon} active={effectiveTool === t.id} onClick={() => setTool(t.id)} title={`${t.label} (${t.key})`} />
             ))}
@@ -347,7 +406,9 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
             <ToggleChip label={`Patch annotations (${patchDrawn.length})`} checked={showPatchDrawn} onChange={setShowPatchDrawn} />
           </div>
 
-          <div className="relative flex-1 min-h-0">
+          <ToolOptions tool={tool} />
+
+          <div className="relative flex-1 min-h-0 mt-space-sm">
             <div className="absolute inset-0">
             <WsiViewer
               slideId={slide.id}
@@ -377,6 +438,7 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
                 onShapeComplete={createShape}
                 onShapeEdit={(id, points) => editAnnotation(id, { coordinates_level0: points }, "edit shape")}
                 onDeleteSelected={deleteSelected}
+                onBrush={applyBrush}
                 gestureRef={gestureRef}
                 resetKey={slide.id}
               />

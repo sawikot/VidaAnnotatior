@@ -353,6 +353,8 @@ export const updateAnnotation = (
   id: number,
   payload: Partial<{
     class_id: number | null;
+    /** With new points: a shape the brush reworked into another kind. */
+    type: GeometryType;
     coordinates_patch_local: [number, number][];
     /** For a slide-level annotation (which has no patch-local coordinates). */
     coordinates_level0: [number, number][];

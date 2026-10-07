@@ -43,6 +43,8 @@ class SlideAnnotationCreate(BaseModel):
 
 class GeometryAnnotationUpdate(BaseModel):
     class_id: int | None = None
+    # A shape reworked into another kind: a rectangle or circle the brush added to or cut into is an outline now.
+    type: str | None = None
     coordinates_patch_local: list[list[float]] | None = None
     # Only for slide-level annotations (which have no patch-local coordinates).
     coordinates_level0: list[list[float]] | None = None

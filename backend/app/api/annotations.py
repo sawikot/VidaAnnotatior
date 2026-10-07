@@ -503,6 +503,7 @@ def update_annotation(
     if changes.get("class_id") is not None:
         _require_class_of_config(db, changes["class_id"], annotation.config_version_id)
     before = (annotation.coordinates_patch_local, annotation.coordinates_level0)
+    shape_type = changes.pop("type", None) or annotation.type
 
     if annotation.patch_id is None:
         # Slide-level: only Level-0 coordinates exist.
@@ -510,7 +511,7 @@ def update_annotation(
             raise HTTPException(status_code=422, detail="A slide-level annotation has no patch-local coordinates; send coordinates_level0")
         if changes.get("coordinates_level0") is not None:
             try:
-                validate_shape(annotation.type, changes["coordinates_level0"])
+                validate_shape(shape_type, changes["coordinates_level0"])
             except ValueError as exc:
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
             _require_inside_slide(db.get(Slide, annotation.slide_id), changes["coordinates_level0"])
@@ -531,7 +532,7 @@ def update_annotation(
         changes["coordinates_patch_local"] = polygon_level0_to_patch_local(_origin_for_patch(patch), changes["coordinates_level0"])
     if "coordinates_patch_local" in changes and changes["coordinates_patch_local"] is not None:
         try:
-            validate_shape(annotation.type, changes["coordinates_patch_local"])  # the shape keeps its type
+            validate_shape(shape_type, changes["coordinates_patch_local"])
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         patch = db.get(Patch, annotation.patch_id)
@@ -543,6 +544,12 @@ def update_annotation(
         changes.pop("coordinates_patch_local")
 
     changes.pop("coordinates_level0", None)
+    if shape_type != annotation.type:
+        try:
+            validate_shape(shape_type, annotation.coordinates_level0)  # also when the points stayed as they were
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        annotation.type = shape_type
     if annotation.whole_patch and (annotation.coordinates_patch_local, annotation.coordinates_level0) != before:
         annotation.whole_patch = False  # reshaped: an ordinary shape now (the label stays)
     for field, value in changes.items():

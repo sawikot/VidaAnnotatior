@@ -76,6 +76,8 @@ export function useTissueRegions(slideId: number, onSaved: () => void) {
     add: (region: Draft) => change({ source, regions: [...strip(regions), region] }),
     update: (id: number, fields: Partial<Draft>) =>
       change({ source, regions: strip(regions).map((r, i) => (i + 1 === id ? { ...r, ...fields } : r)) }),
+    /** Several regions changed at once (a brush stroke), as one step. */
+    replace: (next: Draft[]) => change({ source, regions: next }),
     remove: (id: number) => change({ source, regions: strip(regions).filter((_, i) => i + 1 !== id) }),
     clear: () => regions.length > 0 && change({ source, regions: [] }),
     canUndo: past.length > 0,

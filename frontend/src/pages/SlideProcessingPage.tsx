@@ -11,6 +11,7 @@ import { TissueRegionPanel } from "../features/tissue/TissueRegionPanel";
 import { REGION_CLASSES, REGION_TOOLS, classIdOf } from "../features/tissue/regionTools";
 import { useTissueRegions } from "../features/tissue/useTissueRegions";
 import type { AnnotationTool } from "../stores/annotationStore";
+import type { BrushChange } from "../utils/brush";
 import { detectTissue, generatePatches, getConfig, getSlide } from "../services/api";
 import { TissueMaskOutline } from "../features/tissue/TissueMaskOutline";
 import { parseGridKey } from "../utils/gridKey";
@@ -96,6 +97,27 @@ export function SlideProcessingPage() {
       })),
     [tissue.data],
   );
+  /** One brush stroke over the regions: reshaped, joined, cut apart or painted new, saved as one step. */
+  function applyBrush(changes: BrushChange[]) {
+    const before = tissue.data?.regions ?? []; // a region's id is its place in the list
+    const kept: ({ mode: TissueRegionMode; type: TissueRegionType; coordinates: [number, number][] } | null)[] = before.map(
+      ({ mode, type, coordinates }) => ({ mode, type, coordinates }),
+    );
+    const added: NonNullable<(typeof kept)[number]>[] = [];
+    for (const change of changes) {
+      if (change.kind === "delete") kept[change.id - 1] = null;
+      else if (change.kind === "edit") {
+        const region = kept[change.id - 1];
+        if (region) kept[change.id - 1] = { ...region, type: change.type as TissueRegionType, coordinates: change.points };
+      } else {
+        const mode = change.like === null ? drawMode : (before[change.like - 1]?.mode ?? drawMode);
+        added.push({ mode, type: "freehand", coordinates: change.points });
+      }
+    }
+    tissue.replace([...kept.filter((r) => r !== null), ...added]);
+    setSelectedRegion(null); // the list was renumbered
+  }
+
   const effectiveTool = spaceHeld || wholeSlide ? "pan" : tool;
   const effectiveToolRef = useRef(effectiveTool);
   effectiveToolRef.current = effectiveTool;
@@ -358,6 +380,8 @@ export function SlideProcessingPage() {
                   tissue.remove(selectedRegion);
                   setSelectedRegion(null);
                 }}
+                onBrush={applyBrush}
+                brushClassId={classIdOf(drawMode)}
                 gestureRef={gestureRef}
                 resetKey={sid}
                 fillOpacity={regionOpacity}

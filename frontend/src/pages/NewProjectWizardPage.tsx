@@ -56,7 +56,6 @@ const PRESETS: [number, number, number, number][] = [
 ];
 
 const PLANNED_TOOLS = [
-  { id: "brush", label: "Brush Mask", icon: "brush" },
   { id: "sam", label: "SAM Assisted", icon: "auto_fix_high" },
   { id: "ruler", label: "Ruler / Caliper", icon: "straighten" },
 ];

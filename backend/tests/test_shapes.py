@@ -144,6 +144,23 @@ def test_moving_a_shape_updates_both_coordinate_spaces_and_bad_updates_are_refus
     assert client.get(f"/api/patches/{patch['id']}/annotations").json()[-1]["coordinates_patch_local"] == [[20, 30], [50, 30]]
 
 
+def test_a_reworked_shape_can_change_type_with_its_points(annotated_slide):  # noqa: F811
+    """The brush turns a rectangle it cuts into into a free outline: the type changes with the points."""
+    client, _, patch = annotated_slide
+    corners = [[10, 10], [60, 10], [60, 60], [10, 60]]
+    ann = client.post(f"/api/patches/{patch['id']}/annotations", json={"type": "rectangle", "coordinates_patch_local": corners}).json()
+
+    outline = [[10, 10], [60, 10], [60, 60], [35, 40], [10, 60]]
+    assert client.put(f"/api/annotations/{ann['id']}", json={"coordinates_patch_local": outline}).status_code == 422  # 5 corners
+    cut = client.put(f"/api/annotations/{ann['id']}", json={"type": "freehand", "coordinates_patch_local": outline})
+    assert cut.status_code == 200 and cut.json()["type"] == "freehand" and cut.json()["coordinates_patch_local"] == outline
+
+    assert client.put(f"/api/annotations/{ann['id']}", json={"type": "rectangle"}).status_code == 422  # not with these points
+    assert client.put(f"/api/annotations/{ann['id']}", json={"type": "zigzag"}).status_code == 422
+    back = client.put(f"/api/annotations/{ann['id']}", json={"type": "rectangle", "coordinates_patch_local": corners})  # undo
+    assert back.status_code == 200 and back.json()["type"] == "rectangle"
+
+
 def test_import_skips_malformed_entries_instead_of_failing_the_whole_file(annotated_slide):  # noqa: F811
     client, slide_id, patch = annotated_slide
     origin = {"x": patch["x"], "y": patch["y"]}

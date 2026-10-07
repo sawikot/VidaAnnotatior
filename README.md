@@ -49,6 +49,7 @@ Backend service modules (`backend/app/services/`):
 | Circle | `C` | Drag from the centre outwards | `circle`: the centre and one point on the edge |
 | Polygon | `P` | Click the vertices, then click the first point, double-click or press `Enter`; `Backspace` takes back the last point. Panning mid-shape (Space) keeps it | `polygon`: ≥ 3 points |
 | Freehand polygon | `F` | Drag around the outline | `freehand`: a closed outline, ≥ 3 points |
+| Brush | `B` | Drag to paint. *New*: each stroke is a shape of its own. *Add*: the stroke grows every shape of the active class it touches, and the shape it starts on whatever its class; shapes it connects become one, and touching none it paints a new shape. *Erase* (or hold `Shift` in the other modes): the stroke is cut out of the shapes it crosses. `[` / `]` change the size | `freehand`: the outline of what was painted |
 
 **Modifying an annotation** (Select tool, or click an object in the workspace's object list): the selected
 shape shows handles. Drag the shape to move it; drag a handle to reshape it — a polygon, freehand or line
@@ -58,6 +59,24 @@ it (a polygon keeps at least 3, a freehand line 2). The *Edit* panel under the o
 class, unsure/flag marks and a note, or deletes it. Every one of these changes is saved at once and can be
 undone with `Ctrl+Z` (redo with `Ctrl+Shift+Z`); a shape can only be given a class of its own project
 configuration (the server answers 422 otherwise).
+
+**The brush** works on area shapes (polygon, freehand, rectangle, circle) and has its own bar of options under
+the toolbar: the mode, the size (in screen pixels, so it covers the same part of the screen at any zoom) and,
+for the eraser, whether it cuts into only the shapes of the active class (the default) or every shape. A rectangle or circle the
+brush reworks becomes a `freehand` outline. A shape is one outline without holes, so erasing right through a
+shape leaves several shapes (each keeps the class, marks and note), erasing all of it deletes it, and rubbing
+in the middle of a shape does nothing until the stroke reaches its edge. One stroke is one undo step, however
+many shapes it changed. The fill of a patch label is left alone. The same brush draws tissue regions on the
+slide processing page, where "the active class" is the kind picked there (add tissue or remove tissue). The brush is offered wherever the freehand
+polygon tool is enabled. Outlines are worked out with [clipper-lib](https://www.npmjs.com/package/clipper-lib)
+(`frontend/src/utils/brush.ts`).
+
+**New, Add or Erase for the shape tools.** Rectangle, Circle, Polygon and Freehand polygon show the same *New* /
+*Add* / *Erase* choice under the toolbar (not for points and lines, which have no area to join). *New* is how they have always
+worked. With *Add*, a shape drawn onto shapes of the active class is joined to them -- several become one --
+and the result is a `polygon` (a `freehand` outline if either was one); drawn touching none, it is a new shape
+as usual. With *Erase*, the drawn shape is not kept: it is cut out of the shapes it crosses, by the brush's
+rules (pieces, no holes, every shape or the active class only). The choice is kept apart from the brush's mode, and applies to tissue regions too.
 
 `Esc` abandons a shape in progress. Which of these a project offers is set in its configuration
 (*Config → Tools*); Select is always available, and new projects get all of them. Projects created
@@ -481,8 +500,8 @@ to `[A-Za-z0-9._-]`. Adding a format means one `Exporter` subclass registered in
 
 ## Scope of this MVP (intentional, not accidental)
 
-- **Annotation tools**: Select/Move, Point, Line, Freehand line, Rectangle, Circle, Polygon and Freehand
-  polygon are fully functional (see *Annotation tools*). Brush mask, SAM-assisted, and Ruler/Caliper
+- **Annotation tools**: Select/Move, Point, Line, Freehand line, Rectangle, Circle, Polygon, Freehand
+  polygon and Brush are fully functional (see *Annotation tools*). SAM-assisted and Ruler/Caliper
   are shown in the project wizard per the design but disabled with a "planned" tooltip — the spec
   explicitly defers these past the core MVP phases. Existing shapes can be moved, reshaped
   and reclassified (see *Annotation tools*); rotating a shape is not supported.

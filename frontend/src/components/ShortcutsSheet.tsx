@@ -12,7 +12,7 @@ interface Section {
   rows: Row[];
 }
 
-const REGION_TOOL_IDS = ["select", "rectangle", "polygon", "freehand", "circle"];
+const REGION_TOOL_IDS = ["select", "rectangle", "polygon", "freehand", "circle", "brush"];
 const toolRows = (ids?: string[]): Row[] =>
   TOOLS.filter((t) => !ids || ids.includes(t.id)).map((t) => [[t.key], t.label.replace(/ \(.*\)$/, "")]);
 
@@ -24,6 +24,10 @@ const EDITING: Row[] = [
   [["Enter"], "Finish a polygon (or double-click, or click its first point)"],
   [["Backspace"], "While drawing a polygon: take back the last point"],
   [["Esc"], "Abandon the shape being drawn"],
+];
+const BRUSH: Row[] = [
+  [["[", "]"], "Brush: smaller, larger"],
+  [["Shift", "Drag"], "Brush: erase, whatever its mode"],
 ];
 const UNDO: Row[] = [
   [["Ctrl", "Z"], "Undo"],
@@ -42,6 +46,7 @@ const SECTIONS: Section[] = [
       [["Space"], "Next patch that is not annotated yet"],
       [["Wheel"], "Zoom in and out around the cursor"],
       [["Middle drag"], "Move around a zoomed patch"],
+      ...BRUSH,
       ...EDITING,
       ...UNDO,
     ],
@@ -55,6 +60,7 @@ const SECTIONS: Section[] = [
       ...toolRows(),
       [["1", "...", "9"], "Pick a diagnostic class"],
       [["Wheel"], "Zoom"],
+      ...BRUSH,
       ...EDITING,
       ...UNDO,
     ],
@@ -67,6 +73,7 @@ const SECTIONS: Section[] = [
       [["Hold Space"], "Move around with any tool"],
       ...toolRows(REGION_TOOL_IDS),
       [["Wheel"], "Zoom"],
+      ...BRUSH,
       ...EDITING,
       ...UNDO,
     ],

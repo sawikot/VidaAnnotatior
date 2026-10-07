@@ -1,6 +1,7 @@
 import { MaterialIcon } from "../../components/MaterialIcon";
 import { IconButton } from "../../components/primitives";
 import type { AnnotationTool } from "../../stores/annotationStore";
+import { ToolOptions } from "../annotations/BrushOptions";
 import type { TissueRegion, TissueRegionMode, TissueSource } from "../../types/api";
 import { REGION_COLORS, REGION_TOOLS } from "./regionTools";
 
@@ -99,6 +100,7 @@ export function TissueRegionPanel(p: Props) {
             <IconButton key={t.id} icon={t.icon} active={p.tool === t.id} onClick={() => p.onToolChange(t.id)} title={`${t.label} (${t.key})`} />
           ))}
         </div>
+        <ToolOptions tool={p.tool} group={p.drawMode === "add" ? "added tissue" : "removed tissue"} className="bg-[#070d1e] rounded-lg" />
         <p className="text-label-sm text-slate-500">
           Pick a shape and draw on the slide. Hold Space to move around while drawing. Where an added and a removed area
           overlap, the area is removed.
