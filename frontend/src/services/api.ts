@@ -376,6 +376,8 @@ export interface ImportAnnotationsResult {
   skipped_duplicate: number;
   skipped_invalid_shape: number;
   skipped_outside_slide: number;
+  /** Only the area covered by patches was asked for. */
+  skipped_outside_patch_area: number;
   /** Their label was mapped to "skip". */
   skipped_by_choice: number;
 }
@@ -403,6 +405,10 @@ export interface ParsedAnnotations {
   bounds: [number, number, number, number] | null;
   slide_size: [number | null, number | null];
   image_project: boolean;
+  /** What the slide's patches cover: all of it, or its tissue only. Null: no patches, or an image. */
+  patch_grid: "whole" | "tissue" | null;
+  /** Label -> shapes on the slide but where it has no patch. */
+  outside_patches: Record<string, number>;
   /** Every coordinate was multiplied by this; `scale_note` says why when it was worked out from the file. */
   scale: number;
   scale_auto: boolean;
@@ -425,6 +431,8 @@ export const importAnnotations = (
     created_by?: string;
     label_map?: Record<string, ImportLabelTarget>;
     assign_to_patches?: boolean;
+    /** "patches": leave out shapes lying where the slide has no patch. */
+    area?: "slide" | "patches";
   },
 ) =>
   request<ImportAnnotationsResult>(`/slides/${slideId}/import-annotations`, {

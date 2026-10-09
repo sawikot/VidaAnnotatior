@@ -29,6 +29,7 @@ from app.schemas.annotation import (
 from app.api.access import current_user
 from app.models.user import User
 from app.services.annotation_import import FORMAT_NAMES, ImportFormatError, parse_annotation_file, shape_bounds
+from app.services.patch_grid import GridSpec
 from app.services.patch_labels import on_fill_class_changed, on_fill_deleted
 from app.services.geometry import circle_center_radius, polygon_bounds, validate_shape
 from app.services.coordinate_transform import PatchOrigin, polygon_level0_to_patch_local, polygon_patch_local_to_level0
@@ -140,6 +141,26 @@ def _outside_slide(slide: Slide, coords: list[list[float]]) -> bool:
     return min_x < -tolerance or min_y < -tolerance or max_x > slide.width_l0 + tolerance or max_y > slide.height_l0 + tolerance
 
 
+def _import_patches(db: Session, slide: Slide, config: ProjectConfigVersion) -> list[Patch]:
+    """The patches an import is placed in: those of the grid on screen."""
+    query = db.query(Patch).filter(Patch.slide_id == slide.id, Patch.config_version_id == config.id)
+    if config.id == slide.active_config_version_id and slide.active_grid_key is not None:
+        query = query.filter(Patch.grid_key == slide.active_grid_key)
+    return query.all()
+
+
+def _patch_grid_area(slide: Slide, config: ProjectConfigVersion, patches: list[Patch]) -> Literal["whole", "tissue"] | None:
+    """Whether the slide's patches cover all of it or its tissue only; none when it has no patches."""
+    if not patches:
+        return None
+    key = slide.active_grid_key if config.id == slide.active_config_version_id else None
+    try:
+        spec = GridSpec.from_key(key) if key else GridSpec.from_config(config)
+    except ValueError:
+        spec = GridSpec.from_config(config)
+    return "whole" if spec.whole_slide else "tissue"
+
+
 @router.post("/slides/{slide_id}/import-annotations/parse", response_model=ParsedAnnotationsOut)
 async def parse_annotation_import(
     file: UploadFile = File(...),
@@ -169,12 +190,20 @@ async def parse_annotation_import(
 
     class_by_name = {c.name.strip().lower(): c.id for c in classes}
     label_counts = Counter(entry["label"] or "" for entry in parsed.entries)
+    image_project = slide.project.project_type == "image"
+    patches = _import_patches(db, slide, config)
+    patch_grid = None if image_project else _patch_grid_area(slide, config, patches)
+    finder = _PatchFinder(patches) if patch_grid == "tissue" else None  # only then is the area a choice
+    outside_patches: Counter = Counter()
     bounds = None
     outside = 0
     for entry in parsed.entries:
         b = shape_bounds(entry["type"], entry["coordinates"])
         bounds = b if bounds is None else (min(bounds[0], b[0]), min(bounds[1], b[1]), max(bounds[2], b[2]), max(bounds[3], b[3]))
-        outside += _outside_slide(slide, entry["coordinates"])
+        off_slide = _outside_slide(slide, entry["coordinates"])
+        outside += off_slide
+        if finder and not off_slide and not entry["source_patch"] and not finder.touches(b):
+            outside_patches[entry["label"] or ""] += 1
 
     return ParsedAnnotationsOut(
         format=parsed.format,
@@ -190,7 +219,9 @@ async def parse_annotation_import(
         outside_slide=outside,
         bounds=[round(v, 2) for v in bounds] if bounds else None,
         slide_size=[slide.width_l0, slide.height_l0],
-        image_project=slide.project.project_type == "image",
+        image_project=image_project,
+        patch_grid=patch_grid,
+        outside_patches=dict(outside_patches),
         scale=parsed.scale,
         scale_auto=parsed.auto_scale,
         scale_note=parsed.scale_note,
@@ -204,6 +235,7 @@ class _PatchFinder:
     of a coarse grid it overlaps, and a patch containing the shape contains its top-left corner."""
 
     def __init__(self, patches: list[Patch]):
+        self.patches = patches
         self.cell_w = max((p.width_l0 for p in patches), default=1) or 1
         self.cell_h = max((p.height_l0 for p in patches), default=1) or 1
         self.cells: dict[tuple[int, int], list[Patch]] = defaultdict(list)
@@ -211,6 +243,19 @@ class _PatchFinder:
             for cx in range(p.x // self.cell_w, (p.x + p.width_l0 - 1) // self.cell_w + 1):
                 for cy in range(p.y // self.cell_h, (p.y + p.height_l0 - 1) // self.cell_h + 1):
                     self.cells[(cx, cy)].append(p)
+
+    def touches(self, bounds: tuple[float, float, float, float]) -> bool:
+        """Whether any patch overlaps the shape's bounds: the shape lies in the area the patches cover."""
+        min_x, min_y, max_x, max_y = bounds
+
+        def overlaps(p: Patch) -> bool:
+            return p.x <= max_x and min_x < p.x + p.width_l0 and p.y <= max_y and min_y < p.y + p.height_l0
+
+        cols = range(int(min_x // self.cell_w), int(max_x // self.cell_w) + 1)
+        rows = range(int(min_y // self.cell_h), int(max_y // self.cell_h) + 1)
+        if len(cols) * len(rows) > len(self.patches):  # a shape spanning much of the slide
+            return any(overlaps(p) for p in self.patches)
+        return any(overlaps(p) for cx in cols for cy in rows for p in self.cells.get((cx, cy), []))
 
     def containing(self, bounds: tuple[float, float, float, float]) -> Patch | None:
         min_x, min_y, max_x, max_y = bounds
@@ -269,6 +314,7 @@ def import_annotations(
     no re-run tissue check) would silently corrupt the coordinate-generation provenance the rest of
     the app relies on. An entry without one becomes a slide-level annotation, or -- with
     `assign_to_patches`, and always in an image project -- goes into the patch that contains it.
+    With `area="patches"`, an entry lying where the slide has no patch is left out.
 
     Labels are mapped by `label_map` where it names them, else matched by exact (case-insensitive)
     class name; an unrecognized label is skipped rather than inventing a new class.
@@ -284,12 +330,11 @@ def import_annotations(
             raise HTTPException(status_code=422, detail=f"Class {target} is not a class of this slide's configuration")
     image_project = slide.project.project_type == "image"
 
-    patch_query = db.query(Patch).filter(Patch.slide_id == slide.id, Patch.config_version_id == config.id)
-    if config.id == slide.active_config_version_id and slide.active_grid_key is not None:
-        patch_query = patch_query.filter(Patch.grid_key == slide.active_grid_key)  # the grid on screen
-    patches = patch_query.all()
+    patches = _import_patches(db, slide, config)
     patch_by_origin = {(p.x, p.y): p for p in patches}
-    finder = _PatchFinder(patches) if payload.assign_to_patches or image_project else None
+    place = payload.assign_to_patches or image_project
+    patches_only = payload.area == "patches" and not image_project
+    finder = _PatchFinder(patches) if place or patches_only else None
 
     duplicates = _Duplicates()
     for ann in db.query(GeometryAnnotation).filter(GeometryAnnotation.slide_id == slide.id):
@@ -330,7 +375,11 @@ def import_annotations(
             if _outside_slide(slide, entry.coordinates):
                 counts["outside"] += 1
                 continue
-            patch = finder.containing(shape_bounds(entry.type, entry.coordinates)) if finder else None
+            bounds = shape_bounds(entry.type, entry.coordinates)
+            if patches_only and not finder.touches(bounds):
+                counts["outside_patches"] += 1
+                continue
+            patch = finder.containing(bounds) if place else None
             if patch is None and image_project:
                 counts["no_patch"] += 1  # an image is annotated only through its patch
                 continue
@@ -374,6 +423,7 @@ def import_annotations(
         skipped_duplicate=counts["duplicate"],
         skipped_invalid_shape=counts["invalid"],
         skipped_outside_slide=counts["outside"],
+        skipped_outside_patch_area=counts["outside_patches"],
         skipped_by_choice=counts["by_choice"],
     )
 

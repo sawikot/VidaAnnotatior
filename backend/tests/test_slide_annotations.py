@@ -244,6 +244,7 @@ def test_a_qupath_geojson_file_is_read_mapped_and_placed_in_patches(grid):
     body = parsed.json()
     assert body["format"] == "geojson" and body["shape_counts"] == {"polygon": 1, "point": 2}
     assert {l["label"]: l["class_id"] for l in body["labels"]} == {"Tumour": None, "stroma": classes["Stroma"], "Ignore": None}
+    assert body["patch_grid"] in ("whole", "tissue") and sum(body["outside_patches"].values()) <= 3
 
     result = client.post(f"/api/slides/{slide_id}/import-annotations", json={
         "annotations": body["annotations"],

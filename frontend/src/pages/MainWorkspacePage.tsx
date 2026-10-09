@@ -7,6 +7,7 @@ import { IconButton } from "../components/primitives";
 import { AnnotationCanvas } from "../features/annotations/AnnotationCanvas";
 import { ToolOptions } from "../features/annotations/BrushOptions";
 import { useAnnotationHistory } from "../features/annotations/useAnnotationHistory";
+import { ImportAnnotationsButton } from "../features/annotations/ImportAnnotationsButton";
 import { neighbour, progress, type ImageFilter } from "../features/images/imageNav";
 import { AnnotationModeSwitch, rememberMode, rememberedMode, type AnnotationMode } from "../features/annotations/AnnotationModeSwitch";
 import { WsiAnnotationView, type WsiFocus } from "../features/annotations/WsiAnnotationView";
@@ -305,6 +306,21 @@ export function MainWorkspacePage() {
     setPatch(next);
     setNoPatches(next === null);
     setGridRefresh((n) => n + 1);
+  }
+
+  /** Imported shapes land in this patch, its neighbours and on the whole slide: reload all three. */
+  function afterImport() {
+    const cur = patch;
+    history.reset();
+    listSlideAnnotations(sid, "slide").then(setSlideAnnotations).catch(() => undefined);
+    if (!cur) return;
+    listPatchAnnotations(cur.id).then(setAnnotations).catch(() => undefined);
+    getPatch(cur.id).then(setPatch).catch(() => undefined); // its status may have changed
+    if (!isImage) {
+      listOverlappingAnnotations(cur.id).then(setBorrowed).catch(() => undefined);
+      refreshTotals();
+      setGridRefresh((n) => n + 1);
+    }
   }
 
   function refreshTotals() {
@@ -867,6 +883,7 @@ export function MainWorkspacePage() {
             </span>
           </>
         )}
+        <ImportAnnotationsButton slide={slide} onImported={afterImport} />
         <div className="flex-1" />
         <span className="text-slate-400">
           {isImage ? "Progress" : "Slide Progress"}: {prog.total ? Math.round((prog.done / prog.total) * 100) : 0}% ({prog.done}/{prog.total})

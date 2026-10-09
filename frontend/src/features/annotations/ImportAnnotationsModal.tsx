@@ -39,6 +39,8 @@ export function ImportAnnotationsModal({ open, onClose, slideId, onImported }: P
   const [parsed, setParsed] = useState<ParsedAnnotations | null>(null);
   const [labelMap, setLabelMap] = useState<Record<string, ImportLabelTarget>>({});
   const [assignToPatches, setAssignToPatches] = useState(true);
+  // Asked only when the patches cover the tissue alone: null until the person has answered.
+  const [area, setArea] = useState<"patches" | "slide" | null>(null);
   const [busy, setBusy] = useState<"reading" | "importing" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ImportAnnotationsResult | null>(null);
@@ -49,6 +51,7 @@ export function ImportAnnotationsModal({ open, onClose, slideId, onImported }: P
     setScaleDraft(null);
     setParsed(null);
     setLabelMap({});
+    setArea(null);
     setError(null);
     setResult(null);
   }
@@ -90,6 +93,7 @@ export function ImportAnnotationsModal({ open, onClose, slideId, onImported }: P
         created_by: `${annotatorName} (imported)`,
         label_map: labelMap,
         assign_to_patches: assignToPatches,
+        area: askArea && area === "patches" ? "patches" : "slide",
       });
       if (res.imported > 0) {
         const skipped = res.total - res.imported;
@@ -110,10 +114,16 @@ export function ImportAnnotationsModal({ open, onClose, slideId, onImported }: P
     }
   }
 
-  const toImport = parsed
-    ? parsed.labels.filter((l) => labelMap[l.label] !== "skip").reduce((n, l) => n + l.count, 0)
-    : 0;
   const unlinked = parsed ? parsed.annotations.length - parsed.linked_to_patches : 0;
+  // A grid over the whole slide leaves nothing to choose: every shape is where a patch is.
+  const askArea = !!parsed && parsed.patch_grid === "tissue" && unlinked > 0;
+  const kept = (onlyPatches: boolean) =>
+    parsed
+      ? parsed.labels
+          .filter((l) => labelMap[l.label] !== "skip")
+          .reduce((n, l) => n + l.count - (onlyPatches ? (parsed.outside_patches[l.label] ?? 0) : 0), 0)
+      : 0;
+  const toImport = kept(askArea && area === "patches");
   const unreadable = parsed ? Object.entries(parsed.unreadable) : [];
 
   function applyScale() {
@@ -286,6 +296,31 @@ export function ImportAnnotationsModal({ open, onClose, slideId, onImported }: P
               </div>
             )}
 
+            {askArea && (
+              <div className="flex flex-col gap-space-sm">
+                <h3 className="font-headline-sm text-label-lg">Which area do you want to import?</h3>
+                <p className="text-body-sm text-on-surface-variant">
+                  This slide's patches cover its tissue only, so some shapes may lie where there is no patch.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-sm" role="radiogroup" aria-label="Area to import">
+                  <AreaOption
+                    icon="grid_view"
+                    title="Only the area with patches"
+                    detail={`${kept(true)} shape${kept(true) === 1 ? "" : "s"} · those outside the patches are left out`}
+                    checked={area === "patches"}
+                    onSelect={() => setArea("patches")}
+                  />
+                  <AreaOption
+                    icon="crop_free"
+                    title="The whole slide"
+                    detail={`${kept(false)} shape${kept(false) === 1 ? "" : "s"} · everything in the file`}
+                    checked={area === "slide"}
+                    onSelect={() => setArea("slide")}
+                  />
+                </div>
+              </div>
+            )}
+
             {unlinked > 0 && !parsed.image_project && (
               <div className="flex flex-col gap-1">
                 <Toggle
@@ -323,6 +358,7 @@ export function ImportAnnotationsModal({ open, onClose, slideId, onImported }: P
             <SkipRow label="Skipped -- unknown class label" value={result.skipped_unknown_class} />
             <SkipRow label="Skipped -- no matching patch" value={result.skipped_no_matching_patch} />
             <SkipRow label="Skipped -- outside the slide" value={result.skipped_outside_slide} />
+            <SkipRow label="Skipped -- outside the area with patches" value={result.skipped_outside_patch_area} />
             <SkipRow label="Skipped -- malformed shape" value={result.skipped_invalid_shape} />
           </div>
         )}
@@ -345,7 +381,8 @@ export function ImportAnnotationsModal({ open, onClose, slideId, onImported }: P
               <Button
                 variant="primary"
                 icon="upload"
-                disabled={!parsed || toImport === 0 || !!busy}
+                disabled={!parsed || toImport === 0 || !!busy || (askArea && area === null)}
+                title={askArea && area === null ? "Choose which area to import first" : undefined}
                 onClick={() => void runImport()}
               >
                 {busy === "importing" ? "Importing..." : `Import ${toImport} shape${toImport === 1 ? "" : "s"}`}
@@ -360,6 +397,26 @@ export function ImportAnnotationsModal({ open, onClose, slideId, onImported }: P
 
 function fmt(n: number) {
   return Math.round(n).toLocaleString();
+}
+
+function AreaOption({ icon, title, detail, checked, onSelect }: { icon: string; title: string; detail: string; checked: boolean; onSelect: () => void }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={checked}
+      onClick={onSelect}
+      className={`flex items-start gap-space-sm rounded border p-space-sm text-left transition-colors ${
+        checked ? "border-primary bg-primary-container text-on-primary-container" : "border-outline-variant hover:bg-surface-container-low"
+      }`}
+    >
+      <MaterialIcon name={icon} className="!text-[20px] shrink-0" />
+      <span className="flex flex-col">
+        <span className="font-headline-sm text-label-lg">{title}</span>
+        <span className="text-body-sm opacity-80">{detail}</span>
+      </span>
+    </button>
+  );
 }
 
 function Notice({ children }: { children: ReactNode }) {

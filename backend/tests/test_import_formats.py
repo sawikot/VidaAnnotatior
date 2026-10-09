@@ -254,6 +254,23 @@ def test_assign_to_patches_places_shapes_in_the_containing_patch(db):
     assert patch.status == "annotated"
 
 
+def test_importing_the_patch_area_only_leaves_out_shapes_where_there_is_no_patch(db):
+    project, config, slide, patch, tumor = _seed(db)  # patch at (20000, 15000), 512 px
+    result = import_annotations(
+        ImportAnnotationsRequest(
+            annotations=[
+                _point(20100, 15100),  # inside the patch
+                ImportAnnotationEntry(type="polygon", coordinates=[[20400, 15100], [20600, 15100], [20500, 15200]]),  # crosses its edge
+                _point(500, 500),  # in no patch
+            ],
+            area="patches",
+        ),
+        slide=slide, db=db, user=IMPORTER,
+    )
+    assert (result.imported_on_slide, result.imported_to_patches, result.skipped_outside_patch_area) == (2, 0, 1)
+    assert [500.0, 500.0] not in [a.coordinates_level0[0] for a in db.query(GeometryAnnotation)]
+
+
 def test_overlapping_patches_take_the_one_the_shape_is_most_central_in(db):
     project, config, slide, patch, tumor = _seed(db)
     neighbour = Patch(slide_id=slide.id, config_version_id=config.id, patch_index=246, x=20256, y=15000, level=0,

@@ -4,7 +4,6 @@ import { MaterialIcon } from "../components/MaterialIcon";
 import { Button, Card, Modal } from "../components/primitives";
 import { WsiViewer, type ViewportBbox } from "../features/viewer/WsiViewer";
 import { PatchGridOverlay } from "../features/viewer/PatchGridOverlay";
-import { ImportAnnotationsModal } from "../features/annotations/ImportAnnotationsModal";
 import { ShapeLayer, type LayerShape } from "../features/annotations/ShapeLayer";
 import { HOTKEYS } from "../features/annotations/tools";
 import { TissueRegionPanel } from "../features/tissue/TissueRegionPanel";
@@ -45,7 +44,6 @@ export function SlideProcessingPage() {
   const [bbox, setBbox] = useState<ViewportBbox | null>(null);
   const [busy, setBusy] = useState(false);
   const [gridRefresh, setGridRefresh] = useState(0);
-  const [importOpen, setImportOpen] = useState(false);
   // Which part of the slide Generate Coords cuts: the tissue (by the configuration's threshold) or all of it.
   const [patchArea, setPatchArea] = useState<"tissue" | "whole">("tissue");
   // Start from what the slide's current patches cover (a whole-slide grid has no tissue threshold: "_t0").
@@ -300,15 +298,6 @@ export function SlideProcessingPage() {
             }
           >
             Generate Coords
-          </Button>
-          <Button
-            variant="secondary"
-            icon="upload_file"
-            onClick={() => setImportOpen(true)}
-            disabled={slide.status === "imported" || slide.status === "tissue_detected"}
-            title="Import annotations from WSI JSON, GeoJSON (QuPath), COCO, ASAP/Aperio XML or CSV"
-          >
-            Import Annotations
           </Button>
           <Button
             variant="primary"
@@ -586,17 +575,6 @@ export function SlideProcessingPage() {
           </div>
         </div>
       </Modal>
-
-      <ImportAnnotationsModal
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
-        slideId={sid}
-        onImported={() => {
-          // Straight to the whole-slide view, where the imported shapes can be checked in place.
-          setImportOpen(false);
-          navigate(`/projects/${pid}/slides/${sid}/workspace?mode=wsi`);
-        }}
-      />
     </div>
   );
 }

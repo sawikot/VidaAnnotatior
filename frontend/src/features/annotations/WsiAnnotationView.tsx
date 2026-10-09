@@ -21,6 +21,7 @@ import { PatchGridOverlay } from "../viewer/PatchGridOverlay";
 import { WsiViewer, type ViewportBbox } from "../viewer/WsiViewer";
 import { AnnotationModeSwitch, type AnnotationMode } from "./AnnotationModeSwitch";
 import { ToolOptions } from "./BrushOptions";
+import { ImportAnnotationsButton } from "./ImportAnnotationsButton";
 import { ShapeLayer } from "./ShapeLayer";
 import { HOTKEYS, PAN_TOOL, visibleTools } from "./tools";
 import { useAnnotationHistory } from "./useAnnotationHistory";
@@ -352,6 +353,13 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
 
   const saveLabel = { idle: "", saving: "Saving...", saved: "Saved", error: "Error saving" }[saveState];
 
+  /** Imported shapes land on the slide and in its patches: show both, and drop undo steps that predate them. */
+  function afterImport() {
+    history.reset();
+    listSlideAnnotations(slide.id, "slide").then(setSlideAnnotations).catch(() => undefined);
+    listSlideAnnotations(slide.id, "patch").then(setPatchDrawn).catch(() => undefined);
+  }
+
   if (!width || !height) {
     return <div className="p-space-xl text-center text-slate-400 bg-[#0a0f1d] h-[calc(100vh-3.5rem)]">This slide has no known size yet; re-import it.</div>;
   }
@@ -365,6 +373,7 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
         <span className="font-mono text-label-sm text-cyan-300">
           {width.toLocaleString()} × {height.toLocaleString()} px · Level-0
         </span>
+        <ImportAnnotationsButton slide={slide} onImported={afterImport} />
         <div className="flex-1" />
         <span className="text-slate-400">{slideAnnotations.length} slide-level object{slideAnnotations.length === 1 ? "" : "s"}</span>
         <IconButton icon="undo" onClick={() => history.undo()} disabled={!history.canUndo} title="Undo (Ctrl+Z)" />

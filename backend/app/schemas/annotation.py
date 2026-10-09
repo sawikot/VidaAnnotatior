@@ -86,6 +86,8 @@ class ImportAnnotationsRequest(BaseModel):
     # Put each shape that names no patch into the patch that wholly contains it (patch annotations
     # count toward the patch's status); shapes no patch contains stay on the whole slide.
     assign_to_patches: bool = False
+    # "patches": leave out shapes lying where the slide has no patch (a grid over the tissue only).
+    area: Literal["slide", "patches"] = "slide"
 
 
 class ImportAnnotationsResponse(BaseModel):
@@ -98,6 +100,7 @@ class ImportAnnotationsResponse(BaseModel):
     skipped_duplicate: int
     skipped_invalid_shape: int = 0
     skipped_outside_slide: int = 0
+    skipped_outside_patch_area: int = 0  # only the area covered by patches was asked for
     skipped_by_choice: int = 0  # their label was mapped to "skip"
 
 
@@ -128,6 +131,9 @@ class ParsedAnnotationsOut(BaseModel):
     bounds: list[float] | None  # [min_x, min_y, max_x, max_y] of all shapes, Level-0
     slide_size: list[int | None]  # [width, height], Level-0
     image_project: bool  # every shape must go in the image's patch
+    # What the slide's patches cover: all of it, or its tissue only. None: no patches, or an image.
+    patch_grid: Literal["whole", "tissue"] | None = None
+    outside_patches: dict[str, int] = {}  # label -> shapes on the slide but where it has no patch
     scale: float  # every coordinate was multiplied by this
     scale_auto: bool  # the scale was worked out from the file, not given
     scale_note: str | None = None  # why it is not 1, when worked out
