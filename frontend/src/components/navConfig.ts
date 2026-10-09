@@ -63,6 +63,13 @@ export const NAV_ITEMS: NavItem[] = [
     path: (p) => (p ? `/projects/${p}/export` : "/projects"),
     requiresProject: true,
   },
+  {
+    key: "training",
+    label: "Training",
+    icon: "model_training",
+    path: (p) => (p ? `/projects/${p}/training` : "/projects"),
+    requiresProject: true,
+  },
 ];
 
 /** Image projects have no tissue detection, patch grid or stitched overview: an image is
@@ -87,6 +94,7 @@ const IMAGE_NAV_ITEMS: NavItem[] = [
   },
   NAV_ITEMS[6],
   NAV_ITEMS[7],
+  NAV_ITEMS[8],
 ];
 
 export function navItemsFor(projectType: ProjectType | undefined, canManage = true): NavItem[] {

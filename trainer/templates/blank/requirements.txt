@@ -1,0 +1,3 @@
+# Extra Python packages this recipe needs, one per line (for example: timm==1.0.15).
+# PyTorch, torchvision, Pillow and numpy are already there. Packages listed here are installed
+# once, the first time the recipe is checked or trained, and kept for the next time.

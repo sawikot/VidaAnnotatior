@@ -16,13 +16,21 @@ import type {
   PatchStatus,
   Project,
   ProjectDetail,
+  Recipe,
+  RecipeDetail,
   Slide,
   SlideBatchImportResult,
+  SlideSuggestState,
   SplitName,
   SplitSettings,
+  Suggestion,
+  TrainedModel,
   TissueRegion,
   TissueRegions,
   TissueSource,
+  TrainerStatus,
+  TrainingReadiness,
+  TrainingRun,
   WsiFormats,
 } from "../types/api";
 
@@ -442,6 +450,90 @@ export const importAnnotations = (
     method: "POST",
     body: JSON.stringify(payload),
   });
+
+// ---- Model recipes (administrators change them; everyone reads) ----
+export const listAllRecipes = () => request<RecipeDetail[]>("/recipes");
+export const getRecipe = (id: string) => request<RecipeDetail>(`/recipes/${id}`);
+/** A copy of `sourceId`, or (without one) the blank template. */
+export const createRecipe = (name: string, task?: string, sourceId?: string) =>
+  request<RecipeDetail>("/recipes", { method: "POST", body: JSON.stringify({ name, task, source_id: sourceId }) });
+export const uploadRecipe = (file: File, name: string) => {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("name", name);
+  return request<RecipeDetail>("/recipes/upload", { method: "POST", body: form });
+};
+export const deleteRecipe = (id: string) => request<void>(`/recipes/${id}`, { method: "DELETE" });
+export const recipeDownloadUrl = (id: string) => `${API_BASE}/recipes/${id}/download`;
+export const getRecipeFile = (id: string, name: string) =>
+  request<{ name: string; content: string; versions: { id: string; saved_at: string }[] }>(`/recipes/${id}/files/${encodeURIComponent(name)}`);
+export const saveRecipeFile = (id: string, name: string, content: string) =>
+  request<RecipeDetail>(`/recipes/${id}/files/${encodeURIComponent(name)}`, { method: "PUT", body: JSON.stringify({ content }) });
+export const deleteRecipeFile = (id: string, name: string) => request<RecipeDetail>(`/recipes/${id}/files/${encodeURIComponent(name)}`, { method: "DELETE" });
+export const getRecipeFileVersion = (id: string, name: string, version: string) =>
+  request<{ content: string }>(`/recipes/${id}/files/${encodeURIComponent(name)}/versions/${version}`);
+/** Ask the trainer to try the recipe as it is now; its `check` then goes queued -> running -> passed | failed. */
+export const checkRecipe = (id: string) => request<RecipeDetail>(`/recipes/${id}/check`, { method: "POST" });
+export const removeRecipePackages = (id: string) => request<RecipeDetail>(`/recipes/${id}/packages`, { method: "DELETE" });
+
+// ---- Model training ----
+export const listRecipes = () => request<Recipe[]>("/training/recipes");
+export const getTrainerStatus = () => request<TrainerStatus>("/training/status");
+export const getTrainingReadiness = (projectId: number, task = "detection") =>
+  request<TrainingReadiness>(`/projects/${projectId}/training/readiness?task=${task}`);
+export const listTrainingRuns = (projectId: number) => request<TrainingRun[]>(`/projects/${projectId}/training/runs`);
+export const startTrainingRun = (projectId: number, recipeId: string, settings: Record<string, unknown>) =>
+  request<TrainingRun>(`/projects/${projectId}/training/runs`, { method: "POST", body: JSON.stringify({ recipe_id: recipeId, settings }) });
+export const getTrainingRun = (runId: number) => request<TrainingRun>(`/training/runs/${runId}`);
+export const stopTrainingRun = (runId: number) => request<TrainingRun>(`/training/runs/${runId}/stop`, { method: "POST" });
+export const deleteTrainingRun = (runId: number) => request<void>(`/training/runs/${runId}`, { method: "DELETE" });
+export const getTrainingLog = (runId: number, tail = 300) =>
+  fetch(`${API_BASE}/training/runs/${runId}/log?tail=${tail}`, { credentials: "include" }).then((r) => (r.ok ? r.text() : ""));
+export const trainingModelUrl = (runId: number) => `${API_BASE}/training/runs/${runId}/model`;
+
+// ---- Trained models and their suggestions ----
+export const listProjectModels = (projectId: number) => request<TrainedModel[]>(`/projects/${projectId}/models`);
+export const listImporters = () => request<Recipe[]>("/training/importers");
+/** Add a model file trained elsewhere; the trainer opens it once, so this can take a while. */
+export const importModel = (
+  projectId: number,
+  file: File,
+  importerId: string,
+  options: { name?: string; settings?: Record<string, unknown>; classNames?: string } = {},
+) => {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("importer_id", importerId);
+  form.append("name", options.name ?? "");
+  form.append("settings", JSON.stringify(options.settings ?? {}));
+  form.append("class_names", options.classNames ?? "");
+  return request<TrainedModel>(`/projects/${projectId}/models/import`, { method: "POST", body: form });
+};
+export const updateModel = (modelId: number, payload: { name?: string; class_map?: Record<string, number | null> }) =>
+  request<TrainedModel>(`/models/${modelId}`, { method: "PUT", body: JSON.stringify(payload) });
+export const deleteModel = (modelId: number) => request<void>(`/models/${modelId}`, { method: "DELETE" });
+export const listPatchSuggestions = (patchId: number) => request<Suggestion[]>(`/patches/${patchId}/suggestions`);
+/** Ask a model what it sees in the patch; answers with the patch's waiting suggestions. Can take a while the first time. */
+export const suggestForPatch = (patchId: number, modelId: number) =>
+  request<Suggestion[]>(`/patches/${patchId}/suggest`, { method: "POST", body: JSON.stringify({ model_id: modelId }) });
+export const acceptSuggestion = (id: number) => request<GeometryAnnotation>(`/suggestions/${id}/accept`, { method: "POST" });
+export const rejectSuggestion = (id: number) => request<void>(`/suggestions/${id}/reject`, { method: "POST" });
+export const acceptSuggestions = (patchId: number, minScore: number) =>
+  request<GeometryAnnotation[]>(`/patches/${patchId}/suggestions/accept`, { method: "POST", body: JSON.stringify({ min_score: minScore }) });
+export const clearSuggestions = (patchId: number) => request<void>(`/patches/${patchId}/suggestions`, { method: "DELETE" });
+
+// ---- A model over a whole slide ----
+export const getSlideSuggestState = (slideId: number) => request<SlideSuggestState>(`/slides/${slideId}/suggest`);
+export const startSlideSuggest = (slideId: number, modelId: number, scope: "unannotated" | "all") =>
+  request<SlideSuggestState>(`/slides/${slideId}/suggest`, { method: "POST", body: JSON.stringify({ model_id: modelId, scope }) });
+export const stopSlideSuggest = (slideId: number) => request<SlideSuggestState>(`/slides/${slideId}/suggest`, { method: "DELETE" });
+export const listSlideSuggestions = (slideId: number) => request<Suggestion[]>(`/slides/${slideId}/suggestions`);
+/** The next patch (after the one with this number, wrapping round) that has suggestions waiting. */
+export const nextPatchWithSuggestions = (slideId: number, afterPatchIndex?: number) =>
+  request<{ patch_id: number | null }>(`/slides/${slideId}/suggestions/next${afterPatchIndex === undefined ? "" : `?after=${afterPatchIndex}`}`);
+export const acceptSlideSuggestions = (slideId: number, minScore: number) =>
+  request<SlideSuggestState & { accepted: number }>(`/slides/${slideId}/suggestions/accept`, { method: "POST", body: JSON.stringify({ min_score: minScore }) });
+export const clearSlideSuggestions = (slideId: number) => request<SlideSuggestState>(`/slides/${slideId}/suggestions`, { method: "DELETE" });
 
 // ---- Train / val / test split ----
 export interface SplitUpdate extends SplitSettings {

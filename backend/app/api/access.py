@@ -4,7 +4,7 @@ Every data route (all routers but the sign-in ones) runs ``authorize``:
 
 1. there must be a signed-in, active user (else 401);
 2. the project the route touches -- found from ``project_id``, ``slide_id``, ``patch_id``,
-   ``annotation_id`` or ``config_id`` in the path -- must be one the user may see: admins see
+   ``annotation_id``, ``suggestion_id``, ``run_id`` or ``config_id`` in the path -- must be one the user may see: admins see
    every project, everyone else the projects they are a member of (else 403);
 3. the route must be allowed for the user's role: reading, and the annotation work listed in
    ``ANNOTATOR_WRITES``, for everyone; any other change for managers and admins only (else 403).
@@ -22,6 +22,7 @@ from app.models.annotation import GeometryAnnotation
 from app.models.config_version import ProjectConfigVersion
 from app.models.patch import Patch
 from app.models.slide import Slide
+from app.models.training import Suggestion, TrainedModel, TrainingRun
 from app.models.user import ProjectMember, User
 from app.services.auth import SESSION_COOKIE, user_for_session
 
@@ -37,6 +38,16 @@ ANNOTATOR_WRITES = {
     ("DELETE", "/annotations/{annotation_id}"),
     ("PUT", "/slides/{slide_id}/active-grid"),
     ("POST", "/slides/{slide_id}/patches/label"),
+    # ...and asking a model for suggestions, and deciding on them.
+    ("POST", "/patches/{patch_id}/suggest"),
+    ("POST", "/patches/{patch_id}/suggestions/accept"),
+    ("DELETE", "/patches/{patch_id}/suggestions"),
+    ("POST", "/suggestions/{suggestion_id}/accept"),
+    ("POST", "/suggestions/{suggestion_id}/reject"),
+    ("POST", "/slides/{slide_id}/suggest"),
+    ("DELETE", "/slides/{slide_id}/suggest"),
+    ("POST", "/slides/{slide_id}/suggestions/accept"),
+    ("DELETE", "/slides/{slide_id}/suggestions"),
 }
 
 # Routes that touch no single project: reading the list (filtered to the user's projects) and the
@@ -44,6 +55,9 @@ ANNOTATOR_WRITES = {
 NO_PROJECT = {
     ("GET", "/projects"),
     ("GET", "/wsi-formats"),
+    ("GET", "/training/recipes"),
+    ("GET", "/training/status"),
+    ("GET", "/training/importers"),
 }
 MANAGER_NO_PROJECT = {("POST", "/projects")}
 
@@ -94,6 +108,21 @@ def project_of(db: Session, params: dict) -> int | None:
         )
         if row is None:
             raise missing("Annotation", params["annotation_id"])
+        return row[0]
+    if "suggestion_id" in params:
+        row = db.query(Slide.project_id).join(Suggestion, Suggestion.slide_id == Slide.id).filter(Suggestion.id == int(params["suggestion_id"])).first()
+        if row is None:
+            raise missing("Suggestion", params["suggestion_id"])
+        return row[0]
+    if "model_id" in params:
+        row = db.query(TrainedModel.project_id).filter(TrainedModel.id == int(params["model_id"])).first()
+        if row is None:
+            raise missing("Model", params["model_id"])
+        return row[0]
+    if "run_id" in params:
+        row = db.query(TrainingRun.project_id).filter(TrainingRun.id == int(params["run_id"])).first()
+        if row is None:
+            raise missing("Training run", params["run_id"])
         return row[0]
     if "config_id" in params:
         row = db.query(ProjectConfigVersion.project_id).filter(ProjectConfigVersion.id == int(params["config_id"])).first()

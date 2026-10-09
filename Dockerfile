@@ -27,6 +27,9 @@ RUN pip install --no-cache-dir -r backend/requirements.txt docker==7.1.0
 
 COPY backend/app backend/app
 COPY updater updater
+# Only recipe.json is read by the app (to list the models); the code is run by the trainer image.
+COPY trainer/recipes trainer/recipes
+COPY trainer/templates trainer/templates
 COPY --from=frontend /src/frontend/dist frontend/dist
 
 LABEL org.opencontainers.image.source="https://github.com/sawikot/VidaAnnotatior" \

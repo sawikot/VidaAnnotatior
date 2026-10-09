@@ -204,6 +204,89 @@ and database come back by themselves. When going back to an older version, the a
 restore the data as it was when that version was last used. The choice is written to `APP_VERSION` in
 `.env`, so a restart keeps it.
 
+## Model training
+
+A project's annotations can train a model from the app (**Training** in the project menu). The work
+is done by a second program, the **trainer** (`trainer/trainer.py`), so that hours of GPU work never
+slow the app down and a crashing model can never take the app with it.
+
+- **The app** keeps the list of training runs, cuts each run's dataset (the same COCO export with
+  patch images, sorted by the project's train / validation / test split) and shows progress.
+- **The trainer** asks the app for the next waiting run, runs that run's *model recipe* as a process of
+  its own, and reports each epoch back. It talks to the app only over HTTP, with a secret kept in the
+  one folder the two share (`data/training`), and never opens the database or the slides.
+- **A model recipe** is a folder under `trainer/recipes` with a `recipe.json` (name, task, and the
+  settings shown on the Start form) and a `train.py`. What a recipe is given and must write is
+  described in `trainer/recipes/README.md`. Three ship with the app, all built on torchvision: a
+  Faster R-CNN object **detector** (learns from boxes, circles and outlines), a ResNet patch
+  **classifier** (learns one class per patch, from Patch Labels) and a region **segmenter** (LR-ASPP
+  or DeepLabV3; learns from polygons and brushed areas, everything not drawn being background).
+
+A project is ready to train once it has a train / validation / test split and, in the training and
+validation sets, what the chosen kind of model learns from: classified shapes, or -- for a classifier
+-- patches with a class (at least two classes). Finished runs can be ticked on the Training page to
+**compare** them: their settings (those that differ stand out), scores, and validation score by epoch. Each run keeps its settings, what it was trained on, a copy of the code
+as it ran, its log and the trained model in `data/training/runs/<id>`; the dataset copy is deleted when
+the run ends.
+
+**Suggestions in the workspace.** A finished run becomes a *trained model* of the project. In the
+annotation workspace (patch view), **AI suggestions** lists the project's models: *Suggest* sends the
+patch image to the trainer, which keeps the model loaded and answers in a second or two (on the CPU
+while a training run has the graphics card). What the model finds is drawn dashed, with how sure it
+is, and is **not an annotation**: no export or count sees it until a person accepts it. Accepting
+makes an ordinary annotation recorded as that person's, "suggested by" the model; rejecting keeps the
+model from proposing the same object there again. Objects already annotated -- in the patch, or on
+the whole slide where it reaches the patch -- are never suggested. What a suggestion is follows the
+model: a detector proposes boxes, a segmenter outlines, a classifier a **Patch Label** (accepting it
+labels the patch). In a slide project the model can also be sent through **the whole slide** in the
+background (the patches not annotated yet, or all of them): the whole-slide view then shows every
+waiting suggestion on the slide and accepts or clears them in bulk by confidence, and *Next patch
+with suggestions* steps through them patch by patch.
+
+**Models trained elsewhere.** *Training -> Models -> Add a model trained elsewhere* takes a model file
+and makes it available in the workspace like one trained here. Two kinds of file are read, each by an
+*importer* (a recipe with prediction code only): Faster R-CNN weights (`.pt`: a model downloaded from
+another VidaAnnotator, or a torchvision state dict), and detectors exported to ONNX or TorchScript
+(YOLO v5 / v8 / v11-style outputs, or torchvision's boxes-labels-scores). The trainer opens the file
+once -- a file it cannot run is refused with the reason -- and reads its class names where the file
+carries them; otherwise they are typed in. Each of the model's classes is then matched to a class of
+the project (by name to begin with) or left out. Weights are loaded as data only, never as code.
+The importers have tests of their own, run in the trainer's environment:
+`trainer/.venv/Scripts/python -m pytest trainer/tests` (they need `pytest` and `onnx` installed there).
+
+**Your own recipes.** The **Model recipes** page (the code icon at the bottom of the left rail) lists
+every recipe with its code. Built-in ones are read-only. Administrators -- only they, since recipe
+code runs on the training machine -- can *duplicate* one, start a *new* one from a template that
+has the whole shape of a recipe with the places for their code marked, or *upload* a ZIP; edit the
+files in the browser (every save keeps the earlier version); and *download* a recipe to work on it
+elsewhere. Your own recipes live in `data/training/recipes`. One can be trained with only after its
+**check** has passed as it is now: the trainer installs its packages, trains one epoch on a few
+made-up images, loads the result in `predict.py` and asks it about an image, and reports each step
+with what the code printed. Any later change makes the check stale. Packages listed in a recipe's
+`requirements.txt` are installed once into an environment of their own on top of the trainer's
+(`data/training/envs`, shared by recipes wanting the same packages, removable from the page) and
+need internet the first time. A run or model keeps its own copy of the code, so editing or deleting
+a recipe never changes what an earlier run used.
+
+**With Docker**, `install.sh` / `install.ps1` ask once whether to install training, look for an NVIDIA
+graphics card (`nvidia-smi`), check that Docker can hand it to a container, and write the result to
+`COMPOSE_PROFILES` in `.env`: `trainer-gpu`, `trainer-cpu` (no card: works, slowly) or empty. The GPU
+image carries its own CUDA libraries, so the machine needs only the NVIDIA driver and, on Linux, the
+NVIDIA Container Toolkit (DGX systems ship with both; Docker Desktop on Windows needs the WSL 2
+engine). On a machine with several cards, `TRAINER_GPUS` chooses which the trainer may use. The
+trainer is not switched by the app's Version page: after installing a new app version, run
+`docker compose pull && docker compose up -d` (or the install script again) to bring it along.
+
+**From the source code**, give the trainer an environment of its own with PyTorch, then run it beside
+the backend:
+
+```bash
+python -m venv trainer/.venv
+trainer/.venv/Scripts/python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128   # Linux/macOS: trainer/.venv/bin/python; no NVIDIA card: .../whl/cpu
+trainer/.venv/Scripts/python -m pip install -r trainer/requirements.txt
+trainer/.venv/Scripts/python trainer/trainer.py          # APP_URL defaults to http://127.0.0.1:8088
+```
+
 ## Setup (from the source code, for development)
 
 ### Prerequisites

@@ -1,0 +1,40 @@
+{
+  "name": "Detector as ONNX or TorchScript",
+  "task": "detection",
+  "description": "An object detector exported to a standard file: ONNX (.onnx) or TorchScript (.torchscript). Works with YOLO exports (v5, v8, v11 and later) and with models that give boxes, labels and scores (torchvision).",
+  "import": { "extensions": [".onnx", ".torchscript"] },
+  "settings": [
+    {
+      "key": "layout",
+      "label": "What the model gives back",
+      "type": "choice",
+      "default": "auto",
+      "choices": [
+        { "value": "auto", "label": "Work it out from the file" },
+        { "value": "yolo", "label": "YOLO: one table of boxes and class scores" },
+        { "value": "boxes", "label": "Boxes, labels and scores (torchvision)" }
+      ]
+    },
+    {
+      "key": "image_size",
+      "label": "Image size (px)",
+      "type": "int",
+      "default": 640,
+      "min": 32,
+      "max": 4096,
+      "help": "YOLO: images are fitted into a square of this size. Ignored when the file fixes its own input size."
+    },
+    {
+      "key": "first_label",
+      "label": "Number of the first class",
+      "type": "choice",
+      "default": "auto",
+      "choices": [
+        { "value": "auto", "label": "Usual for the kind of model (YOLO 0, torchvision 1)" },
+        { "value": "0", "label": "0" },
+        { "value": "1", "label": "1 (0 is background)" }
+      ],
+      "advanced": true
+    }
+  ]
+}

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.database.base import Base
-from app.models import annotation, config_version, patch, project, slide, user  # noqa: F401
+from app.models import annotation, config_version, patch, project, slide, training, user  # noqa: F401
 
 
 @pytest.fixture(autouse=True)
@@ -19,6 +19,16 @@ def isolated_storage(tmp_path, monkeypatch):
     settings = get_settings()
     monkeypatch.setattr(settings, "wsi_storage_dir", tmp_path / "isolated_uploads")
     monkeypatch.setattr(settings, "wsi_watch_dir", tmp_path / "isolated_watch")
+    monkeypatch.setattr(settings, "training_dir", tmp_path / "isolated_training")
+    # What the app remembers about the trainer between requests must not leak from test to test.
+    from app.api import recipes as recipes_api, training as training_api
+
+    monkeypatch.setitem(training_api._trainer, "seen", 0.0)
+    monkeypatch.setitem(training_api._trainer, "hardware", None)
+    recipes_api._to_check.clear()
+    from app.api import suggestions as suggestions_api
+
+    suggestions_api._slide_jobs.clear()
     settings.wsi_storage_dir.mkdir()
     settings.wsi_watch_dir.mkdir()
 

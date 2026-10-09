@@ -133,6 +133,136 @@ export interface ProjectStats {
   tissue_area_mm2: number;
 }
 
+// ---- Model training ----
+export interface RecipeSetting {
+  key: string;
+  label: string;
+  type: "int" | "float" | "choice" | "bool";
+  default: string | number | boolean;
+  min?: number;
+  max?: number;
+  choices?: { value: string; label: string }[];
+  help?: string;
+  /** Hidden until "Show advanced settings". */
+  advanced?: boolean;
+}
+/** A model the trainer can train (trainer/recipes). */
+export interface Recipe {
+  id: string;
+  name: string;
+  task: "detection" | "classification" | "segmentation";
+  description: string;
+  builtin: boolean;
+  /** It has training code. */
+  trainable: boolean;
+  /** Set when it can run a model file trained elsewhere: the file extensions it takes. */
+  import: { extensions: string[] } | null;
+  settings: RecipeSetting[];
+}
+/** A recipe as the Model recipes page shows it. */
+export interface RecipeDetail extends Recipe {
+  /** Why it cannot be used at all (a broken recipe.json, no code), in words; null when it is fine. */
+  problem: string | null;
+  /** Its last check by the trainer; null for built-in recipes and ones never checked. "stale": changed since. */
+  check: {
+    status: "queued" | "running" | "passed" | "failed" | "stale";
+    at?: string;
+    report?: { steps: { name: string; ok: boolean; detail: string }[]; log: string } | null;
+  } | null;
+  /** Built-in, or passed its check as it is now: it can be trained with. */
+  usable: boolean;
+  files: string[];
+  has_predict: boolean;
+  requirements: string[];
+  /** Its extra packages and whether they are installed; only on a single recipe, null when it needs none. */
+  packages?: { wanted: string[]; installed: boolean; bytes: number } | null;
+}
+
+export interface TrainerStatus {
+  online: boolean;
+  hardware: { device: string; gpus: { index: number; name: string; memory_mb: number }[]; problem?: string } | null;
+}
+export interface TrainingReadiness {
+  task: string;
+  split_mode: SplitMode;
+  classes: { id: number; name: string }[];
+  sets: Record<string, { slides: number; images: number; objects: number; per_class: Record<string, number> }>;
+  /** What stands in the way of starting; empty when ready. */
+  problems: string[];
+  warnings: string[];
+}
+export interface TrainingScores {
+  ap50?: number;
+  accuracy?: number;
+  miou?: number;
+  pixel_accuracy?: number;
+  precision?: number;
+  recall?: number;
+  per_class?: Record<string, number>;
+}
+export interface TrainingRun {
+  id: number;
+  project_id: number;
+  recipe_id: string;
+  recipe_name: string;
+  task: string;
+  settings: Record<string, string | number | boolean>;
+  status: "queued" | "preparing" | "running" | "done" | "failed" | "stopped";
+  stop_requested: boolean;
+  error: string | null;
+  dataset: { classes: { id: number; name: string }[]; sets: Record<string, { slides: string[]; images: number; objects: number }> } | null;
+  epoch: number;
+  epochs: number;
+  result: { primary_metric?: string; best_epoch?: number; val?: TrainingScores; test?: TrainingScores } | null;
+  device: string | null;
+  created_by: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  has_model: boolean;
+  /** One entry per finished epoch; only on a single run. */
+  metrics: Record<string, number>[] | null;
+}
+
+/** A model that can make suggestions in the project's annotation workspace. */
+export interface TrainedModel {
+  id: number;
+  project_id: number;
+  run_id: number | null;
+  name: string;
+  task: string;
+  /** "run": trained in this project. "import": trained elsewhere and added as a file. */
+  source: "run" | "import";
+  /** Trained here: the project's classes (`id`). Added from elsewhere: its own classes, by place (`index`). */
+  classes: { id?: number; index?: number; name: string }[];
+  /** Added from elsewhere: its class (by place) -> the project's class id, or null when left out. */
+  class_map: Record<string, number | null> | null;
+  score: { metric?: string; val?: number; test?: number } | null;
+}
+/** A shape a model proposes in a patch; not an annotation until accepted. */
+export interface Suggestion {
+  id: number;
+  patch_id: number;
+  model_id: number;
+  class_id: number | null;
+  /** A shape, or "patch_label": no shape but a class proposed for the whole patch. */
+  type: GeometryType | "patch_label";
+  coordinates_patch_local: number[][];
+  /** Only in a slide's list of suggestions. */
+  coordinates_level0?: number[][];
+  /** How sure the model is, 0-1. */
+  score: number;
+  status: "pending" | "accepted" | "rejected";
+}
+
+/** A model working through a whole slide in the background, and what is waiting on the slide. */
+export interface SlideSuggestState {
+  job: { model_id: number; status: "running" | "done" | "failed" | "stopped"; done: number; total: number; found: number; error: string | null } | null;
+  /** Suggestions waiting for a decision anywhere on the slide, and the patches they are in. */
+  pending: number;
+  patches: number;
+}
+
 export type SplitName = "train" | "val" | "test";
 export type SplitMode = "off" | "random" | "manual";
 /** How a project's slides are split into train / validation / test; the shares are percentages adding up to 100. */

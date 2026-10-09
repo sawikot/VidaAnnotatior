@@ -1,0 +1,30 @@
+{
+  "name": "ResNet patch classifier",
+  "task": "classification",
+  "description": "Gives each patch (or image) one class, learned from Patch Labels. Starts from a network already trained on everyday photographs.",
+  "settings": [
+    {
+      "key": "model_size",
+      "label": "Model size",
+      "type": "choice",
+      "default": "small",
+      "choices": [
+        { "value": "small", "label": "Small (ResNet-18) - fast" },
+        { "value": "large", "label": "Large (ResNet-50) - more accurate, slower" }
+      ]
+    },
+    { "key": "epochs", "label": "Epochs", "type": "int", "default": 20, "min": 1, "max": 500, "help": "How many times the model sees every training image." },
+    {
+      "key": "image_size",
+      "label": "Image size (px)",
+      "type": "int",
+      "default": 384,
+      "min": 64,
+      "max": 2048,
+      "help": "Patches are resized to a square of this size. Larger keeps fine detail but is slower."
+    },
+    { "key": "batch_size", "label": "Batch size", "type": "int", "default": 16, "min": 1, "max": 256, "help": "Images per step. Lower it if the run fails with 'out of memory'." },
+    { "key": "learning_rate", "label": "Learning rate", "type": "float", "default": 0.0005, "min": 0.000001, "max": 0.1, "advanced": true }
+  ],
+  "check_settings": { "epochs": 1, "image_size": 96, "batch_size": 4 }
+}

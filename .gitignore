@@ -20,6 +20,7 @@ data/uploads/
 data/watch/
 data/database/*.db
 data/database/*.db-*
+data/training/
 
 # Editors / OS
 .vscode/

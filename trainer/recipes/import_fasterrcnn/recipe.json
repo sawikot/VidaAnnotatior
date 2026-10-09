@@ -1,0 +1,17 @@
+{
+  "name": "Faster R-CNN weights (.pt)",
+  "task": "detection",
+  "description": "A Faster R-CNN detector trained elsewhere: a model downloaded from another VidaAnnotator, or weights saved from torchvision's fasterrcnn_mobilenet_v3_large_fpn or fasterrcnn_resnet50_fpn.",
+  "import": { "extensions": [".pt", ".pth"] },
+  "settings": [
+    {
+      "key": "image_size",
+      "label": "Image size (px)",
+      "type": "int",
+      "default": 1024,
+      "min": 256,
+      "max": 4096,
+      "help": "The size images were resized to in training (their shorter side). Ignored for a model downloaded from VidaAnnotator, which carries its own."
+    }
+  ]
+}

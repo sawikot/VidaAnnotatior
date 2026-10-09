@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     updater_url: str = ""
     updater_secret_file: Path = Path("/run/vida/updater-secret")
 
+    # Model training: the folder the app shares with the trainer program (trainer/trainer.py) --
+    # datasets go in, logs and trained models come out.
+    training_dir: Path = PROJECT_ROOT / "data" / "training"
+    # The largest model file that may be added from elsewhere.
+    max_model_bytes: int = 4 * 1024 * 1024 * 1024  # 4 GB
+
     # The built frontend (npm run build). When it exists the backend serves it too, so the whole app
     # is one address -- which is also what lets the sign-in cookie reach every request.
     frontend_dist: Path = PROJECT_ROOT / "frontend" / "dist"

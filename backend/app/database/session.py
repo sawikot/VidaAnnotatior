@@ -28,6 +28,7 @@ def init_db() -> None:
         patch,
         project,
         slide,
+        training,
         user,
     )
 
@@ -73,6 +74,7 @@ def _add_missing_columns(bind=None) -> None:
         "patches": [("grid_key", "VARCHAR(80)"), ("label_class_id", "INTEGER REFERENCES annotation_classes(id)"), ("reviewed_by_id", "INTEGER REFERENCES users(id) ON DELETE SET NULL")],
         "annotation_classes": [("code", "BIGINT")],
         "project_config_versions": [("saved_grids", "JSON")],
+        "trained_models": [("source", "VARCHAR(20) NOT NULL DEFAULT 'run'"), ("class_map", "JSON")],
         "geometry_annotations": [("whole_patch", "BOOLEAN NOT NULL DEFAULT 0"), ("created_by_id", "INTEGER REFERENCES users(id) ON DELETE SET NULL")],
     }
     bind = bind or engine

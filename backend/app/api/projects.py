@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.api.access import current_user
 from app.api.deps import get_project_or_404
+from app.api.training import run_dir, training_dir
 from app.models.user import ProjectMember, User
 from app.core.config import get_settings
 from app.database.session import get_db
@@ -14,6 +17,7 @@ from app.models.config_version import AnnotationClass, ProjectConfigVersion
 from app.models.patch import Patch
 from app.models.project import Project
 from app.models.slide import Slide
+from app.models.training import TrainedModel, TrainingRun
 from app.schemas.project import ProjectCreate, ProjectDetailOut, ProjectOut, ProjectStats, ProjectUpdate
 from app.services import dataset_split, project_storage, reader_cache
 from app.services.deepzoom_service import purge_slide_tiles
@@ -144,9 +148,16 @@ def delete_project(project: Project = Depends(get_project_or_404), db: Session =
     if config_ids:
         db.query(ProjectConfigVersion).filter(ProjectConfigVersion.id.in_(config_ids)).delete(synchronize_session=False)
 
+    run_dirs = [run_dir(row[0]) for row in db.query(TrainingRun.id).filter(TrainingRun.project_id == project.id)]
+    # ...and the files of models added from elsewhere (those of a run live in the run's folder).
+    run_dirs += [training_dir() / Path(row[0]).parent for row in db.query(TrainedModel.code_path).filter(TrainedModel.project_id == project.id, TrainedModel.source == "import")]
+    db.query(TrainingRun).filter(TrainingRun.project_id == project.id).delete(synchronize_session=False)
+
     project_dir = project_storage.project_dir(get_settings().wsi_storage_dir, project.id)
     db.delete(project)
     db.commit()
+    for folder in run_dirs:  # logs and trained models of the project's training runs
+        project_storage.remove_tree(folder)
 
     # Only once the rows are gone: a failed commit must not leave a project
     # whose files were already deleted. This removes every slide/image file and

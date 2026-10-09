@@ -8,6 +8,8 @@ import { AnnotationCanvas } from "../features/annotations/AnnotationCanvas";
 import { ToolOptions } from "../features/annotations/BrushOptions";
 import { useAnnotationHistory } from "../features/annotations/useAnnotationHistory";
 import { ImportAnnotationsButton } from "../features/annotations/ImportAnnotationsButton";
+import { SuggestionOverlay } from "../features/suggestions/SuggestionOverlay";
+import { SuggestionsPanel } from "../features/suggestions/SuggestionsPanel";
 import { neighbour, progress, type ImageFilter } from "../features/images/imageNav";
 import { AnnotationModeSwitch, rememberMode, rememberedMode, type AnnotationMode } from "../features/annotations/AnnotationModeSwitch";
 import { WsiAnnotationView, type WsiFocus } from "../features/annotations/WsiAnnotationView";
@@ -37,7 +39,7 @@ import {
 import { useAnnotationStore } from "../stores/annotationStore";
 import { useContextStore } from "../stores/contextStore";
 import { useUiStore } from "../stores/uiStore";
-import type { ConfigVersion, GeometryAnnotation, GeometryType, ImageSummary, OverlappingAnnotation, Patch, Slide } from "../types/api";
+import type { ConfigVersion, GeometryAnnotation, GeometryType, ImageSummary, OverlappingAnnotation, Patch, Slide, Suggestion } from "../types/api";
 import type { Point } from "../utils/coordinates";
 import type { BrushChange } from "../utils/brush";
 import type { LayerShape } from "../features/annotations/ShapeLayer";
@@ -81,6 +83,9 @@ export function MainWorkspacePage() {
   const [bbox, setBbox] = useState<ViewportBbox | null>(null);
   const [gridRefresh, setGridRefresh] = useState(0);
   const [notes, setNotes] = useState("");
+  // A model's suggestions for this patch (features/suggestions): drawn dashed, not annotations.
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [highlightedSuggestion, setHighlightedSuggestion] = useState<number | null>(null);
 
   // Image projects: every image is a slide with one patch, so moving on means moving to
   // another slide. The whole (light) image list is held here to make that instant.
@@ -158,6 +163,16 @@ export function MainWorkspacePage() {
       setMode("patch");
     } catch {
       pendingSelect.current = null;
+      pushToast("Could not open that patch", "error");
+    }
+  }
+
+  /** Open another patch of this slide (e.g. the next one a model left suggestions in). */
+  async function openPatchById(patchId: number, fromSlideView = false) {
+    try {
+      if (patch?.id !== patchId) setPatch(await getPatch(patchId));
+      if (fromSlideView) setMode("patch");
+    } catch {
       pushToast("Could not open that patch", "error");
     }
   }
@@ -308,7 +323,8 @@ export function MainWorkspacePage() {
     setGridRefresh((n) => n + 1);
   }
 
-  /** Imported shapes land in this patch, its neighbours and on the whole slide: reload all three. */
+  /** Shapes arrived from outside the drawing tools -- an import, or accepted suggestions: they land in this
+   * patch, its neighbours and on the whole slide, so reload all three. */
   function afterImport() {
     const cur = patch;
     history.reset();
@@ -834,6 +850,7 @@ export function MainWorkspacePage() {
         focus={wsiFocus}
         onModeChange={(next) => (next === "patch" ? setMode("patch") : undefined)}
         onOpenPatch={openPatchFromSlide}
+        onReviewPatch={(id) => void openPatchById(id, true)}
       />
     );
   }
@@ -979,7 +996,9 @@ export function MainWorkspacePage() {
               onShapeEdit={handleShapeEdit}
               onDeleteSelected={handleDeleteSelected}
               onBrush={handleBrush}
-            />
+            >
+              <SuggestionOverlay suggestions={suggestions} classes={classes} scale={effectiveZoom} highlightId={highlightedSuggestion} />
+            </AnnotationCanvas>
             )}
             </div>
           </div>
@@ -1012,6 +1031,21 @@ export function MainWorkspacePage() {
               A class fills the whole {noun.toLowerCase()} with that class; Mixed and Artifact are labels only.
             </div>
           </div>
+
+          {!switching && (
+            <SuggestionsPanel
+              projectId={pid}
+              patchId={patch.id}
+              patchIndex={patch.patch_index}
+              slideId={isImage ? null : sid}
+              classes={classes}
+              noun={noun}
+              onShown={setSuggestions}
+              onHighlight={setHighlightedSuggestion}
+              onAccepted={afterImport}
+              onOpenPatch={(id) => void openPatchById(id)}
+            />
+          )}
 
           <div>
             <div className="text-label-md text-on-surface-variant mb-1">Objects in {noun} ({annotations.length})</div>

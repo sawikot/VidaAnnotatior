@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { Point } from "../../utils/coordinates";
 import type { AnnotationTool } from "../../stores/annotationStore";
 import type { AnnotationClass, GeometryAnnotation, GeometryType } from "../../types/api";
@@ -25,6 +26,8 @@ interface Props {
   onDeleteSelected: () => void;
   /** What a brush stroke did to the shapes. */
   onBrush: (changes: BrushChange[]) => void;
+  /** Extra SVG content drawn over the shapes, in the patch's pixels (e.g. a model's suggestions). */
+  children?: ReactNode;
 }
 
 /** One patch: its image with the drawing/editing layer on top, in the patch's own pixels. */
@@ -45,6 +48,7 @@ export function AnnotationCanvas({
   onShapeEdit,
   onDeleteSelected,
   onBrush,
+  children,
 }: Props) {
   const shapes: LayerShape[] = [
     ...borrowed,
@@ -94,6 +98,7 @@ export function AnnotationCanvas({
           onBrush={onBrush}
           resetKey={imageUrl}
         />
+        {children}
       </svg>
     </div>
   );

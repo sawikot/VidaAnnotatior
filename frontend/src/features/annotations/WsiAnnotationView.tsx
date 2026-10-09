@@ -12,7 +12,7 @@ import {
 } from "../../services/api";
 import { useAnnotationStore } from "../../stores/annotationStore";
 import { useUiStore } from "../../stores/uiStore";
-import type { ConfigVersion, GeometryAnnotation, GeometryType, Slide } from "../../types/api";
+import type { ConfigVersion, GeometryAnnotation, GeometryType, Slide, Suggestion } from "../../types/api";
 import type { Point } from "../../utils/coordinates";
 import type { BrushChange } from "../../utils/brush";
 import { shapeBounds } from "../../utils/shapes";
@@ -22,6 +22,8 @@ import { WsiViewer, type ViewportBbox } from "../viewer/WsiViewer";
 import { AnnotationModeSwitch, type AnnotationMode } from "./AnnotationModeSwitch";
 import { ToolOptions } from "./BrushOptions";
 import { ImportAnnotationsButton } from "./ImportAnnotationsButton";
+import { SuggestionOverlay } from "../suggestions/SuggestionOverlay";
+import { WsiSuggestionsPanel } from "../suggestions/WsiSuggestionsPanel";
 import { ShapeLayer } from "./ShapeLayer";
 import { HOTKEYS, PAN_TOOL, visibleTools } from "./tools";
 import { useAnnotationHistory } from "./useAnnotationHistory";
@@ -42,6 +44,8 @@ interface Props {
   onModeChange: (mode: AnnotationMode) => void;
   /** Open the patch a patch-drawn annotation belongs to, with that annotation selected. */
   onOpenPatch: (patchId: number, annotationId: number) => void;
+  /** Open a patch to go through a model's suggestions in it. */
+  onReviewPatch: (patchId: number) => void;
 }
 
 type Fields = Partial<Pick<GeometryAnnotation, "type" | "class_id" | "unsure" | "flagged" | "notes" | "coordinates_level0">>;
@@ -56,7 +60,7 @@ function isTyping(target: EventTarget | null): boolean {
  * space -- and stored as they are, belonging to no patch. Annotations drawn in patches appear faintly
  * for context; the patch view shows these the same way, projected into each patch.
  */
-export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnnotations, focus, onModeChange, onOpenPatch }: Props) {
+export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnnotations, focus, onModeChange, onOpenPatch, onReviewPatch }: Props) {
   const pushToast = useUiStore((s) => s.pushToast);
   const annotatorName = useAuthStore((s) => s.user?.name ?? "");
   const tool = useAnnotationStore((s) => s.tool);
@@ -75,6 +79,7 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
   const [patchDrawn, setPatchDrawn] = useState<GeometryAnnotation[]>([]);
   const [showPatchDrawn, setShowPatchDrawn] = useState(true);
   const [showGrid, setShowGrid] = useState(false);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]); // a model's, waiting anywhere on the slide
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [bbox, setBbox] = useState<ViewportBbox | null>(null);
   const [scale, setScale] = useState(0.05);
@@ -353,7 +358,8 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
 
   const saveLabel = { idle: "", saving: "Saving...", saved: "Saved", error: "Error saving" }[saveState];
 
-  /** Imported shapes land on the slide and in its patches: show both, and drop undo steps that predate them. */
+  /** Shapes arrived from outside the drawing tools (an import, accepted suggestions): they land on the slide and
+   * in its patches, so show both again, and drop undo steps that predate them. */
   function afterImport() {
     history.reset();
     listSlideAnnotations(slide.id, "slide").then(setSlideAnnotations).catch(() => undefined);
@@ -451,6 +457,7 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
                 gestureRef={gestureRef}
                 resetKey={slide.id}
               />
+              <SuggestionOverlay suggestions={suggestions} classes={classes} scale={scale} space="level0" />
             </WsiViewer>
             </div>
             <div className="absolute top-3 left-3 z-10 px-space-sm py-1 rounded bg-black/50 text-label-sm text-slate-300 pointer-events-none">
@@ -465,6 +472,8 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
           <p className="text-body-sm text-on-surface-variant">
             Drawn on the slide itself and stored in Level-0 pixels, so they are not tied to any patch. Patch views show them too.
           </p>
+
+          <WsiSuggestionsPanel projectId={slide.project_id} slideId={slide.id} onShown={setSuggestions} onAccepted={afterImport} onOpenPatch={onReviewPatch} />
 
           <div>
             <div className="text-label-md text-on-surface-variant mb-1">Objects on the slide ({slideAnnotations.length})</div>

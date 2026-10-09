@@ -1,0 +1,30 @@
+{
+  "name": "Region segmenter",
+  "task": "segmentation",
+  "description": "Outlines regions of each class (tumour, stroma, necrosis), learned from polygons and brushed areas. Everything not drawn counts as background, so annotate the patches you train on completely.",
+  "settings": [
+    {
+      "key": "model_size",
+      "label": "Model size",
+      "type": "choice",
+      "default": "small",
+      "choices": [
+        { "value": "small", "label": "Small (LR-ASPP MobileNet) - fast, fits a 4 GB graphics card" },
+        { "value": "large", "label": "Large (DeepLabV3 ResNet-50) - more accurate, needs 8 GB or more" }
+      ]
+    },
+    { "key": "epochs", "label": "Epochs", "type": "int", "default": 40, "min": 1, "max": 1000, "help": "How many times the model sees every training image." },
+    {
+      "key": "image_size",
+      "label": "Image size (px)",
+      "type": "int",
+      "default": 512,
+      "min": 128,
+      "max": 2048,
+      "help": "Patches are resized to a square of this size. Larger follows outlines more closely but needs more memory."
+    },
+    { "key": "batch_size", "label": "Batch size", "type": "int", "default": 4, "min": 1, "max": 64, "help": "Images per step. Lower it if the run fails with 'out of memory'." },
+    { "key": "learning_rate", "label": "Learning rate", "type": "float", "default": 0.0005, "min": 0.000001, "max": 0.1, "advanced": true }
+  ],
+  "check_settings": { "epochs": 1, "image_size": 160, "batch_size": 2 }
+}

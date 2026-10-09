@@ -10,6 +10,8 @@ import { PatchGalleryPage } from "./pages/PatchGalleryPage";
 import { FullOverviewPage } from "./pages/FullOverviewPage";
 import { ProjectSettingsPage } from "./pages/ProjectSettingsPage";
 import { ProjectExportPage } from "./pages/ProjectExportPage";
+import { ProjectTrainingPage } from "./pages/ProjectTrainingPage";
+import { RecipesPage } from "./pages/RecipesPage";
 import { ImageAnnotateRedirect } from "./pages/ImageAnnotateRedirect";
 import { ImageGalleryPage } from "./pages/ImageGalleryPage";
 import { LoginPage, SetPasswordPage, SetupPage } from "./pages/AuthPages";
@@ -45,7 +47,9 @@ export default function App() {
           <Route path="/projects/:projectId/slides/:slideId/gallery" element={<PatchGalleryPage />} />
           <Route path="/projects/:projectId/slides/:slideId/overview" element={<FullOverviewPage />} />
           <Route path="/projects/:projectId/export" element={<ProjectExportPage />} />
+          <Route path="/projects/:projectId/training" element={<ProjectTrainingPage />} />
           <Route path="/projects/:projectId/slides/:slideId/export" element={<ExportRedirect />} />
+          <Route path="/recipes" element={<RecipesPage />} />
           <Route path="/admin/users" element={<UsersPage />} />
           <Route path="/admin/version" element={<VersionPage />} />
           <Route path="*" element={<Navigate to="/projects" replace />} />

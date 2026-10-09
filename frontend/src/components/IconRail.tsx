@@ -23,7 +23,21 @@ export function IconRail() {
           <NavIconLink key={item.key} item={item} projectId={projectId} slideId={slideId} />
         ))}
       </div>
-      {/* App-wide, not per project: the administrator's user management sits apart, at the bottom. */}
+      {/* App-wide, not per project: the model recipes and the administrator's user management sit apart, at the bottom. */}
+      <div className="flex flex-col items-center gap-space-sm w-full">
+        {manage && (
+          <NavLink
+            to="/recipes"
+            title="Model recipes"
+            className={({ isActive }) =>
+              `w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                isActive ? "bg-[#007bb9] text-[#fdfcff] shadow-sm" : "text-slate-400 hover:bg-[#1e293b] hover:text-white"
+              }`
+            }
+          >
+            <MaterialIcon name="code_blocks" />
+          </NavLink>
+        )}
       {admin && (
         <div className="flex flex-col items-center w-full">
           <NavLink
@@ -39,6 +53,7 @@ export function IconRail() {
           </NavLink>
         </div>
       )}
+      </div>
     </aside>
   );
 }

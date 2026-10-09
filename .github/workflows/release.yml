@@ -49,3 +49,46 @@ jobs:
         with:
           generate_release_notes: true
           prerelease: ${{ steps.meta.outputs.prerelease }}
+
+  # The trainer images (model training). A separate job, so a problem here never holds back the app's
+  # own image or the release. GPU: Intel/AMD and ARM (DGX Spark); CPU: both as well.
+  trainer:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      matrix:
+        include:
+          - suffix: ""
+            index: https://download.pytorch.org/whl/cu128
+          - suffix: "-cpu"
+            index: https://download.pytorch.org/whl/cpu
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Image name, and room for the build (the GPU image is several GB)
+        id: meta
+        run: |
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}-trainer" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: trainer/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            APP_VERSION=${{ github.ref_name }}
+            TORCH_INDEX=${{ matrix.index }}
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ github.ref_name }}${{ matrix.suffix }}
+            ${{ steps.meta.outputs.prerelease == 'false' && format('{0}:latest{1}', steps.meta.outputs.image, matrix.suffix) || '' }}

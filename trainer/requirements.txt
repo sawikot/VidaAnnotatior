@@ -1,0 +1,8 @@
+# What the built-in recipes need besides PyTorch and torchvision, which are installed separately
+# (with or without GPU support; see Dockerfile and the README).
+Pillow==11.3.0
+numpy==2.4.2
+# Turning a segmenter's pixel classes into outlines (recipes/segmentation_deeplab).
+opencv-python-headless==5.0.0.93
+# Running models that were exported to ONNX elsewhere (recipes/import_detection_file).
+onnxruntime==1.31.0

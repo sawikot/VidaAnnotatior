@@ -39,5 +39,36 @@ services:
       - ./.env:/config/.env
       - updater-secret:/run/vida
 
+  # Model training (optional): carries out the training runs started in the app. It reaches the app
+  # only over the network, with a secret kept in the folder the two share, and sees nothing but that
+  # folder. install.sh / install.ps1 pick the variant for this machine and write it to
+  # COMPOSE_PROFILES in .env: "trainer-gpu" (NVIDIA card), "trainer-cpu", or neither.
+  trainer-gpu: &trainer
+    profiles: ["trainer-gpu"]
+    image: ${IMAGE:-ghcr.io/sawikot/vidaannotatior}-trainer:${TRAINER_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      APP_URL: http://app:8088
+      # Which cards it may use: "all", or indexes such as "0" or "0,1".
+      NVIDIA_VISIBLE_DEVICES: ${TRAINER_GPUS:-all}
+    volumes:
+      - ./data/training:/data/training
+      - trainer-cache:/cache  # downloaded pretrained networks
+    shm_size: 2gb
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  trainer-cpu:
+    <<: *trainer
+    profiles: ["trainer-cpu"]
+    image: ${IMAGE:-ghcr.io/sawikot/vidaannotatior}-trainer:${TRAINER_VERSION:-latest}-cpu
+    deploy: {}
+
 volumes:
   updater-secret:
+  trainer-cache:
