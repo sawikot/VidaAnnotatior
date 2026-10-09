@@ -217,10 +217,34 @@ slow the app down and a crashing model can never take the app with it.
   one folder the two share (`data/training`), and never opens the database or the slides.
 - **A model recipe** is a folder under `trainer/recipes` with a `recipe.json` (name, task, and the
   settings shown on the Start form) and a `train.py`. What a recipe is given and must write is
-  described in `trainer/recipes/README.md`. Three ship with the app, all built on torchvision: a
-  Faster R-CNN object **detector** (learns from boxes, circles and outlines), a ResNet patch
-  **classifier** (learns one class per patch, from Patch Labels) and a region **segmenter** (LR-ASPP
-  or DeepLabV3; learns from polygons and brushed areas, everything not drawn being background).
+  described in `trainer/recipes/README.md`. Thirty-seven ship with the app, each offering its
+  networks in several sizes. Built on torchvision, with nothing more to install:
+  - **detectors** (a box round each object; learn from boxes, circles and outlines): Faster R-CNN,
+    RetinaNet, FCOS, SSDlite, SSD300;
+  - **classifiers** (one class per patch; learn from Patch Labels): ResNet, ResNeXt / Wide ResNet,
+    EfficientNet, EfficientNetV2, ConvNeXt, MobileNet, ShuffleNet, DenseNet, RegNet, Vision
+    Transformer, Swin Transformer;
+  - **segmenters** (learn from polygons and brushed areas): DeepLabV3, LR-ASPP and FCN mark regions,
+    everything not drawn being background; Mask R-CNN outlines each object separately.
+
+  Built on **Ultralytics** (YOLO and RT-DETR):
+  - **detectors**: YOLO26, YOLO12, YOLO11, YOLOv10, YOLOv9, YOLOv8, YOLOv5 (and its large-image
+    variant), YOLOv3, RT-DETR;
+  - **classifiers**: YOLO26, YOLO11, YOLOv8;
+  - **object outliners**: YOLO26, YOLO11, YOLOv9, YOLOv8.
+
+  The Ultralytics package is **AGPL-3.0** licensed. It is not part of the app or of the trainer
+  image: each of these recipes lists it in its `requirements.txt`, so it is downloaded from PyPI
+  into an environment of its own the first time one of them is checked or trained (that needs
+  internet, about 400 MB). The recipes' own scripts import it, so they fall under its terms; if
+  the AGPL is not acceptable where you install the app, delete the `*_yolo*` and `detection_rtdetr`
+  folders from `trainer/recipes` (and their lines from `trainer/tools/sync_recipes.py`), or buy an
+  Ultralytics licence.
+
+  Recipes of one kind share their code: it lives once in `trainer/shared/<kind>`, and
+  `python trainer/tools/sync_recipes.py` writes each recipe's folder from it and from the list of
+  models in that script -- so every recipe stays a complete folder that can be read, duplicated and
+  changed on its own. To add a torchvision model, add a line to that list and run the script.
 
 A project is ready to train once it has a train / validation / test split and, in the training and
 validation sets, what the chosen kind of model learns from: classified shapes, or -- for a classifier
@@ -250,7 +274,10 @@ another VidaAnnotator, or a torchvision state dict), and detectors exported to O
 (YOLO v5 / v8 / v11-style outputs, or torchvision's boxes-labels-scores). The trainer opens the file
 once -- a file it cannot run is refused with the reason -- and reads its class names where the file
 carries them; otherwise they are typed in. Each of the model's classes is then matched to a class of
-the project (by name to begin with) or left out. Weights are loaded as data only, never as code.
+the project (by name to begin with) or left out. Those weights are loaded as data only, never as
+code. A third importer takes models trained with **Ultralytics** elsewhere (`.pt`: YOLO or RT-DETR
+detectors, `-seg` and `-cls` models); such a file is a pickle and *can* carry code, so add only
+files you trust.
 The importers have tests of their own, run in the trainer's environment:
 `trainer/.venv/Scripts/python -m pytest trainer/tests` (they need `pytest` and `onnx` installed there).
 

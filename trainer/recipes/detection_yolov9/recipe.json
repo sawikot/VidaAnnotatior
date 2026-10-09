@@ -1,0 +1,68 @@
+{
+  "name": "YOLOv9 detector",
+  "task": "detection",
+  "description": "Finds objects and draws a box around each one. A YOLO designed to lose less detail on the way through the network. Starts from a network already trained on everyday photographs, so it learns from few examples. Uses the Ultralytics package (AGPL-3.0 licence), installed the first time it is used; that needs internet.",
+  "settings": [
+    {
+      "key": "architecture",
+      "label": "Network",
+      "type": "choice",
+      "default": "yolov9t",
+      "choices": [
+        {
+          "value": "yolov9t",
+          "label": "Tiny - fastest, fits any graphics card"
+        },
+        {
+          "value": "yolov9s",
+          "label": "Small"
+        },
+        {
+          "value": "yolov9m",
+          "label": "Medium"
+        },
+        {
+          "value": "yolov9c",
+          "label": "Compact - needs 8 GB or more"
+        },
+        {
+          "value": "yolov9e",
+          "label": "Extended - most accurate, needs a big graphics card"
+        }
+      ],
+      "help": "Start with the smallest; move up when you have many examples and the scores stop improving."
+    },
+    {
+      "key": "epochs",
+      "label": "Epochs",
+      "type": "int",
+      "default": 100,
+      "min": 1,
+      "max": 1000,
+      "help": "How many times the model sees every training image."
+    },
+    {
+      "key": "image_size",
+      "label": "Image size (px)",
+      "type": "int",
+      "default": 1024,
+      "min": 160,
+      "max": 2048,
+      "help": "Patches are resized so their longer side is this long. Larger keeps small objects visible but needs more memory."
+    },
+    {
+      "key": "batch_size",
+      "label": "Batch size",
+      "type": "int",
+      "default": 4,
+      "min": 1,
+      "max": 256,
+      "help": "Images per step. Lower it if the run fails with 'out of memory'."
+    }
+  ],
+  "check_settings": {
+    "epochs": 1,
+    "batch_size": 2,
+    "image_size": 160
+  }
+}

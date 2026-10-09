@@ -1,0 +1,65 @@
+{
+  "name": "FCN region segmenter",
+  "task": "segmentation",
+  "description": "Outlines regions of each class with the classic fully convolutional network: simple and a common baseline. Everything not drawn counts as background. Starts from a network already trained on everyday photographs, so it learns from few examples.",
+  "settings": [
+    {
+      "key": "architecture",
+      "label": "Network",
+      "type": "choice",
+      "default": "fcn_resnet50",
+      "choices": [
+        {
+          "value": "fcn_resnet50",
+          "label": "ResNet-50 - needs 8 GB or more"
+        },
+        {
+          "value": "fcn_resnet101",
+          "label": "ResNet-101 - more accurate, slower"
+        }
+      ]
+    },
+    {
+      "key": "epochs",
+      "label": "Epochs",
+      "type": "int",
+      "default": 40,
+      "min": 1,
+      "max": 1000,
+      "help": "How many times the model sees every training image."
+    },
+    {
+      "key": "image_size",
+      "label": "Image size (px)",
+      "type": "int",
+      "default": 512,
+      "min": 128,
+      "max": 2048,
+      "help": "Patches are resized to a square of this size. Larger follows outlines more closely but needs more memory."
+    },
+    {
+      "key": "batch_size",
+      "label": "Batch size",
+      "type": "int",
+      "default": 4,
+      "min": 1,
+      "max": 256,
+      "help": "Images per step. Lower it if the run fails with 'out of memory'."
+    },
+    {
+      "key": "learning_rate",
+      "label": "Learning rate",
+      "type": "float",
+      "default": 0.0005,
+      "min": 1e-06,
+      "max": 0.1,
+      "help": "How big each learning step is. The default suits most projects.",
+      "advanced": true
+    }
+  ],
+  "check_settings": {
+    "epochs": 1,
+    "batch_size": 2,
+    "image_size": 160
+  }
+}

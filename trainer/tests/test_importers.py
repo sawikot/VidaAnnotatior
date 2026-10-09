@@ -117,3 +117,21 @@ def test_plain_faster_rcnn_weights_and_what_is_not_one(ask, tmp_path):
     torch.save({"layer.weight": torch.zeros(2)}, tmp_path / "model.pt")
     with pytest.raises(RuntimeError, match="not Faster R-CNN weights"):
         ask("import_fasterrcnn", tmp_path / "model.pt")
+
+
+def test_an_ultralytics_model_names_its_own_classes(ask, tmp_path, monkeypatch):
+    """Needs the Ultralytics package, which the importer's requirements.txt has installed on first use."""
+    import subprocess
+
+    monkeypatch.setenv("ENVS_DIR", str(RECIPES.parents[1] / "data" / "training" / "envs"))  # installed once, not per test
+    python = trainer.python_for(RECIPES / "import_ultralytics")
+    make = "import sys; from ultralytics import YOLO; m = YOLO('yolo11n.yaml'); m.model.names = {0: 'ring', 1: 'schizont'}; m.save(sys.argv[1])"
+    done = subprocess.run([python, "-c", make, str(tmp_path / "model.pt")], capture_output=True, text=True, cwd=tmp_path)
+    assert done.returncode == 0, done.stderr[-800:]
+    info, found = ask("import_ultralytics", tmp_path / "model.pt", {"image_size": 160})
+    assert info["task"] == "detect" and info["classes"][:2] == ["ring", "schizont"]
+    assert all("box" in d and isinstance(d["class"], int) for d in found)  # an untrained network finds what it will
+
+    (tmp_path / "model.pt").write_bytes(b"not a model")
+    with pytest.raises(RuntimeError, match="not a model Ultralytics can open"):
+        ask("import_ultralytics", tmp_path / "model.pt")

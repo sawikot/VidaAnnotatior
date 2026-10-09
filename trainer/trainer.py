@@ -10,6 +10,7 @@ Environment:
     APP_URL        where the app answers            (default http://127.0.0.1:8088)
     TRAINING_DIR   the folder shared with the app   (default <repository>/data/training)
     RECIPES_DIR    the model recipes                (default the recipes/ folder beside this file)
+    ENVS_DIR       where recipes' extra packages go (default <TRAINING_DIR>/envs)
 
 What a recipe is told and must answer is described in recipes/README.md.
 """
@@ -19,6 +20,7 @@ import hashlib
 import json
 import os
 import queue
+import re
 import shutil
 import site
 import subprocess
@@ -49,6 +51,19 @@ PACKAGES_S = 1800  # ...and how long installing a recipe's extra packages may ta
 # Set while a training run is in progress: it gets the graphics card to itself, and suggestions are
 # made on the CPU meanwhile (slower, but they neither wait for hours nor crash the training).
 TRAINING = threading.Event()
+
+
+_COLOURS = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+_BAR = re.compile(r"\d+%\s*[\u2500-\u259f|#]")  # a percentage followed by the bar's block characters
+
+
+def for_the_log(line: str) -> str | None:
+    """A line of a recipe's output as it should be kept: without terminal colour codes, and not at all
+    if it is one of the many redraws of a progress bar (only its last, at 100%, is kept)."""
+    line = _COLOURS.sub("", line)
+    if _BAR.search(line) and "100%" not in line:
+        return None
+    return line
 
 
 def say(text: str) -> None:
@@ -108,7 +123,7 @@ def python_for(code: Path) -> str:
     wanted = sorted(line.strip() for line in lines if line.strip() and not line.strip().startswith("#"))
     if not wanted:
         return sys.executable
-    env = TRAINING_DIR / "envs" / hashlib.sha256("\n".join(wanted).encode()).hexdigest()[:16]
+    env = Path(os.environ.get("ENVS_DIR") or TRAINING_DIR / "envs") / hashlib.sha256("\n".join(wanted).encode()).hexdigest()[:16]
     python = env / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     ready = env / ".ready"
     if ready.is_file() and ready.read_text(encoding="utf-8").strip() == sys.version and python.is_file():
@@ -315,8 +330,10 @@ def run_recipe(job: dict, hw: dict) -> None:
                     except ValueError:
                         pass
                     continue
-                log.write(line)
-                log.flush()
+                kept = for_the_log(line)
+                if kept is not None:
+                    log.write(kept)
+                    log.flush()
 
     reader = threading.Thread(target=read_output, daemon=True)
     reader.start()

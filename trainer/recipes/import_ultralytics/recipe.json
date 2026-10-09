@@ -1,0 +1,17 @@
+{
+  "name": "Ultralytics model (.pt): YOLO, RT-DETR",
+  "task": "detection",
+  "description": "A model trained with Ultralytics elsewhere: a YOLO or RT-DETR detector, a \"-seg\" model (suggests outlines) or a \"-cls\" model (suggests patch labels). Its class names are read from the file. Uses the Ultralytics package (AGPL-3.0 licence), installed the first time it is used; that needs internet. Only add files you trust: this kind of file can carry code.",
+  "import": { "extensions": [".pt"] },
+  "settings": [
+    {
+      "key": "image_size",
+      "label": "Image size (px)",
+      "type": "int",
+      "default": 1024,
+      "min": 32,
+      "max": 4096,
+      "help": "The size the model was trained at (its imgsz). Patches are resized so their longer side is this long."
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "name": "LR-ASPP region segmenter (lightweight)",
+  "task": "segmentation",
+  "description": "Outlines regions of each class with a very small, fast network. Everything not drawn counts as background. For a quick first result, or a modest graphics card. Starts from a network already trained on everyday photographs, so it learns from few examples.",
+  "settings": [
+    {
+      "key": "architecture",
+      "label": "Network",
+      "type": "choice",
+      "default": "lraspp_mobilenet_v3_large",
+      "choices": [
+        {
+          "value": "lraspp_mobilenet_v3_large",
+          "label": "MobileNet - fits any graphics card"
+        }
+      ]
+    },
+    {
+      "key": "epochs",
+      "label": "Epochs",
+      "type": "int",
+      "default": 40,
+      "min": 1,
+      "max": 1000,
+      "help": "How many times the model sees every training image."
+    },
+    {
+      "key": "image_size",
+      "label": "Image size (px)",
+      "type": "int",
+      "default": 512,
+      "min": 128,
+      "max": 2048,
+      "help": "Patches are resized to a square of this size. Larger follows outlines more closely but needs more memory."
+    },
+    {
+      "key": "batch_size",
+      "label": "Batch size",
+      "type": "int",
+      "default": 4,
+      "min": 1,
+      "max": 256,
+      "help": "Images per step. Lower it if the run fails with 'out of memory'."
+    },
+    {
+      "key": "learning_rate",
+      "label": "Learning rate",
+      "type": "float",
+      "default": 0.0005,
+      "min": 1e-06,
+      "max": 0.1,
+      "help": "How big each learning step is. The default suits most projects.",
+      "advanced": true
+    }
+  ],
+  "check_settings": {
+    "epochs": 1,
+    "batch_size": 2,
+    "image_size": 160
+  }
+}

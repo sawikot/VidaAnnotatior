@@ -1,0 +1,65 @@
+{
+  "name": "Swin Transformer classifier",
+  "task": "classification",
+  "description": "One class per patch, from a transformer that takes any image size. Among the most accurate here given enough examples. Starts from a network already trained on everyday photographs, so it learns from few examples.",
+  "settings": [
+    {
+      "key": "architecture",
+      "label": "Network",
+      "type": "choice",
+      "default": "swin_t",
+      "choices": [
+        {
+          "value": "swin_t",
+          "label": "Swin-T"
+        },
+        {
+          "value": "swin_s",
+          "label": "Swin-S - more accurate, needs 8 GB or more"
+        }
+      ]
+    },
+    {
+      "key": "epochs",
+      "label": "Epochs",
+      "type": "int",
+      "default": 25,
+      "min": 1,
+      "max": 1000,
+      "help": "How many times the model sees every training image."
+    },
+    {
+      "key": "image_size",
+      "label": "Image size (px)",
+      "type": "int",
+      "default": 384,
+      "min": 64,
+      "max": 1024,
+      "help": "Patches are resized to a square of this size. Larger keeps fine detail but is slower."
+    },
+    {
+      "key": "batch_size",
+      "label": "Batch size",
+      "type": "int",
+      "default": 8,
+      "min": 1,
+      "max": 256,
+      "help": "Images per step. Lower it if the run fails with 'out of memory'."
+    },
+    {
+      "key": "learning_rate",
+      "label": "Learning rate",
+      "type": "float",
+      "default": 5e-05,
+      "min": 1e-06,
+      "max": 0.1,
+      "help": "How big each learning step is. The default suits most projects.",
+      "advanced": true
+    }
+  ],
+  "check_settings": {
+    "epochs": 1,
+    "batch_size": 2,
+    "image_size": 96
+  }
+}

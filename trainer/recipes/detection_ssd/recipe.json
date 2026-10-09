@@ -1,0 +1,51 @@
+{
+  "name": "SSD300 detector",
+  "task": "detection",
+  "description": "A classic single-pass detector working at a fixed 300 px: fast, and only for objects that are large in the patch. Starts from a network already trained on everyday photographs, so it learns from few examples.",
+  "settings": [
+    {
+      "key": "architecture",
+      "label": "Network",
+      "type": "choice",
+      "default": "ssd300_vgg16",
+      "choices": [
+        {
+          "value": "ssd300_vgg16",
+          "label": "VGG-16 - needs 4 GB or more"
+        }
+      ]
+    },
+    {
+      "key": "epochs",
+      "label": "Epochs",
+      "type": "int",
+      "default": 40,
+      "min": 1,
+      "max": 1000,
+      "help": "How many times the model sees every training image."
+    },
+    {
+      "key": "batch_size",
+      "label": "Batch size",
+      "type": "int",
+      "default": 4,
+      "min": 1,
+      "max": 256,
+      "help": "Images per step. Lower it if the run fails with 'out of memory'."
+    },
+    {
+      "key": "learning_rate",
+      "label": "Learning rate",
+      "type": "float",
+      "default": 0.001,
+      "min": 1e-06,
+      "max": 0.1,
+      "help": "How big each learning step is. The default suits most projects.",
+      "advanced": true
+    }
+  ],
+  "check_settings": {
+    "epochs": 1,
+    "batch_size": 2
+  }
+}

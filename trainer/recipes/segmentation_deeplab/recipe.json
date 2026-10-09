@@ -1,19 +1,37 @@
 {
-  "name": "Region segmenter",
+  "name": "DeepLabV3 region segmenter",
   "task": "segmentation",
-  "description": "Outlines regions of each class (tumour, stroma, necrosis), learned from polygons and brushed areas. Everything not drawn counts as background, so annotate the patches you train on completely.",
+  "description": "Outlines regions of each class (tumour, stroma, necrosis), learned from polygons and brushed areas. Everything not drawn counts as background, so annotate the patches you train on completely. Starts from a network already trained on everyday photographs, so it learns from few examples.",
   "settings": [
     {
-      "key": "model_size",
-      "label": "Model size",
+      "key": "architecture",
+      "label": "Network",
       "type": "choice",
-      "default": "small",
+      "default": "deeplabv3_mobilenet_v3_large",
       "choices": [
-        { "value": "small", "label": "Small (LR-ASPP MobileNet) - fast, fits a 4 GB graphics card" },
-        { "value": "large", "label": "Large (DeepLabV3 ResNet-50) - more accurate, needs 8 GB or more" }
+        {
+          "value": "deeplabv3_mobilenet_v3_large",
+          "label": "Small (MobileNet) - fast, fits a 4 GB graphics card"
+        },
+        {
+          "value": "deeplabv3_resnet50",
+          "label": "Large (ResNet-50) - more accurate, needs 8 GB or more"
+        },
+        {
+          "value": "deeplabv3_resnet101",
+          "label": "Largest (ResNet-101) - most accurate, slowest"
+        }
       ]
     },
-    { "key": "epochs", "label": "Epochs", "type": "int", "default": 40, "min": 1, "max": 1000, "help": "How many times the model sees every training image." },
+    {
+      "key": "epochs",
+      "label": "Epochs",
+      "type": "int",
+      "default": 40,
+      "min": 1,
+      "max": 1000,
+      "help": "How many times the model sees every training image."
+    },
     {
       "key": "image_size",
       "label": "Image size (px)",
@@ -23,8 +41,29 @@
       "max": 2048,
       "help": "Patches are resized to a square of this size. Larger follows outlines more closely but needs more memory."
     },
-    { "key": "batch_size", "label": "Batch size", "type": "int", "default": 4, "min": 1, "max": 64, "help": "Images per step. Lower it if the run fails with 'out of memory'." },
-    { "key": "learning_rate", "label": "Learning rate", "type": "float", "default": 0.0005, "min": 0.000001, "max": 0.1, "advanced": true }
+    {
+      "key": "batch_size",
+      "label": "Batch size",
+      "type": "int",
+      "default": 4,
+      "min": 1,
+      "max": 256,
+      "help": "Images per step. Lower it if the run fails with 'out of memory'."
+    },
+    {
+      "key": "learning_rate",
+      "label": "Learning rate",
+      "type": "float",
+      "default": 0.0005,
+      "min": 1e-06,
+      "max": 0.1,
+      "help": "How big each learning step is. The default suits most projects.",
+      "advanced": true
+    }
   ],
-  "check_settings": { "epochs": 1, "image_size": 160, "batch_size": 2 }
+  "check_settings": {
+    "epochs": 1,
+    "batch_size": 2,
+    "image_size": 160
+  }
 }

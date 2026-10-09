@@ -32,6 +32,13 @@ const CHECK: Record<string, { label: string; tone: string; icon: string }> = {
   none: { label: "Not checked yet", tone: "bg-amber-100 text-amber-900", icon: "warning" },
 };
 const TASKS = ["detection", "classification", "segmentation"] as const;
+// The list, in groups: what trains by task, then what only runs model files from elsewhere.
+const GROUPS: { title: string; has: (r: RecipeDetail) => boolean }[] = [
+  { title: "Find objects (detection)", has: (r) => r.trainable && r.task === "detection" },
+  { title: "Classify patches", has: (r) => r.trainable && r.task === "classification" },
+  { title: "Outline areas (segmentation)", has: (r) => r.trainable && r.task === "segmentation" },
+  { title: "For models trained elsewhere", has: (r) => !r.trainable },
+];
 const FILE_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}\.(py|json|txt|md|ya?ml|cfg|toml|ini)$/;
 
 /**
@@ -215,8 +222,11 @@ export function RecipesPage() {
       </div>
 
       <div className="grid lg:grid-cols-[17rem_1fr] gap-space-md items-start">
-        <Card className="p-0 overflow-hidden">
-          {list.map((r) => (
+        <Card className="p-0 overflow-hidden lg:max-h-[80vh] lg:overflow-y-auto">
+          {GROUPS.map((group) => ({ group, rows: list.filter(group.has) })).filter(({ rows }) => rows.length > 0).map(({ group, rows }) => (
+          <div key={group.title}>
+          <div className="px-space-md py-1 bg-surface-container-low text-label-sm text-on-surface-variant sticky top-0">{group.title} · {rows.length}</div>
+          {rows.map((r) => (
             <button
               key={r.id}
               aria-current={r.id === openId}
@@ -238,6 +248,8 @@ export function RecipesPage() {
                 {!r.trainable && r.builtin && " · importer"}
               </span>
             </button>
+          ))}
+          </div>
           ))}
         </Card>
 

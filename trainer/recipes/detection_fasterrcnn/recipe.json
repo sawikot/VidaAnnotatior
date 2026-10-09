@@ -1,16 +1,26 @@
 {
   "name": "Faster R-CNN detector",
   "task": "detection",
-  "description": "Finds objects and draws a box around each one (cells, parasites, mitoses). Starts from a network already trained on everyday photographs, so it learns from few examples.",
+  "description": "Finds objects and draws a box around each one (cells, parasites, mitoses). The dependable all-rounder; start here. Starts from a network already trained on everyday photographs, so it learns from few examples.",
   "settings": [
     {
-      "key": "model_size",
-      "label": "Model size",
+      "key": "architecture",
+      "label": "Network",
       "type": "choice",
-      "default": "small",
+      "default": "fasterrcnn_mobilenet_v3_large_fpn",
       "choices": [
-        { "value": "small", "label": "Small - fast, fits a 4 GB graphics card" },
-        { "value": "large", "label": "Large - more accurate, needs 8 GB or more" }
+        {
+          "value": "fasterrcnn_mobilenet_v3_large_fpn",
+          "label": "Small (MobileNet) - fast, fits a 4 GB graphics card"
+        },
+        {
+          "value": "fasterrcnn_resnet50_fpn",
+          "label": "Large (ResNet-50) - more accurate, needs 8 GB or more"
+        },
+        {
+          "value": "fasterrcnn_resnet50_fpn_v2",
+          "label": "Large v2 (ResNet-50, improved) - most accurate, slowest"
+        }
       ],
       "help": "Start small; move to large when you have many examples and the scores stop improving."
     },
@@ -20,7 +30,7 @@
       "type": "int",
       "default": 30,
       "min": 1,
-      "max": 500,
+      "max": 1000,
       "help": "How many times the model sees every training image."
     },
     {
@@ -38,7 +48,7 @@
       "type": "int",
       "default": 2,
       "min": 1,
-      "max": 32,
+      "max": 256,
       "help": "Images per step. Lower it if the run fails with 'out of memory'."
     },
     {
@@ -46,11 +56,15 @@
       "label": "Learning rate",
       "type": "float",
       "default": 0.005,
-      "min": 0.00001,
+      "min": 1e-06,
       "max": 0.1,
       "help": "How big each learning step is. The default suits most projects.",
       "advanced": true
     }
   ],
-  "check_settings": { "epochs": 1, "image_size": 320, "batch_size": 2 }
+  "check_settings": {
+    "epochs": 1,
+    "batch_size": 2,
+    "image_size": 320
+  }
 }

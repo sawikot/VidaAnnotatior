@@ -1,19 +1,37 @@
 {
-  "name": "ResNet patch classifier",
+  "name": "ResNet classifier",
   "task": "classification",
-  "description": "Gives each patch (or image) one class, learned from Patch Labels. Starts from a network already trained on everyday photographs.",
+  "description": "Gives each patch (or image) one class, learned from Patch Labels. The dependable all-rounder; start here. Starts from a network already trained on everyday photographs, so it learns from few examples.",
   "settings": [
     {
-      "key": "model_size",
-      "label": "Model size",
+      "key": "architecture",
+      "label": "Network",
       "type": "choice",
-      "default": "small",
+      "default": "resnet18",
       "choices": [
-        { "value": "small", "label": "Small (ResNet-18) - fast" },
-        { "value": "large", "label": "Large (ResNet-50) - more accurate, slower" }
+        {
+          "value": "resnet18",
+          "label": "ResNet-18 - fast"
+        },
+        {
+          "value": "resnet50",
+          "label": "ResNet-50 - more accurate, slower"
+        },
+        {
+          "value": "resnet101",
+          "label": "ResNet-101 - largest, slowest"
+        }
       ]
     },
-    { "key": "epochs", "label": "Epochs", "type": "int", "default": 20, "min": 1, "max": 500, "help": "How many times the model sees every training image." },
+    {
+      "key": "epochs",
+      "label": "Epochs",
+      "type": "int",
+      "default": 20,
+      "min": 1,
+      "max": 1000,
+      "help": "How many times the model sees every training image."
+    },
     {
       "key": "image_size",
       "label": "Image size (px)",
@@ -23,8 +41,29 @@
       "max": 2048,
       "help": "Patches are resized to a square of this size. Larger keeps fine detail but is slower."
     },
-    { "key": "batch_size", "label": "Batch size", "type": "int", "default": 16, "min": 1, "max": 256, "help": "Images per step. Lower it if the run fails with 'out of memory'." },
-    { "key": "learning_rate", "label": "Learning rate", "type": "float", "default": 0.0005, "min": 0.000001, "max": 0.1, "advanced": true }
+    {
+      "key": "batch_size",
+      "label": "Batch size",
+      "type": "int",
+      "default": 16,
+      "min": 1,
+      "max": 256,
+      "help": "Images per step. Lower it if the run fails with 'out of memory'."
+    },
+    {
+      "key": "learning_rate",
+      "label": "Learning rate",
+      "type": "float",
+      "default": 0.0005,
+      "min": 1e-06,
+      "max": 0.1,
+      "help": "How big each learning step is. The default suits most projects.",
+      "advanced": true
+    }
   ],
-  "check_settings": { "epochs": 1, "image_size": 96, "batch_size": 4 }
+  "check_settings": {
+    "epochs": 1,
+    "batch_size": 2,
+    "image_size": 96
+  }
 }

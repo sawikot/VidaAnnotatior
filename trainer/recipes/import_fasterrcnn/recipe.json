@@ -1,7 +1,7 @@
 {
-  "name": "Faster R-CNN weights (.pt)",
+  "name": "Detector weights (.pt)",
   "task": "detection",
-  "description": "A Faster R-CNN detector trained elsewhere: a model downloaded from another VidaAnnotator, or weights saved from torchvision's fasterrcnn_mobilenet_v3_large_fpn or fasterrcnn_resnet50_fpn.",
+  "description": "A box detector trained elsewhere: any detector downloaded from another VidaAnnotator, or Faster R-CNN weights saved from torchvision (fasterrcnn_mobilenet_v3_large_fpn or fasterrcnn_resnet50_fpn).",
   "import": { "extensions": [".pt", ".pth"] },
   "settings": [
     {

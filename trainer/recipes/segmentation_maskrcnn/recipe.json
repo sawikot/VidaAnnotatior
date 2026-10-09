@@ -1,0 +1,65 @@
+{
+  "name": "Mask R-CNN (outlines each object)",
+  "task": "segmentation",
+  "description": "Finds each object and traces its outline, keeping touching objects apart. For separate things -- cells, nuclei, glands, parasites -- rather than regions of tissue. Starts from a network already trained on everyday photographs, so it learns from few examples.",
+  "settings": [
+    {
+      "key": "architecture",
+      "label": "Network",
+      "type": "choice",
+      "default": "maskrcnn_resnet50_fpn",
+      "choices": [
+        {
+          "value": "maskrcnn_resnet50_fpn",
+          "label": "ResNet-50 - needs 8 GB or more"
+        },
+        {
+          "value": "maskrcnn_resnet50_fpn_v2",
+          "label": "ResNet-50 v2 (improved) - more accurate, slower"
+        }
+      ]
+    },
+    {
+      "key": "epochs",
+      "label": "Epochs",
+      "type": "int",
+      "default": 30,
+      "min": 1,
+      "max": 1000,
+      "help": "How many times the model sees every training image."
+    },
+    {
+      "key": "image_size",
+      "label": "Image size (px)",
+      "type": "int",
+      "default": 1024,
+      "min": 256,
+      "max": 2048,
+      "help": "Patches are resized so their shorter side is this long. Larger keeps small objects visible but needs more memory."
+    },
+    {
+      "key": "batch_size",
+      "label": "Batch size",
+      "type": "int",
+      "default": 1,
+      "min": 1,
+      "max": 256,
+      "help": "Images per step. Lower it if the run fails with 'out of memory'."
+    },
+    {
+      "key": "learning_rate",
+      "label": "Learning rate",
+      "type": "float",
+      "default": 0.003,
+      "min": 1e-06,
+      "max": 0.1,
+      "help": "How big each learning step is. The default suits most projects.",
+      "advanced": true
+    }
+  ],
+  "check_settings": {
+    "epochs": 1,
+    "batch_size": 2,
+    "image_size": 320
+  }
+}

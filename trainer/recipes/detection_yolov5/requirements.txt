@@ -1,0 +1,3 @@
+# The Ultralytics package (YOLO, RT-DETR). Licensed under AGPL-3.0: see https://www.ultralytics.com/license
+# Installed once, the first time one of these models is checked or trained, on top of the trainer's PyTorch.
+ultralytics==8.4.174

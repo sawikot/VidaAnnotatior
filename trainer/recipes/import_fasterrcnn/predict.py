@@ -1,9 +1,10 @@
-"""Runs Faster R-CNN weights that were trained elsewhere (see ../README.md, "predict.py").
+"""Runs detector weights that were trained elsewhere (see ../README.md, "predict.py").
 
-Reads either a model downloaded from VidaAnnotator (which carries its classes and sizes) or a plain
-torchvision state dict; the network (MobileNet or ResNet-50 backbone) and the number of classes are
-read off the weights themselves. Detections name their class by its place in the model's own class
-list (``"class": 0`` is its first class); the app maps that to a class of the project.
+Reads either a detector downloaded from VidaAnnotator -- any of its box detectors; the file says
+which network it is and carries its classes and sizes -- or a plain torchvision Faster R-CNN state
+dict, whose network (MobileNet or ResNet-50 backbone) and number of classes are read off the weights.
+Detections name their class by its place in the model's own class list (``"class": 0`` is its first
+class); the app maps that to a class of the project.
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ from pathlib import Path
 
 import torch
 from PIL import Image
+import torchvision.models.detection as detectors
 from torchvision.models.detection import fasterrcnn_mobilenet_v3_large_fpn, fasterrcnn_resnet50_fpn
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.transforms.functional import pil_to_tensor
@@ -28,9 +30,17 @@ def load(path: Path, device: torch.device):
     names: list[str] = []
     size = int(config.get("image_size") or 1024)
     if "state_dict" in saved:  # downloaded from VidaAnnotator
+        if saved.get("kind", "detection") != "detection":
+            raise SystemExit(f"This file is a {saved['kind']} model, not a box detector; it cannot be added here.")
         names = [cls["name"] for cls in saved.get("classes", [])]
-        size = int(saved.get("image_size") or size)
         state = saved["state_dict"]
+        if saved.get("architecture"):  # says which network it is
+            fixed = saved.get("image_size")
+            sizes = {} if not fixed else {"min_size": int(fixed), "max_size": max(int(fixed), int(int(fixed) * 1.5))}
+            model = getattr(detectors, saved["architecture"])(weights=None, weights_backbone=None, num_classes=len(names) + 1, **sizes)
+            model.load_state_dict(state)
+            return model.to(device).eval(), names, len(names)
+        size = int(saved.get("image_size") or size)
     else:
         state = saved.get("model", saved)  # torchvision's reference scripts save {"model": state_dict, ...}
     head = state.get("roi_heads.box_predictor.cls_score.weight")
@@ -66,7 +76,7 @@ def main() -> None:
                 found = model([image])[0]
             results.append([
                 {"box": [round(float(v), 2) for v in box], "class": int(label) - 1, "score": round(float(score), 4)}
-                for box, label, score in zip(found["boxes"].cpu(), found["labels"].cpu(), found["scores"].cpu())
+                for box, label, score in zip(found["boxes"].float().cpu(), found["labels"].cpu(), found["scores"].float().cpu())
                 if float(score) >= floor
             ])
         print("VP_RESULT " + json.dumps({"id": request["id"], "results": results}), flush=True)

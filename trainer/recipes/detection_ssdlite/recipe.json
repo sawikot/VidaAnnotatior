@@ -1,0 +1,51 @@
+{
+  "name": "SSDlite detector (lightweight)",
+  "task": "detection",
+  "description": "A very small, very fast detector that works at a fixed 320 px, so it only suits objects that are large in the patch. Usable without a graphics card. Starts from a network already trained on everyday photographs, so it learns from few examples.",
+  "settings": [
+    {
+      "key": "architecture",
+      "label": "Network",
+      "type": "choice",
+      "default": "ssdlite320_mobilenet_v3_large",
+      "choices": [
+        {
+          "value": "ssdlite320_mobilenet_v3_large",
+          "label": "MobileNet - fits any graphics card, or none"
+        }
+      ]
+    },
+    {
+      "key": "epochs",
+      "label": "Epochs",
+      "type": "int",
+      "default": 40,
+      "min": 1,
+      "max": 1000,
+      "help": "How many times the model sees every training image."
+    },
+    {
+      "key": "batch_size",
+      "label": "Batch size",
+      "type": "int",
+      "default": 8,
+      "min": 1,
+      "max": 256,
+      "help": "Images per step. Lower it if the run fails with 'out of memory'."
+    },
+    {
+      "key": "learning_rate",
+      "label": "Learning rate",
+      "type": "float",
+      "default": 0.005,
+      "min": 1e-06,
+      "max": 0.1,
+      "help": "How big each learning step is. The default suits most projects.",
+      "advanced": true
+    }
+  ],
+  "check_settings": {
+    "epochs": 1,
+    "batch_size": 2
+  }
+}

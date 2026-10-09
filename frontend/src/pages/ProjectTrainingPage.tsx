@@ -34,6 +34,15 @@ const STATUS: Record<string, { label: string; tone: string }> = {
   failed: { label: "Failed", tone: "bg-red-100 text-red-900" },
   stopped: { label: "Stopped", tone: "bg-amber-100 text-amber-900" },
 };
+// What each kind of model does, in the order offered; and the recipe to start with in each.
+const TASKS: { id: Recipe["task"]; title: string; body: string }[] = [
+  { id: "detection", title: "Find objects", body: "A box around each one: cells, parasites, mitoses" },
+  { id: "classification", title: "Classify patches", body: "One class for the whole patch, from Patch Labels" },
+  { id: "segmentation", title: "Outline areas", body: "Regions of tissue, or each object's own outline" },
+];
+const START_WITH = ["detection_fasterrcnn", "classification_resnet", "segmentation_deeplab"];
+const startFirst = (list: Recipe[]) => [...list].sort((a, b) => Number(START_WITH.includes(b.id)) - Number(START_WITH.includes(a.id)));
+
 const SET_LABELS: Record<string, string> = { train: "Train", val: "Validation", test: "Test" };
 // Names of the numbers a recipe reports, as shown on the curves.
 const METRIC_LABELS: Record<string, string> = {
@@ -86,7 +95,7 @@ export function ProjectTrainingPage() {
     listRecipes()
       .then((list) => {
         setRecipes(list);
-        setRecipeId(list[0]?.id ?? null);
+        setRecipeId((list.find((r) => r.id === START_WITH[0]) ?? list[0])?.id ?? null);
       })
       .catch(() => setRecipes([]));
   }, [pid]);
@@ -279,8 +288,31 @@ export function ProjectTrainingPage() {
           <Card className="p-space-lg text-body-sm text-on-surface-variant">No model recipes are installed.</Card>
         ) : (
           <Card className="p-space-lg flex flex-col gap-space-md">
-            <div role="radiogroup" aria-label="Model" className="grid sm:grid-cols-2 gap-space-sm">
-              {(recipes ?? []).map((r) => (
+            <div role="tablist" aria-label="What the model should do" className="grid sm:grid-cols-3 gap-space-sm">
+              {TASKS.map((t) => {
+                const mine = (recipes ?? []).filter((r) => r.task === t.id);
+                const on = task === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={on}
+                    disabled={mine.length === 0}
+                    onClick={() => !on && setRecipeId(startFirst(mine)[0].id)}
+                    className={`text-left px-space-md py-space-sm rounded-xl disabled:opacity-40 ${on ? "bg-primary text-on-primary" : "bg-surface-container-high hover:bg-surface-container-highest"}`}
+                  >
+                    <span className="flex items-center justify-between gap-space-sm font-headline-sm text-headline-sm">
+                      {t.title}
+                      <span className={`text-label-sm font-mono ${on ? "" : "text-on-surface-variant"}`}>{mine.length}</span>
+                    </span>
+                    <span className={`block text-body-sm ${on ? "opacity-90" : "text-on-surface-variant"}`}>{t.body}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div role="radiogroup" aria-label="Model" className="grid sm:grid-cols-2 gap-space-sm max-h-[26rem] overflow-y-auto p-1 -m-1">
+              {startFirst((recipes ?? []).filter((r) => r.task === task)).map((r) => (
                 <button
                   key={r.id}
                   type="button"
@@ -291,7 +323,11 @@ export function ProjectTrainingPage() {
                 >
                   <span className="flex items-center justify-between gap-space-sm">
                     <span className="font-headline-sm text-headline-sm">{r.name}</span>
-                    <span className="px-space-sm py-0.5 rounded-full bg-surface-container-high text-label-sm capitalize shrink-0">{r.task}</span>
+                    {START_WITH.includes(r.id) ? (
+                      <span className="px-space-sm py-0.5 rounded-full bg-emerald-100 text-emerald-900 text-label-sm shrink-0">Start here</span>
+                    ) : (
+                      !r.builtin && <span className="px-space-sm py-0.5 rounded-full bg-surface-container-high text-label-sm shrink-0">Yours</span>
+                    )}
                   </span>
                   <span className="block text-body-sm text-on-surface-variant">{r.description}</span>
                 </button>

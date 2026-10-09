@@ -47,8 +47,8 @@ def test_the_built_in_recipe_is_listed_with_its_settings(project):
 def test_settings_are_filled_in_and_checked():
     recipe = recipes.get_recipe(RECIPE)
     assert recipes.resolve_settings(recipe, {"epochs": 5})["epochs"] == 5
-    assert recipes.resolve_settings(recipe, {})["model_size"] == "small"
-    for bad in ({"epochs": 0}, {"epochs": 2.5}, {"model_size": "huge"}, {"nonsense": 1}):
+    assert recipes.resolve_settings(recipe, {})["architecture"] == "fasterrcnn_mobilenet_v3_large_fpn"
+    for bad in ({"epochs": 0}, {"epochs": 2.5}, {"architecture": "huge"}, {"nonsense": 1}):
         with pytest.raises(ValueError):
             recipes.resolve_settings(recipe, bad)
 
