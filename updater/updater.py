@@ -414,10 +414,34 @@ def clean_leftovers() -> None:
         print(f"[updater] Brought back {c.name} after an interrupted switch.", flush=True)
 
 
+def start_app_if_stopped() -> None:
+    """The updater starting usually means Docker has just come up (a reboot). If the app's container
+    did not come back with it, say what state it was left in -- so the reason can be found -- and
+    start it. Runs once, a little after start, so as not to race Docker bringing the app up itself."""
+    time.sleep(15)
+    if state["state"] != "idle":
+        return  # a version switch is under way and has the container in hand
+    app = app_container()
+    if app is None or app.status == "running":
+        return
+    was = app.attrs.get("State", {})
+    print(
+        f"[updater] The app ({app.name}) was not running: status {was.get('Status')}, exit code {was.get('ExitCode')}, "
+        f"stopped {was.get('FinishedAt')}{', out of memory' if was.get('OOMKilled') else ''}"
+        f"{', error: ' + was['Error'] if was.get('Error') else ''}. Starting it.",
+        flush=True,
+    )
+    try:
+        app.start()
+    except APIError as e:
+        print(f"[updater] The app could not be started: {e.explanation or e}", flush=True)
+
+
 SECRET = load_secret()
 
 if __name__ == "__main__":
     clean_leftovers()
+    threading.Thread(target=start_app_if_stopped, daemon=True).start()
     port = int(os.environ.get("UPDATER_PORT", "9000"))
     print(f"[updater] Listening on :{port} for {GITHUB_REPO} ({IMAGE}).", flush=True)
     ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
