@@ -135,6 +135,8 @@ describe("the export screen's download", () => {
     expect(selectionDownloadKind("wsi", ["coco"], opts({ combine: true }), 2)).toBe("file");
     expect(selectionDownloadKind("wsi", ["coco", "patch_csv"], opts(), 1)).toBe("zip");
     expect(selectionDownloadKind("wsi", ["coco"], opts({ content: "images" }), 1)).toBe("zip");
+    expect(selectionDownloadKind("wsi", ["wsi_json"], opts({ split: true }), 1)).toBe("zip");
+    expect(selectionQuery(opts({ split: true }), ["coco"], [1], 1)).toBe("?formats=coco&split=true");
   });
 
   it("needs a slide and a file", () => {

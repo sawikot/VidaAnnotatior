@@ -4,6 +4,7 @@ import { MaterialIcon } from "../components/MaterialIcon";
 import { Button, Card } from "../components/primitives";
 import { EXPORT_FORMATS, type ExportFormat } from "../features/export/formats";
 import { ExportOptionsPanel } from "../features/export/ExportOptionsPanel";
+import { SplitPanel } from "../features/split/SplitPanel";
 import { formatBytes } from "../features/slides/uploadSelection";
 import {
   exportSelectionUrl,
@@ -15,7 +16,7 @@ import {
   startDownload,
 } from "../services/api";
 import { useUiStore } from "../stores/uiStore";
-import type { GridSpec, ProjectDetail, Slide } from "../types/api";
+import type { GridSpec, ProjectDetail, Slide, SplitMode } from "../types/api";
 import { gridKey } from "../utils/gridKey";
 import {
   DEFAULT_EXPORT_OPTIONS,
@@ -61,6 +62,7 @@ export function ProjectExportPage() {
   const [defaultGrid, setDefaultGrid] = useState<GridSpec | null>(null);
   const [summary, setSummary] = useState<ExportSummary | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [splitMode, setSplitMode] = useState<SplitMode | null>(null); // null: not loaded yet
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewFormat, setPreviewFormat] = useState<string | null>(null);
   const [previewSlide, setPreviewSlide] = useState<number | null>(null);
@@ -144,6 +146,13 @@ export function ProjectExportPage() {
   const kind = selectionDownloadKind(project?.project_type, formats, options, selected.length);
   const problem = selectionProblem(summary, options, formats, selected.length, noun);
 
+  /** A project with a split is exported by it unless the person unticks that; without one there is nothing to sort by. */
+  function splitModeChanged(mode: SplitMode) {
+    const turnedOn = mode !== "off" && (splitMode === null || splitMode === "off");
+    setSplitMode(mode);
+    setOptionsState((o) => ({ ...o, split: mode === "off" ? false : turnedOn ? true : o.split }));
+  }
+
   function toggleFormat(id: string) {
     setFormats((prev) => (prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]));
   }
@@ -162,7 +171,7 @@ export function ProjectExportPage() {
     // Straight from the click: the browser downloads the file itself (see startDownload).
     startDownload(exportSelectionUrl(pid, options, formats, selectedIds, slides.length));
     pushToast(
-      images || selected.length > 1 || formats.length > 1
+      images || selected.length > 1 || formats.length > 1 || options.split
         ? "Building the download on the server. Your browser saves it as soon as it is ready; large exports can take a few minutes."
         : "Download started.",
       "info",
@@ -322,9 +331,27 @@ export function ProjectExportPage() {
         </Card>
       </section>
 
-      {/* 2. Files */}
+      {/* 2. Split */}
       <section>
-        <h2 className="font-headline-md text-headline-md mb-space-sm">2. Files to Download</h2>
+        <h2 className="font-headline-md text-headline-md mb-space-sm">2. Train / Validation / Test Split</h2>
+        <SplitPanel projectId={pid} isImageProject={isImage} onModeChange={splitModeChanged} />
+        {splitMode !== null && splitMode !== "off" && (
+          <label className="mt-space-md flex items-start gap-space-sm text-body-md cursor-pointer">
+            <input type="checkbox" className="w-4 h-4 mt-1" checked={options.split} onChange={(e) => setOptions({ ...options, split: e.target.checked })} />
+            <span>
+              Sort this download into train / val / test folders
+              <span className="block text-body-sm text-on-surface-variant">
+                Each set gets its own annotation files{images ? " and images" : ""}, and a <span className="font-mono">splits.csv</span> lists
+                which {noun} went where. Unchecked exports everything together.
+              </span>
+            </span>
+          </label>
+        )}
+      </section>
+
+      {/* 3. Files */}
+      <section>
+        <h2 className="font-headline-md text-headline-md mb-space-sm">3. Files to Download</h2>
         <p className="text-body-sm text-on-surface-variant mb-space-md">Tick as many as you need; several files come together in one ZIP.</p>
         <div className="grid lg:grid-cols-3 gap-space-md">
           <FormatGroup title="JSON" icon="data_object" list={JSON_FORMATS} chosen={formats} onToggle={toggleFormat} />
@@ -375,9 +402,9 @@ export function ProjectExportPage() {
         </div>
       </section>
 
-      {/* 3. Options */}
+      {/* 4. Options */}
       <section>
-        <h2 className="font-headline-md text-headline-md mb-space-md">3. Options</h2>
+        <h2 className="font-headline-md text-headline-md mb-space-md">4. Options</h2>
         <ExportOptionsPanel
           options={options}
           onChange={setOptions}
@@ -388,11 +415,11 @@ export function ProjectExportPage() {
         />
       </section>
 
-      {/* 4. Preview */}
+      {/* 5. Preview */}
       <section>
         <button className="flex items-center gap-space-sm font-headline-md text-headline-md" onClick={() => setPreviewOpen((v) => !v)} aria-expanded={previewOpen}>
           <MaterialIcon name={previewOpen ? "expand_less" : "expand_more"} />
-          4. Preview a File
+          5. Preview a File
         </button>
         {previewOpen && (
           <div className="mt-space-md">
@@ -454,7 +481,8 @@ export function ProjectExportPage() {
             ) : summary ? (
               <span>
                 <span className="text-on-surface">{chosenNames.join(" + ")}</span>
-                {images && " + images"} · {summary.patches.toLocaleString()} {isImage ? "images" : "patches"} ·{" "}
+                {images && " + images"}
+                {options.split && " · split into train / val / test"} · {summary.patches.toLocaleString()} {isImage ? "images" : "patches"} ·{" "}
                 {summary.annotations.toLocaleString()} annotations
                 {images && ` · ${summary.images.toLocaleString()} image files ≈ ${formatBytes(summary.approx_image_bytes)}`}
               </span>

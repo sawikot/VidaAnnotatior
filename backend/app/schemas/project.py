@@ -8,6 +8,15 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.schemas.config_version import ConfigVersionCreate, ConfigVersionOut
 
 
+class SplitSettings(BaseModel):
+    """How a project's slides are split into train / validation / test (services/dataset_split.py)."""
+
+    mode: Literal["off", "random", "manual"] = "off"
+    train: int = Field(default=70, ge=0, le=100)  # shares in percent; they add up to 100
+    val: int = Field(default=15, ge=0, le=100)
+    test: int = Field(default=15, ge=0, le=100)
+
+
 class ProjectCreate(BaseModel):
     name: str
     project_type: Literal["wsi", "image"] = "wsi"
@@ -16,6 +25,7 @@ class ProjectCreate(BaseModel):
     description: str | None = None
     team: str | None = None
     config: ConfigVersionCreate = ConfigVersionCreate()
+    split: SplitSettings | None = None
 
 
 class ProjectUpdate(BaseModel):
@@ -38,6 +48,7 @@ class ProjectOut(BaseModel):
     team: str | None
     status: str
     project_type: str
+    split_config: dict | None = None
     active_config_version_id: int | None
     created_at: datetime
     updated_at: datetime

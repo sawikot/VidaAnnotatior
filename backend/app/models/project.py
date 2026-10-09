@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import JSON, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base, TimestampMixin
@@ -19,6 +19,9 @@ class Project(Base, TimestampMixin):
     # "wsi": gigapixel slides, tiled into virtual patches. "image": ordinary images (or
     # pre-cut patches) annotated as they are -- each image is one slide with one patch.
     project_type: Mapped[str] = mapped_column(String(20), default="wsi", server_default="wsi")
+
+    # How the slides are split into train / val / test (services/dataset_split.py); None: no split.
+    split_config: Mapped[dict | None] = mapped_column(JSON, default=None)
 
     active_config_version_id: Mapped[int | None] = mapped_column(
         ForeignKey("project_config_versions.id", use_alter=True, name="fk_project_active_config"),

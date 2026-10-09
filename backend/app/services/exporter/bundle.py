@@ -11,11 +11,17 @@ Layout::
     mask_classes.json            optional: pixel value -> class name for the masks
     manifest.json                what was written, and anything that had to be skipped
 
+With a train / val / test split, each set is a dataset of its own with that layout, in its own
+folder (``train/annotations/...``, ``train/images/...``, ``val/...``), and ``splits.csv`` lists
+which slide went where. Slides in no set go under ``unassigned/``.
+
 The COCO ``file_name`` of every image is exactly its name under ``images/``, so the ZIP is a
 ready-to-train COCO dataset. Images are generated on the fly; nothing is kept on the server.
 """
 from __future__ import annotations
 
+import csv
+import io
 import json
 import re
 import tempfile
@@ -110,13 +116,22 @@ def build_bundle(
     label: str,
     max_images: int,
     skipped_slides: list[dict] | None = None,
+    split_of: dict[int, str] | None = None,
 ) -> Bundle:
     """Write the ZIP for ``slides`` into a temporary file (deleted when closed).
 
     ``exporter`` may be several formats; each writes its own annotation file(s). Patch images are
-    written only with ``options.content == "images"``."""
+    written only with ``options.content == "images"``. ``split_of`` (slide id -> train | val | test |
+    unassigned) writes each set into a folder of its own."""
     exporters = _as_list(exporter)
     several = len(exporters) > 1
+    # (folder prefix, its slides): one group holding everything, or one per set of the split.
+    groups: list[tuple[str, list[Slide]]] = [("", slides)]
+    if split_of is not None:
+        sets = ("train", "val", "test", "unassigned")
+        groups = [(f"{name}/", [s for s in slides if split_of.get(s.id, "unassigned") == name]) for name in sets]
+        groups = [(prefix, group) for prefix, group in groups if group]
+    prefix_of = {slide.id: prefix for prefix, group in groups for slide in group}
     datas = {slide.id: load_export_data(db, slide, options) for slide in slides}
 
     names: dict[int, str] = {}
@@ -143,9 +158,9 @@ def build_bundle(
         with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             # -------- annotation file(s), per format
             files: list[dict] = []
-            for exp in exporters:
+            for exp, (prefix, group) in ((e, g) for e in exporters for g in groups):
                 results = []
-                for slide in slides:
+                for slide in group:
                     try:
                         results.append((slide, exp.export(db, slide, options)))
                     except Exception as exc:  # noqa: BLE001 - one bad slide must not lose the rest
@@ -155,18 +170,18 @@ def build_bundle(
 
                 if combine and exp.mergeable and results:
                     body = exp.render(exp.merge([r for _, r in results])).encode("utf-8")
-                    name = exp.bundle_name or f"annotations/{_safe(label, 'project')}_{exp.format_id}.{exp.file_extension}"
+                    name = prefix + (exp.bundle_name or f"annotations/{_safe(label, 'project')}_{exp.format_id}.{exp.file_extension}")
                     archive.writestr(name, body)
                     files.append({"file": name, "format": exp.format_id, "slides": len(results), "bytes": len(body)})
                 else:
                     used: set[str] = set()
                     for slide, result in results:
                         stem = _safe(slide.filename.rsplit(".", 1)[0], "slide")
-                        name = f"annotations/{stem}_{exp.format_id}.{exp.file_extension}"
+                        name = f"{prefix}annotations/{stem}_{exp.format_id}.{exp.file_extension}"
                         if exp.bundle_name and len(results) == 1:
-                            name = exp.bundle_name
+                            name = prefix + exp.bundle_name
                         elif name in used:
-                            name = f"annotations/{stem}_{slide.id}_{exp.format_id}.{exp.file_extension}"
+                            name = f"{prefix}annotations/{stem}_{slide.id}_{exp.format_id}.{exp.file_extension}"
                         used.add(name)
                         body = exp.render(result).encode("utf-8")
                         archive.writestr(name, body)
@@ -202,6 +217,7 @@ def build_bundle(
 
                 for patch in drawable:
                     name = names[patch.id]
+                    prefix = prefix_of[slide.id]
                     try:
                         image = render_patch(reader, patch)
                         payload = encode(image, options.image_format)
@@ -210,10 +226,10 @@ def build_bundle(
                         image_errors.append({"slide_id": slide.id, "patch_id": patch.id, "reason": str(exc)})
                         continue
                     # Already-compressed formats: storing them is faster and no larger.
-                    archive.writestr(f"images/{name}", payload, compress_type=zipfile.ZIP_STORED)
+                    archive.writestr(f"{prefix}images/{name}", payload, compress_type=zipfile.ZIP_STORED)
                     if mask is not None:
                         mask_name = name.rsplit(".", 1)[0] + ".png"
-                        archive.writestr(f"masks/{mask_name}", mask, compress_type=zipfile.ZIP_STORED)
+                        archive.writestr(f"{prefix}masks/{mask_name}", mask, compress_type=zipfile.ZIP_STORED)
                     written += 1
 
             manifest = {
@@ -229,11 +245,18 @@ def build_bundle(
                     "combined": bool(combine and any(e.mergeable for e in exporters)),
                 },
                 "slides": [{"slide_id": s.id, "slide": s.filename} for s in slides],
+                **({"splits": {prefix.rstrip("/"): [s.filename for s in group] for prefix, group in groups}} if split_of is not None else {}),
                 "annotation_files": files,
                 "image_count": written,
                 "skipped_slides": skipped,
                 "image_errors": image_errors,
             }
+            if split_of is not None:
+                table = io.StringIO()
+                writer = csv.writer(table, lineterminator="\n")
+                writer.writerow(["slide_id", "slide", "split"])
+                writer.writerows([s.id, s.filename, prefix.rstrip("/")] for prefix, group in groups for s in group)
+                archive.writestr("splits.csv", table.getvalue())
             archive.writestr("manifest.json", json.dumps(manifest, indent=2))
     except BaseException:
         tmp.close()

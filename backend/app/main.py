@@ -4,7 +4,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from app.api import annotations, auth, configs, export, images, patches, processing, projects, slides, system
+from app.api import annotations, auth, configs, export, images, patches, processing, projects, slides, splits, system
 from app.api.access import authorize
 from app.core.config import get_settings
 from app.database.session import SessionLocal, init_db
@@ -46,7 +46,7 @@ def health() -> dict:
 # with access to what it touches (api/access.py).
 app.include_router(auth.router, prefix=settings.api_prefix)
 app.include_router(system.router, prefix=settings.api_prefix)  # administrators only
-for module in (projects, configs, slides, processing, patches, annotations, export, images):
+for module in (projects, configs, slides, processing, patches, annotations, export, images, splits):
     app.include_router(module.router, prefix=settings.api_prefix, dependencies=[Depends(authorize)])
 
 

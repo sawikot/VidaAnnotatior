@@ -48,6 +48,9 @@ class Slide(Base, TimestampMixin):
     # The patch grid shown and exported (services/patch_grid.py); None before any patches exist.
     active_grid_key: Mapped[str | None] = mapped_column(String(80), default=None)
 
+    # The dataset split this slide is in: train | val | test, or None (services/dataset_split.py).
+    split: Mapped[str | None] = mapped_column(String(10), default=None)
+
     @property
     def image_version(self) -> str:
         """Changes only when this slide row is replaced by another (ids are reused after a delete):

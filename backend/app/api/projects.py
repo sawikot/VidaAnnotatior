@@ -15,7 +15,7 @@ from app.models.patch import Patch
 from app.models.project import Project
 from app.models.slide import Slide
 from app.schemas.project import ProjectCreate, ProjectDetailOut, ProjectOut, ProjectStats, ProjectUpdate
-from app.services import project_storage, reader_cache
+from app.services import dataset_split, project_storage, reader_cache
 from app.services.deepzoom_service import purge_slide_tiles
 from app.services.config_versioning import compute_config_hash
 from app.services.slugify import slugify, unique_project_slug
@@ -33,6 +33,11 @@ def list_projects(db: Session = Depends(get_db), user: User = Depends(current_us
 
 @router.post("", response_model=ProjectDetailOut, status_code=201)
 def create_project(payload: ProjectCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Project:
+    try:
+        split = payload.split
+        split_config = dataset_split.make_config(split.mode, split.train, split.val, split.test) if split else None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     base_slug = slugify(payload.slug or payload.name)
     slug = unique_project_slug(db, base_slug)
 
@@ -44,6 +49,7 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db), user: 
         team=payload.team,
         status="active",
         project_type=payload.project_type,
+        split_config=split_config,
     )
     db.add(project)
     db.flush()

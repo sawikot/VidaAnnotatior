@@ -19,6 +19,7 @@ from app.database.session import get_db
 from app.models.patch import Patch
 from app.models.project import Project
 from app.models.slide import Slide
+from app.services import dataset_split
 from app.services.patch_grid import active_grid_filter
 from app.services.exporter import get_exporter
 from app.services.exporter.bundle import Bundle, ExportTooLarge, build_bundle, summarize
@@ -89,12 +90,13 @@ def _stream(bundle: Bundle, filename: str) -> StreamingResponse:
 
 
 def _bundle(
-    db: Session, slides: list[Slide], exporter, options: ExportOptions, *, combine: bool, label: str, skipped: list[dict] | None = None
+    db: Session, slides: list[Slide], exporter, options: ExportOptions, *, combine: bool, label: str, skipped: list[dict] | None = None,
+    split_of: dict[int, str] | None = None,
 ) -> Bundle:
     try:
         return build_bundle(
             db, slides, exporter, options, combine=combine, label=label,
-            max_images=get_settings().max_export_images, skipped_slides=skipped,
+            max_images=get_settings().max_export_images, skipped_slides=skipped, split_of=split_of,
         )
     except ExportTooLarge as exc:
         raise HTTPException(status_code=413, detail=str(exc)) from exc
@@ -290,6 +292,7 @@ def export_selection(
     masks: bool = Query(False),
     combine: bool | None = Query(None, description="one combined file per dataset-level format (COCO, CSV) instead of one per slide"),
     grid: str | None = Query(None, description="export in another patch grid, e.g. 512x512_s512x512_m20_t0.5"),
+    split: bool = Query(False, description="sort the download into train / val / test folders, by the project's split"),
     classify: dict = Depends(classification_params),
     project: Project = Depends(get_project_or_404),
     db: Session = Depends(get_db),
@@ -298,7 +301,8 @@ def export_selection(
 
     One format for one slide (or combined into one file) without images arrives as that file;
     anything else is a ZIP (annotation files under ``annotations/``, images under ``images/``, and a
-    ``manifest.json`` listing slides that were skipped and why)."""
+    ``manifest.json`` listing slides that were skipped and why). With ``split`` it is always a ZIP, each
+    set of the project's train / val / test split in a folder of its own."""
     exporters = _exporters(formats)
     options = _options(patches, content, image_format, masks, combine, grid, classify)
     chosen = _chosen_slides(project, _ids(slides, "slides"))
@@ -310,7 +314,15 @@ def export_selection(
     slug = _safe_stem(project.slug, "project")
     wants_combined = options.combine if options.combine is not None else (project.project_type == "image" or options.with_images)
 
-    if len(exporters) == 1 and not options.with_images:
+    split_of = None
+    if split:
+        if dataset_split.mode_of(project) == "off":
+            raise HTTPException(status_code=422, detail="This project has no train / val / test split yet; set one up first.")
+        if dataset_split.fill(project, list(project.slides)):  # slides added since the last random deal
+            db.commit()
+        split_of = {s.id: s.split if s.split in dataset_split.SPLITS else dataset_split.UNASSIGNED for s in ready}
+
+    if len(exporters) == 1 and not options.with_images and split_of is None:
         exporter = exporters[0]
         single = len(ready) == 1 and not skipped
         if single or (wants_combined and exporter.mergeable):
@@ -327,8 +339,8 @@ def export_selection(
             )
 
     what = exporters[0].format_id if len(exporters) == 1 else "export"
-    bundle = _bundle(db, ready, exporters, options, combine=bool(wants_combined), label=slug, skipped=skipped)
-    tail = "_with_images" if options.with_images else ""
+    bundle = _bundle(db, ready, exporters, options, combine=bool(wants_combined), label=slug, skipped=skipped, split_of=split_of)
+    tail = ("_with_images" if options.with_images else "") + ("_split" if split_of is not None else "")
     return _stream(bundle, f"{slug}_{what}{_suffix(options)}{tail}.zip")
 
 

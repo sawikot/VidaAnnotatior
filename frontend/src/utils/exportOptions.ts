@@ -22,6 +22,8 @@ export interface ExportOptions {
   unlabeled: UnlabeledMode;
   /** Patch classification: folders for labels that are not a class (Mixed, Artifact / Background). */
   otherLabels: boolean;
+  /** Export screen: sort the download into train / val / test folders, by the project's split. */
+  split: boolean;
 }
 
 export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
@@ -34,6 +36,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   minCoverage: 0.9,
   unlabeled: "skip",
   otherLabels: true,
+  split: false,
 };
 
 export const CLASSIFICATION_FORMAT = "patch_classification";
@@ -132,12 +135,13 @@ export function selectionQuery(o: ExportOptions, formats: string[], slides: numb
   const params = new URLSearchParams(optionsQuery(o, { project: true }).replace(/^\?/, ""));
   params.set("formats", formats.join(","));
   if (slides.length !== allSlides) params.set("slides", slides.join(","));
+  if (o.split) params.set("split", "true");
   return `?${params.toString()}`;
 }
 
 /** What the export screen's download arrives as -- the same rule the server applies. */
 export function selectionDownloadKind(projectType: string | undefined, formats: string[], o: ExportOptions, slideCount: number): "zip" | "file" {
-  if (o.content === "images" || formats.length !== 1) return "zip";
+  if (o.content === "images" || formats.length !== 1 || o.split) return "zip"; // a split is one folder per set
   if (slideCount === 1) return "file";
   const combine = o.combine ?? projectType === "image";
   return combine && COMBINABLE_FORMATS.has(formats[0]) ? "file" : "zip";

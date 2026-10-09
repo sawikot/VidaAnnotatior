@@ -63,11 +63,12 @@ def _add_missing_columns(bind=None) -> None:
     from sqlalchemy import inspect, text
 
     additions = {
-        "projects": [("project_type", "VARCHAR(20) NOT NULL DEFAULT 'wsi'")],
+        "projects": [("project_type", "VARCHAR(20) NOT NULL DEFAULT 'wsi'"), ("split_config", "JSON")],
         "slides": [
             ("tissue_source", "VARCHAR(20) NOT NULL DEFAULT 'auto'"),
             ("tissue_regions", "JSON"),
             ("active_grid_key", "VARCHAR(80)"),
+            ("split", "VARCHAR(10)"),
         ],
         "patches": [("grid_key", "VARCHAR(80)"), ("label_class_id", "INTEGER REFERENCES annotation_classes(id)"), ("reviewed_by_id", "INTEGER REFERENCES users(id) ON DELETE SET NULL")],
         "annotation_classes": [("code", "BIGINT")],

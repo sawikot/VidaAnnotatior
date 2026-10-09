@@ -6,6 +6,7 @@ import { Button, Card } from "../components/primitives";
 import { ConfigEditor } from "../features/projects/ConfigEditor";
 import { EditProjectModal } from "../features/projects/EditProjectModal";
 import { PatchSizesPanel } from "../features/grids/PatchSizesPanel";
+import { SplitPanel } from "../features/split/SplitPanel";
 import { getProject } from "../services/api";
 import { useContextStore } from "../stores/contextStore";
 import { useUiStore } from "../stores/uiStore";
@@ -77,6 +78,11 @@ export function ProjectSettingsPage() {
       )}
 
       {canManage && config && !isImage && <PatchSizesPanel projectId={pid} config={config} onConfigChanged={() => refresh()} />}
+
+      <div className="flex flex-col gap-space-sm">
+        <h2 className="font-headline-sm text-headline-sm">Train / validation / test split</h2>
+        <SplitPanel projectId={pid} isImageProject={isImage} />
+      </div>
 
       {canManage && config && (
         <Card className="p-space-md flex flex-col gap-space-md">

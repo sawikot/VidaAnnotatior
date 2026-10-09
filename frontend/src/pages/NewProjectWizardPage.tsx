@@ -5,8 +5,9 @@ import { Field, Toggle } from "../components/formControls";
 import { Button, Card } from "../components/primitives";
 import { CancerTypeSelect } from "../features/projects/CancerTypeSelect";
 import { MVP_TOOLS } from "../features/projects/constants";
+import { DEFAULT_SPLIT, SplitFields, sharesProblem } from "../features/split/SplitFields";
 import { createProject } from "../services/api";
-import type { ProjectType } from "../types/api";
+import type { ProjectType, SplitSettings } from "../types/api";
 import { useUiStore } from "../stores/uiStore";
 
 interface WizardClass {
@@ -32,6 +33,7 @@ const STEPS = [
   { anchor: "step-5", label: "Classes", wsiOnly: false },
   { anchor: "step-6", label: "Tools", wsiOnly: false },
   { anchor: "step-7", label: "Quality Control", wsiOnly: false },
+  { anchor: "step-8", label: "Dataset Split", wsiOnly: false },
 ];
 
 const PROJECT_TYPES: { id: ProjectType; icon: string; title: string; body: string }[] = [
@@ -106,6 +108,9 @@ export function NewProjectWizardPage() {
   const [requireAnnotation, setRequireAnnotation] = useState(false);
   const [reviewerMode, setReviewerMode] = useState(false);
 
+  // Step 8
+  const [split, setSplit] = useState<SplitSettings>(DEFAULT_SPLIT);
+
   const overlapPct = Math.round(((patchWidth - strideX) / patchWidth) * 100);
 
   function addClass() {
@@ -127,6 +132,11 @@ export function NewProjectWizardPage() {
       pushToast("At least one diagnostic class is required", "error");
       return;
     }
+    const splitProblem = sharesProblem(split);
+    if (splitProblem) {
+      pushToast(`Dataset split: ${splitProblem}`, "error");
+      return;
+    }
     setSubmitting(true);
     try {
       const project = await createProject({
@@ -135,6 +145,7 @@ export function NewProjectWizardPage() {
         organ: organ.trim() || null,
         description,
         team,
+        split: split.mode === "off" ? null : split,
         config: isImage
           ? {
               version_label: "v1.0",
@@ -455,6 +466,17 @@ export function NewProjectWizardPage() {
           </div>
         </Card>
       </div>
+
+      {/* Step 8 */}
+      <Card className="p-space-lg" id="step-8">
+        <SectionTitle n={stepNumber("step-8")} title="Train / Validation / Test Split" />
+        <p className="text-body-sm text-on-surface-variant mt-space-sm mb-space-md max-w-3xl">
+          Optional. {isImage ? "Each image" : "Each slide, with all of its patches,"} goes to one set, and exports can be sorted into train / val /
+          test folders. {split.mode === "manual" && `You assign the ${isImage ? "images" : "slides"} in the project settings or on the export screen once they are added. `}
+          You can set this up or change it later, also at export time.
+        </p>
+        <SplitFields value={split} onChange={setSplit} nouns={isImage ? "Images" : "Slides"} />
+      </Card>
 
       {/* Sticky footer */}
       <div className="fixed bottom-4 left-14 right-4 z-30 flex justify-center pointer-events-none">

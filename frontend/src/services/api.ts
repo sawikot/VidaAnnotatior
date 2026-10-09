@@ -2,6 +2,7 @@ import { optionsQuery, selectionQuery, summaryQuery, type ExportOptions, type Ex
 import type {
   ConfigUsage,
   ConfigVersion,
+  DatasetSplit,
   GeometryAnnotation,
   GeometryType,
   GridRemoval,
@@ -17,6 +18,8 @@ import type {
   ProjectDetail,
   Slide,
   SlideBatchImportResult,
+  SplitName,
+  SplitSettings,
   TissueRegion,
   TissueRegions,
   TissueSource,
@@ -439,6 +442,17 @@ export const importAnnotations = (
     method: "POST",
     body: JSON.stringify(payload),
   });
+
+// ---- Train / val / test split ----
+export interface SplitUpdate extends SplitSettings {
+  /** Random: deal every slide out again. */
+  reshuffle?: boolean;
+  /** Manual: slide id -> its set, or null for none. Slides not named keep theirs. */
+  assignments?: Record<number, SplitName | null>;
+}
+export const getSplit = (projectId: number) => request<DatasetSplit>(`/projects/${projectId}/split`);
+export const saveSplit = (projectId: number, payload: SplitUpdate) =>
+  request<DatasetSplit>(`/projects/${projectId}/split`, { method: "PUT", body: JSON.stringify(payload) });
 
 // ---- Export ----
 export const exportSlideUrl = (slideId: number, formatId: string, options?: ExportOptions) =>

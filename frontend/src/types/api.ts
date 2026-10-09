@@ -133,6 +133,21 @@ export interface ProjectStats {
   tissue_area_mm2: number;
 }
 
+export type SplitName = "train" | "val" | "test";
+export type SplitMode = "off" | "random" | "manual";
+/** How a project's slides are split into train / validation / test; the shares are percentages adding up to 100. */
+export interface SplitSettings {
+  mode: SplitMode;
+  train: number;
+  val: number;
+  test: number;
+}
+/** The split with where each slide (or image) is. */
+export interface DatasetSplit extends SplitSettings {
+  slides: { slide_id: number; filename: string; split: SplitName | null }[];
+  counts: Record<SplitName | "unassigned", number>;
+}
+
 export interface Project {
   id: number;
   slug: string;
@@ -142,6 +157,8 @@ export interface Project {
   team: string | null;
   status: ProjectStatus;
   project_type: ProjectType;
+  /** Null: the project has no train / val / test split. */
+  split_config: SplitSettings | null;
   active_config_version_id: number | null;
   created_at: string;
   updated_at: string;
@@ -179,6 +196,8 @@ export interface Slide {
   image_version: string;
   /** The patch grid shown and exported (see PatchGrid); null before any patches exist. */
   active_grid_key: string | null;
+  /** The dataset split this slide is in, if any. */
+  split?: SplitName | null;
   /** Progress in the active patch grid; only filled in by the project's slide list. */
   patch_count?: number | null;
   annotated_patch_count?: number | null;
