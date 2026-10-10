@@ -93,12 +93,15 @@ def test_a_run_goes_from_waiting_to_done_through_the_trainer(project):
     assert running["status"] == "running" and running["dataset"]["sets"]["val"]["slides"] == ["b.tif"]
     assert trainer(client, "/claim").json()["run"] is None  # nothing else is waiting
 
+    # Before the first epoch the trainer says what it is busy with; the first epoch's numbers end that.
+    trainer(client, f"/runs/{run['id']}/progress", {"stage": "Installing this model's packages: example==1.0."})
+    assert "Installing" in client.get(f"/api/training/runs/{run['id']}").json()["stage"]
     for epoch in (1, 2):
         answer = trainer(client, f"/runs/{run['id']}/progress", {"metrics": {"epoch": epoch, "epochs": 3, "train_loss": 1 / epoch}, "device": "CPU"})
         assert answer.json() == {"stop": False}
     assert trainer(client, f"/runs/{run['id']}/progress").json() == {"stop": False}  # a heartbeat adds nothing
     seen = client.get(f"/api/training/runs/{run['id']}").json()
-    assert (seen["epoch"], len(seen["metrics"]), seen["device"]) == (2, 2, "CPU")
+    assert (seen["epoch"], len(seen["metrics"]), seen["device"], seen["stage"]) == (2, 2, "CPU", None)
 
     output = run_dir(run["id"]) / "output"
     output.mkdir()
@@ -615,3 +618,60 @@ def test_what_is_annotated_on_the_whole_slide_is_not_suggested_again(program):
     assert drawn.status_code == 201, drawn.text
     found = ask(client, module, patch["id"], model_id).json()
     assert [s["score"] for s in found] == [0.95, 0.3]  # not the 0.9 one
+
+
+# ------------------------------------------------------------------- how the dataset is cut
+
+
+def test_dataset_options_choose_the_patches_a_run_learns_from(project):
+    client, pid, ids = project
+    split(client, pid, ids)
+    ready = lambda **params: client.get(f"/api/projects/{pid}/training/readiness", params=params)  # noqa: E731
+    train = lambda **params: ready(**params).json()["sets"]["train"]  # noqa: E731
+
+    # Six patches a slide, two of them annotated. Empty ones are added in proportion, as far as there are any.
+    assert (train()["images"], train()["empty"]) == (2, 0)
+    assert train(empty_percent=100)["empty"] == 2
+    assert train(empty_percent=50)["empty"] == 1
+    assert train(empty_percent=5000)["empty"] == 4
+
+    # Only confirmed-empty patches: none is reviewed yet, then one is.
+    none_yet = ready(empty_percent=100, empty_from="reviewed").json()
+    assert none_yet["sets"]["train"]["empty"] == 0 and any("No empty patches" in w for w in none_yet["warnings"])
+    bare = patches(client, ids[0])[4]
+    assert client.put(f"/api/patches/{bare['id']}", json={"status": "reviewed"}).status_code == 200
+    assert train(empty_percent=100, empty_from="reviewed")["empty"] == 1
+
+    # Only reviewed annotated patches: none of those is, so there is nothing to learn from.
+    assert ready(use="reviewed").json()["problems"]
+
+    # Only some classes: one the project's shapes do not have leaves nothing.
+    assert train(classes=str(ready().json()["classes"][0]["id"]))["objects"] == 2
+    assert ready(classes="999999").json()["problems"]
+
+    # Cut afresh at another size: each box lands in one smaller patch, and the whole slide offers more empty ones.
+    small = train(patch_size=256, empty_percent=100000)
+    assert small["images"] == 2 and small["empty"] > 4
+    assert train(patch_size=256, stride=128)["images"] > 2  # overlapping patches see the same box more than once
+    assert ready(patch_size=256, area="whole").json()["problems"] == []
+    assert ready(patch_size=8).status_code == 422
+    assert ready(patch_size=256, use="reviewed").status_code == 422  # a fresh cut has no Reviewed marks
+
+
+def test_a_run_keeps_its_dataset_options_and_is_cut_with_them(project):
+    client, pid, ids = project
+    split(client, pid, ids)
+    start = lambda dataset: client.post(f"/api/projects/{pid}/training/runs", json={"recipe_id": RECIPE, "dataset": dataset})  # noqa: E731
+    assert start({"patch_size": 256, "use": "reviewed"}).status_code == 422
+    assert start({"nonsense": 1}).status_code == 422
+
+    run = start({"empty_percent": 100}).json()
+    assert run["dataset_options"]["empty_percent"] == 100 and run["dataset_options"]["patch_size"] is None
+    job = trainer(client, "/claim").json()["run"]
+    folder = run_dir(job["id"]) / "dataset"
+    layout = json.loads((folder / "dataset.json").read_text())
+    doc = json.loads((folder / layout["sets"]["train"]["annotations"]).read_text())
+    assert len(doc["images"]) == 4 and len({a["image_id"] for a in doc["annotations"]}) == 2  # two with boxes, two empty
+    assert all((folder / layout["sets"]["train"]["images"] / image["file_name"]).is_file() for image in doc["images"])
+    kept = client.get(f"/api/training/runs/{run['id']}").json()["dataset"]
+    assert kept["sets"]["train"]["empty"] == 2 and kept["options"]["empty_percent"] == 100

@@ -131,7 +131,7 @@ class COCOExporter(Exporter):
         # least one exported shape; under the others it is every patch in scope, so empty ones
         # (or reviewed negatives) appear as images without annotations.
         if options.patch_scope == "annotated":
-            image_ids = sorted(used_patch_ids)
+            image_ids = sorted({*used_patch_ids, *data.empty_ids})  # ...and the empty ones asked for, as background
         else:
             image_ids = [p.id for p in data.patches if not p.excluded]
 

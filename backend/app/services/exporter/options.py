@@ -42,6 +42,20 @@ class ExportOptions:
     min_coverage: float = 0.9
     unlabeled: str = "skip"
     other_labels: bool = True
+    # ---- Used when a training dataset is cut (services/training_data.py); exports leave them alone.
+    # Of the patches in scope, keep only those marked Reviewed.
+    only_reviewed: bool = False
+    # Add patches with nothing in them, as examples of background: this many per annotated patch
+    # (0.5: one for every two), picked at random but the same every time for the same ``seed``.
+    # None: add none. ``empty_from``: "any" patch without annotations, or only "reviewed" ones --
+    # those a person has confirmed to be empty.
+    empty_ratio: float | None = None
+    empty_from: str = "any"
+    seed: int = 0
+    # Leave out annotations of any other class (None: every class).
+    class_ids: frozenset[int] | None = None
+    # Leave out the whole-patch shape a Patch Label makes: it is a label, not an object in the patch.
+    skip_patch_fills: bool = False
     # patch id -> file name inside images/; filled in by the bundle builder so that an
     # annotation file (COCO) refers to exactly the names that were written into the ZIP.
     image_names: dict[int, str] = field(default_factory=dict, compare=False)

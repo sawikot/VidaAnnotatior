@@ -113,11 +113,14 @@ def copy_code(recipe: Path, target: Path) -> None:
     shutil.copytree(recipe, target, ignore=shutil.ignore_patterns("__pycache__", ".*"))
 
 
-def python_for(code: Path) -> str:
+def python_for(code: Path, tell=None, out=None) -> str:
     """The Python to run this code with: the trainer's own, or -- when the recipe lists extra packages in
     requirements.txt -- an environment that has them on top of the trainer's. Environments are made
     once, named after what they hold (so recipes wanting the same packages share one), and kept in
-    <training folder>/envs. Raises RuntimeError with pip's own words when a package cannot be installed."""
+    <training folder>/envs. Raises RuntimeError with pip's own words when a package cannot be installed.
+
+    Installing can take minutes, so when it has to be done ``tell`` is called with what is going on (for
+    whoever is watching the run) and ``out`` with each line pip prints (for the run's log)."""
     file = code / "requirements.txt"
     lines = file.read_text(encoding="utf-8", errors="replace").splitlines() if file.is_file() else []
     wanted = sorted(line.strip() for line in lines if line.strip() and not line.strip().startswith("#"))
@@ -130,6 +133,10 @@ def python_for(code: Path) -> str:
         return str(python)
 
     say(f"installing packages: {', '.join(wanted)}")
+    if tell:
+        tell(f"Installing this model's packages: {', '.join(wanted)}. This happens once, needs internet, and can take several minutes.")
+    if out:
+        out(f"Installing packages (first time only): {', '.join(wanted)}\n")
     shutil.rmtree(env, ignore_errors=True)
     env.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -140,16 +147,31 @@ def python_for(code: Path) -> str:
         Path(target, "_trainer_packages.pth").write_text("\n".join(p for p in site.getsitepackages() if Path(p).is_dir()) + "\n", encoding="utf-8")
         requirements = env / "requirements.txt"
         requirements.write_text("\n".join(wanted) + "\n", encoding="utf-8")
-        done = subprocess.run([str(python), "-m", "pip", "install", "--no-input", "--disable-pip-version-check", "-r", str(requirements)], capture_output=True, text=True, timeout=PACKAGES_S)
+        pip = subprocess.Popen(
+            [str(python), "-m", "pip", "install", "--no-input", "--disable-pip-version-check", "--progress-bar", "off", "-r", str(requirements)],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",
+        )
+        stop = threading.Timer(PACKAGES_S, pip.kill)  # a download that never ends must not hold the trainer for ever
+        stop.start()
+        printed: list[str] = []
+        for line in pip.stdout:  # as it goes: what is being downloaded shows in the run's log
+            printed.append(line)
+            if out:
+                out(line)
+        returncode = pip.wait()
+        timed_out = not stop.is_alive()
+        stop.cancel()
+        if timed_out:
+            raise subprocess.TimeoutExpired("pip", PACKAGES_S)
     except subprocess.TimeoutExpired:
         shutil.rmtree(env, ignore_errors=True)
         raise RuntimeError("Installing the recipe's packages took too long.") from None
     except (subprocess.CalledProcessError, OSError) as exc:
         shutil.rmtree(env, ignore_errors=True)
         raise RuntimeError(f"The environment for the recipe's packages could not be made: {getattr(exc, 'stderr', '') or exc}") from None
-    if done.returncode != 0:
+    if returncode != 0:
         shutil.rmtree(env, ignore_errors=True)
-        tail = "\n".join((done.stdout + done.stderr).strip().splitlines()[-12:])
+        tail = "\n".join("".join(printed).strip().splitlines()[-12:])
         raise RuntimeError(f"The recipe's packages could not be installed (requirements.txt):\n{tail}")
     ready.write_text(sys.version, encoding="utf-8")
     return str(python)
@@ -302,16 +324,28 @@ def run_recipe(job: dict, hw: dict) -> None:
     # The run keeps the code exactly as it was run, whatever happens to the recipe later.
     code = folder / "code"
     copy_code(recipe_folder(job), code)
+    def stage(text: str) -> None:
+        """Tell whoever is watching what is going on before the first epoch."""
+        try:
+            call(f"/runs/{run_id}/progress", {"stage": text})
+        except (urllib.error.URLError, OSError):
+            pass  # only a courtesy: the run goes on
+
+    def to_log(line: str) -> None:
+        with (output / "train.log").open("a", encoding="utf-8") as log:
+            log.write(line)
+
     try:
-        python = python_for(code)
+        python = python_for(code, tell=stage, out=to_log)
     except RuntimeError as exc:  # a package could not be installed: say so in the run's own log
-        (output / "train.log").write_text(f"{exc}\n", encoding="utf-8")
+        to_log(f"{exc}\n")
         call(f"/runs/{run_id}/finish", {"status": "failed", "error": str(exc)})
         return
     settings_file = folder / "settings.json"
     settings_file.write_text(json.dumps(job["settings"], indent=2), encoding="utf-8")
 
     say(f"run {run_id}: {job['recipe_id']} {job['settings']}")
+    stage("Starting: loading the network. The first time a network is used, its pretrained weights are downloaded, which can take a few minutes.")
     process = subprocess.Popen(
         [python, "-u", str(code / "train.py"), "--dataset", str(folder / "dataset"), "--output", str(output), "--settings", str(settings_file)],
         cwd=code, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",

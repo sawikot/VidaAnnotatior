@@ -12,7 +12,7 @@ export function ImportAnnotationsButton({ slide, onImported }: { slide: Slide; o
         variant="secondary"
         icon="upload_file"
         onClick={() => setOpen(true)}
-        disabled={slide.status === "imported" || slide.status === "tissue_detected"}
+        disabled={slide.status === "error"}
         title="Import annotations from WSI JSON, GeoJSON (QuPath), COCO, ASAP/Aperio XML or CSV"
       >
         Import Annotations

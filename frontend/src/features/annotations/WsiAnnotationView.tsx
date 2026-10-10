@@ -46,6 +46,8 @@ interface Props {
   onOpenPatch: (patchId: number, annotationId: number) => void;
   /** Open a patch to go through a model's suggestions in it. */
   onReviewPatch: (patchId: number) => void;
+  /** The slide has no patches yet: choosing the patch view leads to where they are generated. */
+  noPatches?: boolean;
 }
 
 type Fields = Partial<Pick<GeometryAnnotation, "type" | "class_id" | "unsure" | "flagged" | "notes" | "coordinates_level0">>;
@@ -60,7 +62,7 @@ function isTyping(target: EventTarget | null): boolean {
  * space -- and stored as they are, belonging to no patch. Annotations drawn in patches appear faintly
  * for context; the patch view shows these the same way, projected into each patch.
  */
-export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnnotations, focus, onModeChange, onOpenPatch, onReviewPatch }: Props) {
+export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnnotations, focus, onModeChange, onOpenPatch, onReviewPatch, noPatches = false }: Props) {
   const pushToast = useUiStore((s) => s.pushToast);
   const annotatorName = useAuthStore((s) => s.user?.name ?? "");
   const tool = useAnnotationStore((s) => s.tool);
@@ -375,7 +377,8 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
       {/* Strip */}
       <div className="bg-[#0b1329] border-b border-[#1e293b] px-space-md py-1.5 flex items-center gap-space-md text-body-sm flex-wrap">
         <span className="font-headline-sm">{slide.filename}</span>
-        <AnnotationModeSwitch mode="wsi" onChange={onModeChange} />
+        <AnnotationModeSwitch mode="wsi" onChange={onModeChange} patchTitle={noPatches ? "No patches yet: opens Slide Processing to generate them" : undefined} />
+        {noPatches && <span className="text-label-sm text-amber-300">No patches yet · whole-slide annotation only</span>}
         <span className="font-mono text-label-sm text-cyan-300">
           {width.toLocaleString()} × {height.toLocaleString()} px · Level-0
         </span>

@@ -337,7 +337,12 @@ function SlideRow({ slide, projectId, onDelete }: { slide: Slide; projectId: num
       <td className="px-space-md py-space-sm">
         <div className="flex items-center gap-0.5">
           {canManage && <IconButton icon="tune" onClick={() => open("processing")} title="Slide processing: tissue and patches" />}
-          <IconButton icon="edit" onClick={() => open("workspace")} disabled={!canAnnotate} title={canAnnotate ? "Annotation workspace" : "Generate patches first"} />
+          <IconButton
+            icon="edit"
+            onClick={() => open("workspace")}
+            disabled={slide.status === "error"}
+            title={canAnnotate ? "Annotation workspace" : "Annotation workspace (whole slide only until patches are generated)"}
+          />
           <IconButton icon="file_download" onClick={() => open("export")} disabled={!canAnnotate} title={canAnnotate ? "Export this slide" : "Generate patches first"} />
           {canManage && <IconButton icon="delete" onClick={onDelete} title="Delete this slide and all its data" className="hover:!text-error" />}
         </div>

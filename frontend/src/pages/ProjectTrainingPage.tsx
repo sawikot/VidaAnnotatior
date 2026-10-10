@@ -4,6 +4,7 @@ import { MaterialIcon } from "../components/MaterialIcon";
 import { Button, Card } from "../components/primitives";
 import { ModelsSection } from "../features/models/ModelsSection";
 import { CompareRuns, MAX_COMPARED, METRIC_NAMES } from "../features/training/CompareRuns";
+import { DEFAULT_DATASET, DatasetOptionsPanel, describeDataset } from "../features/training/DatasetOptionsPanel";
 import { MetricChart, SERIES_COLORS, type Series } from "../features/training/MetricChart";
 import { SettingField, defaultSettings, type SettingValue } from "../features/training/SettingField";
 import {
@@ -23,7 +24,7 @@ import {
 } from "../services/api";
 import { useCan } from "../stores/authStore";
 import { useUiStore } from "../stores/uiStore";
-import type { ProjectDetail, Recipe, TrainerStatus, TrainingReadiness, TrainingRun } from "../types/api";
+import type { DatasetOptions, ProjectDetail, Recipe, TrainerStatus, TrainingReadiness, TrainingRun } from "../types/api";
 
 const ACTIVE = ["queued", "preparing", "running"];
 const STATUS: Record<string, { label: string; tone: string }> = {
@@ -84,6 +85,8 @@ export function ProjectTrainingPage() {
   const [open, setOpen] = useState<TrainingRun | null>(null);
   const [log, setLog] = useState("");
   const [compared, setCompared] = useState<number[]>([]); // finished runs ticked to compare
+  const [dataset, setDataset] = useState<DatasetOptions>(DEFAULT_DATASET);
+  const [counting, setCounting] = useState(false);
 
   const isImage = project?.project_type === "image";
   const recipe = recipes?.find((r) => r.id === recipeId) ?? null;
@@ -102,15 +105,38 @@ export function ProjectTrainingPage() {
 
   // What there is to learn from depends on the kind of model: drawn shapes, or one class per patch.
   const task = recipe?.task ?? null;
+  // A slide project always trains on patches cut for the training: start from the project's own size.
+  const projectPatchSize = project && project.project_type !== "image" ? (project.active_config?.patch_width ?? 512) : null;
   useEffect(() => {
-    if (!task) return;
+    if (projectPatchSize !== null) setDataset((d) => (d.patch_size === null ? { ...d, patch_size: projectPatchSize } : d));
+  }, [projectPatchSize]);
+
+  // It also depends on how the dataset is cut; counted again a moment after the options settle.
+  const datasetKey = JSON.stringify(dataset);
+  const datasetProblem =
+    dataset.patch_size !== null && !(dataset.patch_size >= 32 && dataset.patch_size <= 8192)
+      ? "The patch size must be between 32 and 8192 px."
+      : dataset.stride !== null && !(dataset.stride >= 8 && dataset.stride <= 8192)
+        ? "The stride must be between 8 and 8192 px."
+        : !(dataset.empty_percent >= 0)
+          ? "Say how many empty patches to add."
+          : null;
+  useEffect(() => {
+    if (!task || datasetProblem || !project || (projectPatchSize !== null && dataset.patch_size === null)) return;
     let stale = false;
-    setReadiness(null);
-    getTrainingReadiness(pid, task).then((r) => !stale && setReadiness(r)).catch(() => undefined);
+    setCounting(true);
+    const timer = window.setTimeout(() => {
+      getTrainingReadiness(pid, task, dataset)
+        .then((r) => !stale && setReadiness(r))
+        .catch((e) => !stale && pushToast(e instanceof ApiError ? e.message : "Could not count the dataset", "error"))
+        .finally(() => !stale && setCounting(false));
+    }, 500);
     return () => {
       stale = true;
+      window.clearTimeout(timer);
     };
-  }, [pid, task]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pid, task, datasetKey, projectPatchSize]);
 
   // A newly picked recipe starts from its own defaults.
   useEffect(() => {
@@ -148,7 +174,7 @@ export function ProjectTrainingPage() {
     if (!recipe) return;
     setStarting(true);
     try {
-      const run = await startTrainingRun(pid, recipe.id, values);
+      const run = await startTrainingRun(pid, recipe.id, values, dataset);
       setOpen(null);
       setLog("");
       setOpenId(run.id);
@@ -208,14 +234,32 @@ export function ProjectTrainingPage() {
         </div>
       </div>
 
-      {/* 1. Data */}
+      {/* 1. Dataset */}
       <section>
-        <h2 className="font-headline-md text-headline-md mb-space-md">1. Data</h2>
+        <h2 className="font-headline-md text-headline-md mb-space-md">1. Dataset</h2>
         <Card className="p-space-lg flex flex-col gap-space-md">
+          <DatasetOptionsPanel
+            value={dataset}
+            onChange={setDataset}
+            task={task ?? "detection"}
+            isImageProject={isImage}
+            projectClasses={readiness?.project_classes ?? []}
+            disabled={!canManage}
+          />
+          {datasetProblem && (
+            <p className="text-body-sm text-error" role="alert">
+              {datasetProblem}
+            </p>
+          )}
+          <div className="h-px bg-outline-variant/40" />
           {!readiness ? (
             <span className="text-body-sm text-on-surface-variant">Counting annotations...</span>
           ) : (
             <>
+              <div className="flex items-center gap-space-sm text-label-md text-on-surface-variant">
+                What this gives
+                {counting && <span className="text-label-sm">· counting...</span>}
+              </div>
               <div className="overflow-auto">
                 <table className="w-full text-body-sm">
                   <thead className="text-label-sm text-on-surface-variant">
@@ -223,6 +267,7 @@ export function ProjectTrainingPage() {
                       <th className="text-left py-1 font-medium">Set</th>
                       <th className="text-right py-1 pl-space-md font-medium whitespace-nowrap">{isImage ? "Images" : "Slides"}</th>
                       {!isImage && <th className="text-right py-1 pl-space-md font-medium whitespace-nowrap">Annotated patches</th>}
+                      {readiness.task !== "classification" && <th className="text-right py-1 pl-space-md font-medium whitespace-nowrap">Empty {isImage ? "images" : "patches"}</th>}
                       <th className="text-right py-1 pl-space-md font-medium whitespace-nowrap">{readiness.task === "classification" ? "With a class" : "Objects"}</th>
                       {readiness.classes.map((c) => (
                         <th key={c.id} className="text-right py-1 pl-space-md font-medium whitespace-nowrap" title={c.name}>
@@ -237,6 +282,7 @@ export function ProjectTrainingPage() {
                         <td className="py-1.5">{SET_LABELS[name] ?? name}</td>
                         <td className="py-1.5 pl-space-md text-right font-mono">{set.slides}</td>
                         {!isImage && <td className="py-1.5 pl-space-md text-right font-mono">{set.images.toLocaleString()}</td>}
+                        {readiness.task !== "classification" && <td className="py-1.5 pl-space-md text-right font-mono">{(set.empty ?? 0).toLocaleString()}</td>}
                         <td className="py-1.5 pl-space-md text-right font-mono">{set.objects.toLocaleString()}</td>
                         {readiness.classes.map((c) => (
                           <td key={c.id} className="py-1.5 pl-space-md text-right font-mono">
@@ -352,7 +398,7 @@ export function ProjectTrainingPage() {
                     variant="primary"
                     icon="model_training"
                     onClick={() => void start()}
-                    disabled={!canManage || starting || !readiness || problems.length > 0}
+                    disabled={!canManage || starting || counting || !readiness || problems.length > 0 || !!datasetProblem}
                     title={!canManage ? "Only project managers and administrators can start training" : (problems[0] ?? undefined)}
                   >
                     {starting ? "Starting..." : "Start training"}
@@ -462,14 +508,30 @@ export function ProjectTrainingPage() {
                 </div>
 
                 {open.status === "queued" && (
-                  <p className="text-body-sm text-on-surface-variant">
-                    {trainer?.online ? "Waiting for the trainer to take it." : "Waiting: the trainer is not running."}
-                  </p>
+                  trainer?.online ? (
+                    <p className="text-body-sm text-on-surface-variant">Waiting for the trainer to take it. It works on one run at a time.</p>
+                  ) : (
+                    <div className="rounded bg-amber-500/10 p-space-sm text-body-sm flex items-start gap-1.5" role="status">
+                      <MaterialIcon name="warning" className="!text-[18px] text-amber-600 shrink-0" />
+                      <span>
+                        This run is waiting because the trainer is not running on the server, so nothing will happen until it is. Installing a new
+                        version of the app does not install the trainer. On the server, in the folder the app was installed from, an administrator
+                        runs <span className="font-mono">bash install.sh</span> (Windows: <span className="font-mono">install.ps1</span>) and answers yes
+                        to model training.
+                      </span>
+                    </div>
+                  )
                 )}
                 {open.status === "preparing" && (
                   <p className="text-body-sm text-on-surface-variant">Cutting the patch images for the dataset. Large projects take a few minutes.</p>
                 )}
-                {open.status === "running" && open.epochs > 0 && (
+                {open.status === "running" && open.stage && (
+                  <div className="rounded bg-sky-100 text-sky-900 p-space-sm text-body-sm flex items-start gap-1.5" role="status">
+                    <MaterialIcon name="hourglass_top" className="!text-[18px] shrink-0" />
+                    <span>{open.stage} The log below shows what it is doing.</span>
+                  </div>
+                )}
+                {open.status === "running" && !open.stage && open.epochs > 0 && (
                   <div>
                     <div className="text-body-sm text-on-surface-variant mb-1">
                       Epoch {open.epoch} of {open.epochs}
@@ -513,6 +575,11 @@ export function ProjectTrainingPage() {
                             {set.images.toLocaleString()} {isImage ? "" : "patches · "}
                             {set.objects.toLocaleString()} objects
                           </span>
+                        </div>
+                      ))}
+                      {describeDataset(open.dataset_options, (ids) => ids.map((id) => open.dataset?.classes.find((c) => c.id === id)?.name ?? `#${id}`).join(", ")).map((line) => (
+                        <div key={line} className="text-on-surface-variant">
+                          {line}
                         </div>
                       ))}
                     </div>

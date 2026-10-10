@@ -82,9 +82,11 @@ class RunOut(BaseModel):
     recipe_name: str
     task: str
     settings: dict
+    dataset_options: dict | None = None
     status: str
     stop_requested: bool
     error: str | None
+    stage: str | None = None
     dataset: dict | None
     epoch: int
     epochs: int
@@ -101,7 +103,7 @@ class RunOut(BaseModel):
 def _out(run: TrainingRun, with_metrics: bool = False) -> RunOut:
     return RunOut(
         id=run.id, project_id=run.project_id, recipe_id=run.recipe_id, recipe_name=run.recipe_name, task=run.task,
-        settings=run.settings or {}, status=run.status, stop_requested=run.stop_requested, error=run.error,
+        settings=run.settings or {}, dataset_options=run.dataset_options, status=run.status, stop_requested=run.stop_requested, error=run.error, stage=run.stage if run.status == "running" else None,
         dataset=run.dataset, epoch=run.epoch, epochs=run.epochs, result=run.result, device=run.device,
         created_by=run.created_by, created_at=run.created_at, started_at=run.started_at, finished_at=run.finished_at,
         has_model=(run_dir(run.id) / "output" / "model.pt").is_file(),
@@ -130,10 +132,29 @@ def trainer_status() -> dict:
 
 
 @router.get("/projects/{project_id}/training/readiness")
-def get_readiness(task: str = Query("detection"), project: Project = Depends(get_project_or_404), db: Session = Depends(get_db)) -> dict:
+def get_readiness(
+    task: str = Query("detection"),
+    patch_size: int | None = Query(None, description="cut the slides afresh at this patch size (px); left out: the patches as annotated"),
+    stride: int | None = Query(None, description="with patch_size: how far apart patches start (default: the size)"),
+    area: str = Query("tissue", description="with patch_size: tissue | whole (the whole slide)"),
+    use: str = Query("annotated", description="annotated | reviewed (only patches marked Reviewed)"),
+    empty_percent: float = Query(0, description="empty patches to add for every 100 annotated ones"),
+    empty_from: str = Query("any", description="any | reviewed (only empty patches marked Reviewed)"),
+    classes: str | None = Query(None, description="the class ids to learn, comma-separated (default: all)"),
+    project: Project = Depends(get_project_or_404),
+    db: Session = Depends(get_db),
+) -> dict:
+    """What a run with these dataset options would learn from, and what stands in the way of starting it."""
     if task not in recipes.TASKS:
         raise HTTPException(status_code=422, detail=f"task must be one of: {', '.join(recipes.TASKS)}")
-    return training_data.readiness(db, project, task)
+    try:
+        class_ids = [int(c) for c in classes.split(",") if c.strip()] if classes is not None else None
+        opts = training_data.parse_options(
+            {"patch_size": patch_size, "stride": stride, "area": area, "use": use, "empty_percent": empty_percent, "empty_from": empty_from, "class_ids": class_ids}, project
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return training_data.readiness(db, project, task, opts)
 
 
 @router.get("/projects/{project_id}/training/runs", response_model=list[RunOut])
@@ -145,6 +166,8 @@ def list_runs(project: Project = Depends(get_project_or_404), db: Session = Depe
 class RunCreate(BaseModel):
     recipe_id: str
     settings: dict = {}
+    # How the dataset is cut and which patches go into it (services/training_data.DatasetOptions).
+    dataset: dict = {}
 
 
 @router.post("/projects/{project_id}/training/runs", response_model=RunOut, status_code=201)
@@ -164,12 +187,17 @@ def start_run(
         settings = recipes.resolve_settings(recipe, payload.settings)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    problems = training_data.readiness(db, project, recipe["task"])["problems"]
+    try:
+        opts = training_data.parse_options(payload.dataset, project)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    problems = training_data.readiness(db, project, recipe["task"], opts)["problems"]
     if problems:
         raise HTTPException(status_code=422, detail=problems[0])
 
     run = TrainingRun(
         project_id=project.id, recipe_id=recipe["id"], recipe_name=recipe["name"], task=recipe["task"], settings=settings,
+        dataset_options=opts.as_dict(),
         status="queued", epochs=int(settings.get("epochs", 0) or 0), created_by=user.name, created_by_id=user.id,
     )
     db.add(run)
@@ -272,7 +300,9 @@ def trainer_claim(payload: Hello, db: Session = Depends(get_db)) -> dict:
     try:
         if recipe is None:
             raise ValueError("The model recipe was deleted before the run started.")
-        run.dataset = training_data.build_dataset(db, db.get(Project, run.project_id), folder, run.task)
+        project = db.get(Project, run.project_id)
+        opts = training_data.parse_options(run.dataset_options, project)
+        run.dataset = training_data.build_dataset(db, project, folder, run.task, opts, seed=run.id)
     except Exception as exc:  # noqa: BLE001 - whatever went wrong, the run must not stay "preparing"
         if not isinstance(exc, ValueError):
             log.exception("Cutting the dataset of training run %s failed", run.id)
@@ -296,6 +326,7 @@ def trainer_claim(payload: Hello, db: Session = Depends(get_db)) -> dict:
 class Progress(BaseModel):
     metrics: dict | None = None  # one finished epoch, as the recipe reported it
     device: str | None = None
+    stage: str | None = None  # what is going on before the first epoch (installing packages, loading the network)
 
 
 @trainer_router.post("/runs/{run_id}/progress", dependencies=[Depends(require_trainer)])
@@ -305,7 +336,10 @@ def trainer_progress(payload: Progress, run: TrainingRun = Depends(get_run_or_40
     _seen(None)
     if payload.device:
         run.device = payload.device
+    if payload.stage is not None:
+        run.stage = payload.stage[:400] or None
     if payload.metrics:
+        run.stage = None  # the first epoch is in: it is training
         run.metrics = [*(run.metrics or []), payload.metrics]  # a new list, so the change is saved
         run.epoch = int(payload.metrics.get("epoch", run.epoch) or 0)
         run.epochs = int(payload.metrics.get("epochs", run.epochs) or 0)

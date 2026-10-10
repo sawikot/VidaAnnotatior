@@ -15,6 +15,8 @@ included:
 from __future__ import annotations
 
 import json
+import math
+import random
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
@@ -51,6 +53,8 @@ class ExportData:
     slide_annotations: list[GeometryAnnotation] = field(default_factory=list)
     # Per patch, the part of each slide-level annotation lying inside it, in that patch's pixels.
     projections: dict[int, list[Projected]] = field(default_factory=dict)
+    # Patches with nothing in them that were added on request (ExportOptions.empty_ratio).
+    empty_ids: set[int] = field(default_factory=set)
 
     _own: dict[int, list[GeometryAnnotation]] | None = field(default=None, init=False, repr=False)
 
@@ -165,6 +169,10 @@ def load_export_data(db: Session, slide: Slide, options: ExportOptions | None = 
     if config is not None:
         ann_query = ann_query.filter(GeometryAnnotation.config_version_id == config.id)
     stored = ann_query.order_by(GeometryAnnotation.id.asc()).all()
+    if options.class_ids is not None:
+        stored = [a for a in stored if a.class_id in options.class_ids]
+    if options.skip_patch_fills:
+        stored = [a for a in stored if not a.whole_patch]
 
     if options.grid is not None:
         grid: list = _custom_grid(slide, options.grid)
@@ -194,6 +202,20 @@ def load_export_data(db: Session, slide: Slide, options: ExportOptions | None = 
             p.status = "annotated" if counts.get(p.id, 0) else "unannotated"
 
     patches = [p for p in grid if _in_scope(p, counts.get(p.id, 0), options.patch_scope)]
+    if options.only_reviewed:
+        patches = [p for p in patches if p.status == "reviewed"]
+    empty_ids: set[int] = set()
+    if options.empty_ratio is not None:
+        have = {p.id for p in patches}
+        candidates = [
+            p for p in grid
+            if p.id not in have and not p.excluded and not counts.get(p.id, 0) and not getattr(p, "patch_label", None)
+            and (options.empty_from == "any" or p.status == "reviewed")
+        ]
+        wanted = min(len(candidates), math.ceil(options.empty_ratio * len(patches)))
+        chosen = random.Random(f"{options.seed}:{slide.id}").sample(candidates, wanted)
+        empty_ids = {p.id for p in chosen}
+        patches = sorted([*patches, *chosen], key=lambda p: (p.patch_index, p.id))
     in_scope_ids = {p.id for p in patches if not p.excluded}
     annotations = [a for a in all_annotations if a.patch_id in in_scope_ids]
 
@@ -206,7 +228,7 @@ def load_export_data(db: Session, slide: Slide, options: ExportOptions | None = 
     if missing:
         classes.update({c.id: c for c in db.query(AnnotationClass).filter(AnnotationClass.id.in_(missing))})
 
-    return ExportData(slide, config, patches, annotations, all_annotations, lookup, classes, grid, counts, slide_annotations, projections)
+    return ExportData(slide, config, patches, annotations, all_annotations, lookup, classes, grid, counts, slide_annotations, projections, empty_ids)
 
 
 def dumps_with_line_items(doc: dict[str, Any], big_keys: tuple[str, ...]) -> str:

@@ -22,9 +22,18 @@ export function rememberMode(mode: AnnotationMode): void {
 }
 
 /** Patch | WSI: annotate one patch at a time, or draw directly on the whole slide. */
-export function AnnotationModeSwitch({ mode, onChange }: { mode: AnnotationMode; onChange: (mode: AnnotationMode) => void }) {
+export function AnnotationModeSwitch({
+  mode,
+  onChange,
+  patchTitle,
+}: {
+  mode: AnnotationMode;
+  onChange: (mode: AnnotationMode) => void;
+  /** What choosing Patch does when it is not the usual (e.g. the slide has no patches yet). */
+  patchTitle?: string;
+}) {
   const options: { id: AnnotationMode; label: string; icon: string; title: string }[] = [
-    { id: "patch", label: "Patch", icon: "grid_view", title: "Annotate patch by patch, at full detail" },
+    { id: "patch", label: "Patch", icon: "grid_view", title: patchTitle ?? "Annotate patch by patch, at full detail" },
     { id: "wsi", label: "WSI", icon: "map", title: "Annotate directly on the whole slide (Level-0 coordinates)" },
   ];
   return (

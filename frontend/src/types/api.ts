@@ -182,11 +182,30 @@ export interface TrainerStatus {
   online: boolean;
   hardware: { device: string; gpus: { index: number; name: string; memory_mb: number }[]; problem?: string } | null;
 }
+/** How a training run's dataset is cut from the slides and which patches go into it. */
+export interface DatasetOptions {
+  /** Cut the slides afresh at this patch size (px); null: the patches as annotated. */
+  patch_size: number | null;
+  /** With a patch size: how far apart patches start; null: the size (no overlap). */
+  stride: number | null;
+  /** With a patch size: from the tissue only, or the whole slide. */
+  area: "tissue" | "whole";
+  /** Every annotated patch, or only those marked Reviewed. */
+  use: "annotated" | "reviewed";
+  /** Empty patches added for every 100 annotated ones (0: none). */
+  empty_percent: number;
+  empty_from: "any" | "reviewed";
+  /** The classes to learn; null: all of them. */
+  class_ids: number[] | null;
+}
 export interface TrainingReadiness {
   task: string;
   split_mode: SplitMode;
+  /** The classes that have examples with these options. */
   classes: { id: number; name: string }[];
-  sets: Record<string, { slides: number; images: number; objects: number; per_class: Record<string, number> }>;
+  /** Every class of the project, to choose from. */
+  project_classes: { id: number; name: string }[];
+  sets: Record<string, { slides: number; images: number; empty: number; objects: number; per_class: Record<string, number> }>;
   /** What stands in the way of starting; empty when ready. */
   problems: string[];
   warnings: string[];
@@ -207,9 +226,12 @@ export interface TrainingRun {
   recipe_name: string;
   task: string;
   settings: Record<string, string | number | boolean>;
+  dataset_options?: DatasetOptions | null;
   status: "queued" | "preparing" | "running" | "done" | "failed" | "stopped";
   stop_requested: boolean;
   error: string | null;
+  /** What the trainer is doing before the first epoch (installing packages, loading the network), in words. */
+  stage?: string | null;
   dataset: { classes: { id: number; name: string }[]; sets: Record<string, { slides: string[]; images: number; objects: number }> } | null;
   epoch: number;
   epochs: number;

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useAuthStore } from "../stores/authStore";
+import { useAuthStore, useCan } from "../stores/authStore";
 import { OTHER_PATCH_LABELS } from "../features/patches/labels";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { MaterialIcon } from "../components/MaterialIcon";
@@ -62,6 +62,7 @@ export function MainWorkspacePage() {
   const navigate = useNavigate();
   const pushToast = useUiStore((s) => s.pushToast);
   const annotatorName = useAuthStore((s) => s.user?.name ?? "");
+  const canManage = useCan().manage;
   const setActiveSlide = useContextStore((s) => s.setActiveSlide);
 
   const tool = useAnnotationStore((s) => s.tool);
@@ -124,7 +125,9 @@ export function MainWorkspacePage() {
   const [slideAnnotations, setSlideAnnotations] = useState<GeometryAnnotation[]>([]); // drawn on the whole slide
   const [wsiFocus, setWsiFocus] = useState<WsiFocus | null>(null);
   const [noPatches, setNoPatches] = useState(false);
-  const wsiActive = !isImage && mode === "wsi"; // the whole-slide view has taken over the page
+  // The whole-slide view has taken over the page: it was chosen, or the slide has no patches yet and
+  // so can only be annotated as a whole (the remembered choice is left as it was).
+  const wsiActive = !isImage && (mode === "wsi" || noPatches);
   const pendingSelect = useRef<number | null>(null); // an annotation to select once its patch has loaded
 
   function setMode(next: AnnotationMode) {
@@ -138,6 +141,16 @@ export function MainWorkspacePage() {
       params.set("mode", next);
       return params;
     });
+  }
+
+  /** Patch view asked for on a slide that has no patches: off to where they are made. */
+  function toPatchGeneration() {
+    if (!canManage) {
+      pushToast("This slide has no patches yet. Ask a project manager to generate them; until then it is annotated as a whole.", "info");
+      return;
+    }
+    pushToast("This slide has no patches yet. Generate them here, then open the workspace again.", "info");
+    navigate(`/projects/${pid}/slides/${sid}/processing`);
   }
 
   function showPatchOnSlide() {
@@ -848,7 +861,8 @@ export function MainWorkspacePage() {
         slideAnnotations={slideAnnotations}
         setSlideAnnotations={setSlideAnnotations}
         focus={wsiFocus}
-        onModeChange={(next) => (next === "patch" ? setMode("patch") : undefined)}
+        noPatches={noPatches}
+        onModeChange={(next) => (next !== "patch" ? undefined : noPatches ? toPatchGeneration() : setMode("patch"))}
         onOpenPatch={openPatchFromSlide}
         onReviewPatch={(id) => void openPatchById(id, true)}
       />
@@ -856,18 +870,9 @@ export function MainWorkspacePage() {
   }
 
   if (!patch || !patchOrigin) {
+    // (A slide without patches never gets here: it opens in the whole-slide view above.)
     return noPatches ? (
-      <div className="p-space-xl text-center text-slate-300 bg-[#0a0f1d] h-[calc(100vh-3.5rem)] flex flex-col items-center gap-space-md">
-        <p>This slide has no patches yet, so there is nothing to annotate patch by patch.</p>
-        <div className="flex gap-space-sm">
-          <button className="px-space-md h-8 rounded bg-[#0284c7] text-white text-label-md" onClick={() => setMode("wsi")}>
-            Annotate the whole slide instead
-          </button>
-          <Link className="px-space-md h-8 rounded bg-surface-container-high text-on-surface text-label-md inline-flex items-center" to={`/projects/${pid}/slides/${sid}/processing`}>
-            Generate patches
-          </Link>
-        </div>
-      </div>
+      <div className="p-space-xl text-center text-slate-300 bg-[#0a0f1d] h-[calc(100vh-3.5rem)]">This image is not ready to annotate yet.</div>
     ) : (
       <div className="p-space-xl text-center text-slate-400 bg-[#0a0f1d] h-[calc(100vh-3.5rem)]">Loading workspace...</div>
     );

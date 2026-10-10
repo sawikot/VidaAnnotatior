@@ -2,6 +2,7 @@ import { optionsQuery, selectionQuery, summaryQuery, type ExportOptions, type Ex
 import type {
   ConfigUsage,
   ConfigVersion,
+  DatasetOptions,
   DatasetSplit,
   GeometryAnnotation,
   GeometryType,
@@ -479,11 +480,29 @@ export const removeRecipePackages = (id: string) => request<RecipeDetail>(`/reci
 // ---- Model training ----
 export const listRecipes = () => request<Recipe[]>("/training/recipes");
 export const getTrainerStatus = () => request<TrainerStatus>("/training/status");
-export const getTrainingReadiness = (projectId: number, task = "detection") =>
-  request<TrainingReadiness>(`/projects/${projectId}/training/readiness?task=${task}`);
+/** The dataset options as the server takes them in an address: only what differs from the defaults. */
+function datasetQuery(o?: DatasetOptions): string {
+  if (!o) return "";
+  const params = new URLSearchParams();
+  if (o.patch_size) {
+    params.set("patch_size", String(o.patch_size));
+    if (o.stride) params.set("stride", String(o.stride));
+    params.set("area", o.area);
+  }
+  if (o.use !== "annotated") params.set("use", o.use);
+  if (o.empty_percent > 0) {
+    params.set("empty_percent", String(o.empty_percent));
+    params.set("empty_from", o.empty_from);
+  }
+  if (o.class_ids) params.set("classes", o.class_ids.join(","));
+  const text = params.toString();
+  return text ? `&${text}` : "";
+}
+export const getTrainingReadiness = (projectId: number, task = "detection", dataset?: DatasetOptions) =>
+  request<TrainingReadiness>(`/projects/${projectId}/training/readiness?task=${task}${datasetQuery(dataset)}`);
 export const listTrainingRuns = (projectId: number) => request<TrainingRun[]>(`/projects/${projectId}/training/runs`);
-export const startTrainingRun = (projectId: number, recipeId: string, settings: Record<string, unknown>) =>
-  request<TrainingRun>(`/projects/${projectId}/training/runs`, { method: "POST", body: JSON.stringify({ recipe_id: recipeId, settings }) });
+export const startTrainingRun = (projectId: number, recipeId: string, settings: Record<string, unknown>, dataset?: DatasetOptions) =>
+  request<TrainingRun>(`/projects/${projectId}/training/runs`, { method: "POST", body: JSON.stringify({ recipe_id: recipeId, settings, dataset: dataset ?? {} }) });
 export const getTrainingRun = (runId: number) => request<TrainingRun>(`/training/runs/${runId}`);
 export const stopTrainingRun = (runId: number) => request<TrainingRun>(`/training/runs/${runId}/stop`, { method: "POST" });
 export const deleteTrainingRun = (runId: number) => request<void>(`/training/runs/${runId}`, { method: "DELETE" });

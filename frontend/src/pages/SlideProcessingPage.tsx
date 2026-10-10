@@ -303,7 +303,12 @@ export function SlideProcessingPage() {
             variant="primary"
             icon="open_in_new"
             onClick={() => navigate(`/projects/${pid}/slides/${sid}/workspace`)}
-            disabled={slide.status !== "patches_generated" && slide.status !== "annotating" && slide.status !== "reviewed"}
+            disabled={slide.status === "error" || !slide.width_l0}
+            title={
+              ["patches_generated", "annotating", "reviewed"].includes(slide.status)
+                ? undefined
+                : "Without patches the slide is annotated as a whole; generate coordinates to annotate patch by patch"
+            }
           >
             Open Annotation Workspace
           </Button>

@@ -26,10 +26,14 @@ class TrainingRun(Base, TimestampMixin):
     recipe_name: Mapped[str] = mapped_column(String(200))
     task: Mapped[str] = mapped_column(String(30))  # detection | classification | segmentation
     settings: Mapped[dict] = mapped_column(JSON, default=dict)  # the recipe's settings, as chosen
+    # How its dataset is cut and which patches go into it (services/training_data.DatasetOptions).
+    dataset_options: Mapped[dict | None] = mapped_column(JSON, default=None)
 
     status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
     stop_requested: Mapped[bool] = mapped_column(Boolean, default=False)
     error: Mapped[str | None] = mapped_column(Text, default=None)
+    # What the trainer is doing before the first epoch, in words (installing packages, loading the network).
+    stage: Mapped[str | None] = mapped_column(String(400), default=None)
 
     # What it was trained on, fixed when the dataset is cut: slides and objects per set, the classes.
     dataset: Mapped[dict | None] = mapped_column(JSON, default=None)
