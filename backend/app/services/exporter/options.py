@@ -27,7 +27,7 @@ from app.services.patch_grid import GridSpec
 
 PATCH_SCOPES = ("annotated", "all", "empty", "reviewed")
 CONTENTS = ("annotations", "images")
-IMAGE_FORMATS = ("jpg", "png")
+IMAGE_FORMATS = ("png", "jpg")
 UNLABELED_MODES = ("skip", "folder")
 
 
@@ -35,7 +35,7 @@ UNLABELED_MODES = ("skip", "folder")
 class ExportOptions:
     patch_scope: str = "annotated"
     content: str = "annotations"
-    image_format: str = "jpg"
+    image_format: str = "png"
     masks: bool = False
     combine: bool | None = None  # None: the project type decides
     grid: GridSpec | None = None  # None: the grid each slide was annotated in
@@ -72,7 +72,7 @@ class ExportOptions:
 def parse_options(
     patches: str = "annotated",
     content: str = "annotations",
-    image_format: str = "jpg",
+    image_format: str = "png",
     masks: bool = False,
     combine: bool | None = None,
     grid: str | None = None,

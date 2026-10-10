@@ -197,6 +197,8 @@ export interface DatasetOptions {
   empty_from: "any" | "reviewed";
   /** The classes to learn; null: all of them. */
   class_ids: number[] | null;
+  /** What the patch images are written as. Runs from before this choice have none: they used JPEG. */
+  image_format?: "png" | "jpg";
 }
 export interface TrainingReadiness {
   task: string;
@@ -210,14 +212,55 @@ export interface TrainingReadiness {
   problems: string[];
   warnings: string[];
 }
+/** A figure a recipe gives with its scores; the app draws it. Shares are 0-1. */
+export type ResultFigure =
+  | {
+      type: "curve";
+      title: string;
+      help?: string;
+      x: string;
+      y: string;
+      series: { label: string; points: [number, number][] }[];
+      /** A value of x worth pointing out (e.g. the confidence where F1 is best). */
+      mark?: { x: number; label: string };
+      /** Draw the line of pure guessing, corner to corner (ROC curves). */
+      diagonal?: boolean;
+    }
+  | {
+      type: "matrix";
+      title: string;
+      help?: string;
+      rows: string;
+      columns: string;
+      row_labels: string[];
+      column_labels: string[];
+      values: number[][];
+      /** "percent": the values are shares of each row, not counts. */
+      format?: "percent";
+    }
+  | { type: "bars"; title: string; help?: string; labels: string[]; series: { label: string; values: number[] }[] };
+/**
+ * One set's final scores. Every plain number is a share (0-1) shown as a score; `counts` holds whole
+ * numbers; `classes` is a row per class; `figures` only come with a single run, not the list of runs.
+ */
 export interface TrainingScores {
   ap50?: number;
+  ap75?: number;
+  ap?: number;
   accuracy?: number;
+  balanced_accuracy?: number;
   miou?: number;
+  dice?: number;
   pixel_accuracy?: number;
   precision?: number;
   recall?: number;
+  f1?: number;
+  auc?: number;
+  best_confidence?: number;
   per_class?: Record<string, number>;
+  counts?: Record<string, number>;
+  classes?: ({ name: string } & Record<string, number | string>)[];
+  figures?: ResultFigure[];
 }
 export interface TrainingRun {
   id: number;

@@ -373,8 +373,8 @@ export function ProjectExportPage() {
                 <div role="group" aria-label="Image format" className="flex rounded-lg bg-surface-container-high p-0.5 self-start">
                   {(
                     [
-                      ["jpg", "JPEG · smaller"],
                       ["png", "PNG · lossless"],
+                      ["jpg", "JPEG · smaller"],
                     ] as const
                   ).map(([value, label]) => (
                     <button

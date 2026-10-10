@@ -3,9 +3,10 @@ import { Link, useParams } from "react-router-dom";
 import { MaterialIcon } from "../components/MaterialIcon";
 import { Button, Card } from "../components/primitives";
 import { ModelsSection } from "../features/models/ModelsSection";
-import { CompareRuns, MAX_COMPARED, METRIC_NAMES } from "../features/training/CompareRuns";
+import { CompareRuns, MAX_COMPARED } from "../features/training/CompareRuns";
 import { DEFAULT_DATASET, DatasetOptionsPanel, describeDataset } from "../features/training/DatasetOptionsPanel";
 import { MetricChart, SERIES_COLORS, type Series } from "../features/training/MetricChart";
+import { RunResults } from "../features/training/RunResults";
 import { SettingField, defaultSettings, type SettingValue } from "../features/training/SettingField";
 import {
   ApiError,
@@ -56,13 +57,6 @@ const METRIC_LABELS: Record<string, string> = {
   val_miou: "Mean IoU",
   val_pixel_accuracy: "Pixel accuracy",
 };
-const METRIC_HELP: Record<string, string> = {
-  ap50: "AP50 is the share of objects found with a box overlapping the real one by at least half, averaged over how sure the model is. Precision: how many of its detections are right. Recall: how many of the real objects it finds.",
-  accuracy: "Accuracy is the share of images given their right class. Per class: of the images of that class, the share recognised as it.",
-  miou: "IoU compares the area the model marks as a class with the area drawn as it: what they share, divided by what either covers. Mean IoU averages that over the classes; the background is left out.",
-};
-
-const percent = (v: number | undefined) => (typeof v === "number" ? `${(v * 100).toFixed(1)}%` : "--");
 const when = (iso: string | null) => (iso ? new Date(`${iso}Z`).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "");
 
 /** The project's model training: is the data ready, start a run, and watch the runs. */
@@ -545,7 +539,7 @@ export function ProjectTrainingPage() {
                   </pre>
                 )}
 
-                {open.result && <Scores result={open.result} />}
+                {open.result && <RunResults key={open.id} result={open.result} />}
 
                 <div className="grid md:grid-cols-2 gap-space-md">
                   {charts.map((c) => (
@@ -651,60 +645,6 @@ function Progress({ done, total }: { done: number; total: number }) {
   return (
     <div className="h-1.5 rounded-full bg-surface-container-high overflow-hidden mt-1" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
       <div className="h-full bg-primary" style={{ width: `${Math.min(100, (done / total) * 100)}%` }} />
-    </div>
-  );
-}
-
-function Scores({ result }: { result: NonNullable<TrainingRun["result"]> }) {
-  const metric = (result.primary_metric ?? "ap50") as "ap50" | "accuracy" | "miou";
-  const name = METRIC_NAMES[metric] ?? metric;
-  const sets = (["val", "test"] as const).filter((set) => result[set]);
-  const classes = [...new Set(sets.flatMap((set) => Object.keys(result[set]?.per_class ?? {})))];
-  const also = (set: "val" | "test") =>
-    metric === "ap50"
-      ? `precision ${percent(result[set]?.precision)} · recall ${percent(result[set]?.recall)}`
-      : metric === "miou"
-        ? `pixel accuracy ${percent(result[set]?.pixel_accuracy)}`
-        : null;
-  return (
-    <div className="rounded-xl bg-surface-container-low p-space-md flex flex-col gap-space-sm">
-      <div className="flex items-baseline gap-space-lg flex-wrap">
-        {sets.map((set) => (
-          <div key={set}>
-            <div className="text-label-sm text-on-surface-variant">{set === "test" ? `Test ${name} (final score)` : `Validation ${name}`}</div>
-            <div className="font-headline-lg text-headline-lg">{percent(result[set]?.[metric])}</div>
-            {also(set) && <div className="text-label-sm text-on-surface-variant">{also(set)}</div>}
-          </div>
-        ))}
-        {result.best_epoch ? <div className="text-body-sm text-on-surface-variant">The kept model is from epoch {result.best_epoch}, the best on validation.</div> : null}
-      </div>
-      {classes.length > 1 && (
-        <table className="text-body-sm self-start">
-          <thead className="text-label-sm text-on-surface-variant">
-            <tr>
-              <th className="text-left pr-space-lg font-medium">{metric === "accuracy" ? "Recognised, per class" : metric === "miou" ? "IoU per class" : "AP50 per class"}</th>
-              {sets.map((set) => (
-                <th key={set} className="text-right pl-space-md font-medium">
-                  {SET_LABELS[set]}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {classes.map((c) => (
-              <tr key={c}>
-                <td className="pr-space-lg">{c}</td>
-                {sets.map((set) => (
-                  <td key={set} className="text-right pl-space-md font-mono">
-                    {percent(result[set]?.per_class?.[c])}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      <p className="text-label-sm text-on-surface-variant">{METRIC_HELP[metric] ?? ""}</p>
     </div>
   );
 }

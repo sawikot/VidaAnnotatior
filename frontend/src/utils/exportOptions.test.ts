@@ -33,11 +33,11 @@ describe("optionsQuery", () => {
   it("carries only what differs from the defaults", () => {
     expect(optionsQuery(opts({ patches: "all" }))).toBe("?patches=all");
     expect(optionsQuery(opts({ patches: "empty", content: "images" }))).toBe("?patches=empty&content=images");
-    expect(optionsQuery(opts({ content: "images", imageFormat: "png", masks: true }))).toBe("?content=images&image_format=png&masks=true");
+    expect(optionsQuery(opts({ content: "images", imageFormat: "jpg", masks: true }))).toBe("?content=images&image_format=jpg&masks=true");
   });
 
   it("drops image-only settings when no images are exported", () => {
-    expect(optionsQuery(opts({ imageFormat: "png", masks: true }))).toBe("");
+    expect(optionsQuery(opts({ imageFormat: "jpg", masks: true }))).toBe("");
   });
 
   it("sends combine only for whole-project downloads and only when chosen", () => {
@@ -52,8 +52,8 @@ describe("summaryQuery", () => {
   it("passes the scope, and the image format only when images are exported", () => {
     expect(summaryQuery(opts())).toBe("");
     expect(summaryQuery(opts({ patches: "reviewed" }))).toBe("?patches=reviewed");
-    expect(summaryQuery(opts({ content: "images", imageFormat: "png" }))).toBe("?image_format=png");
-    expect(summaryQuery(opts({ imageFormat: "png" }))).toBe("");
+    expect(summaryQuery(opts({ content: "images", imageFormat: "jpg" }))).toBe("?image_format=jpg");
+    expect(summaryQuery(opts({ imageFormat: "jpg" }))).toBe("");
   });
 });
 

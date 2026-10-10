@@ -246,6 +246,18 @@ slow the app down and a crashing model can never take the app with it.
   models in that script -- so every recipe stays a complete folder that can be read, duplicated and
   changed on its own. To add a torchvision model, add a line to that list and run the script.
 
+**Results.** A finished run shows its **test results** first -- scored once, after training, on the
+test set the model never saw -- with the validation results a click away. What is shown suits the kind
+of model: a detector or object outliner gets AP50, AP75 and AP50-95, precision, recall and F1 at the
+confidence where F1 is best (and that confidence, a good setting for the workspace's slider), what
+was found, missed and falsely raised, the precision-recall curve, precision / recall / F1 by
+confidence, and a table of what was found as what; a classifier gets accuracy, balanced accuracy,
+precision, recall, F1 and AUC, the table of what was recognised as what, and a ROC curve per class;
+a region segmenter gets mean IoU, Dice, pixel accuracy, precision and recall, and what each area was
+marked as. Each also has a table per class. A recipe of your own gives its numbers and figures in
+`result.json` (see `trainer/recipes/README.md`, "The results page"). A project whose test set is
+empty has only validation results, and the page says so.
+
 A project is ready to train once it has a train / validation / test split and, in the training and
 validation sets, what the chosen kind of model learns from: classified shapes, or -- for a classifier
 -- patches with a class (at least two classes). Finished runs can be ticked on the Training page to
@@ -586,7 +598,7 @@ count of what the selection covers.
 |---|---|---|
 | `patches` | `annotated` (default), `all`, `empty`, `reviewed` | Which patches are covered. `annotated`: at least one annotation. `all`: every patch, empty ones included (negatives). `empty`: no annotation at all. `reviewed`: marked Reviewed/QA, confirmed negatives included. Patches flagged *Exclude from training* never contribute annotations or images; they are only listed in the registries (WSI JSON `patches`, patch CSV) under `all`. |
 | `content` | `annotations` (default), `images` | `images` returns a ZIP: `annotations/` (the chosen format), `images/` (one file per patch, cut from the original slide), optional `masks/`, and a `manifest.json`. |
-| `image_format` | `jpg` (default), `png` | JPEG is smaller; PNG is lossless. |
+| `image_format` | `png` (default), `jpg` | PNG is lossless; JPEG is smaller. |
 | `masks` | `true` / `false` | With images: a single-channel PNG per patch, pixel value 0 = background and 1..N = the class (by class order; `mask_classes.json` lists them). Where shapes overlap the later one wins; points are not painted. |
 | `combine` | `true` / `false` (project export) | One file for the whole project for COCO and the CSVs, instead of one per slide. On by default in image projects and whenever images are included. |
 

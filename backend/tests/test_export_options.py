@@ -26,8 +26,8 @@ def opts(scope):
 
 def test_defaults_and_validation():
     d = parse_options()
-    assert (d.patch_scope, d.content, d.image_format, d.masks, d.with_images) == ("annotated", "annotations", "jpg", False, False)
-    assert parse_options("all", "images", "png", True).image_ext == "png"
+    assert (d.patch_scope, d.content, d.image_format, d.masks, d.with_images) == ("annotated", "annotations", "png", False, False)
+    assert parse_options("all", "images", "jpg", True).image_ext == "jpg"
     for bad in (dict(patches="everything"), dict(content="pdf"), dict(image_format="gif"), dict(masks=True)):  # masks need images
         with pytest.raises(ValueError):
             parse_options(**bad)
@@ -137,18 +137,18 @@ def test_slide_export_with_images_is_a_trainable_coco_dataset(annotated_slide): 
 
     entry = next(i for i in coco["images"] if i["id"] == patch["id"])
     pixels = Image.open(io.BytesIO(archive.read("images/" + entry["file_name"])))
-    assert pixels.size == (entry["width"], entry["height"]) == (patch["width"], patch["height"]) and pixels.format == "JPEG"
+    assert pixels.size == (entry["width"], entry["height"]) == (patch["width"], patch["height"]) and pixels.format == "PNG"
 
     manifest = json.loads(archive.read("manifest.json"))
     assert manifest["image_count"] == len(image_files) and manifest["image_errors"] == []
-    assert manifest["options"] == {"patches": "all", "images": True, "image_format": "jpg", "masks": False, "grid": "as annotated", "combined": False}
+    assert manifest["options"] == {"patches": "all", "images": True, "image_format": "png", "masks": False, "grid": "as annotated", "combined": False}
 
 
 def test_images_scope_annotated_only_writes_just_those_patches(annotated_slide):  # noqa: F811
     client, slide_id, patch = annotated_slide
     archive = zip_of(client.get(f"/api/slides/{slide_id}/export/coco?content=images"))
     images = [n for n in archive.namelist() if n.startswith("images/")]
-    assert len(images) == 1 and images[0].endswith(".jpg")
+    assert len(images) == 1 and images[0].endswith(".png")
     coco = json.loads(archive.read("annotations/Case_1_v2_coco.json"))
     assert len(coco["images"]) == 1 and len(coco["annotations"]) == 1
 
@@ -257,9 +257,11 @@ def test_summary_reports_what_an_export_would_contain(annotated_slide):  # noqa:
     assert (annotated["patches"], annotated["annotations"], annotated["images"]) == (1, 1, 1)
     assert annotated["approx_image_bytes"] > 0 and annotated["max_images"] > 0
 
-    everything = client.get(f"/api/slides/{slide_id}/export-summary?patches=all&image_format=png").json()
+    everything = client.get(f"/api/slides/{slide_id}/export-summary?patches=all").json()
     assert everything["patches"] == everything["images"] == total and everything["annotations"] == 1
-    assert everything["approx_image_bytes"] > annotated["approx_image_bytes"] * 5  # PNG of the whole grid is much bigger
+    assert everything["approx_image_bytes"] > annotated["approx_image_bytes"]  # the whole grid is bigger
+    as_jpeg = client.get(f"/api/slides/{slide_id}/export-summary?patches=all&image_format=jpg").json()
+    assert everything["approx_image_bytes"] > as_jpeg["approx_image_bytes"] * 5  # PNG, the default, is much bigger than JPEG
 
     empty = client.get(f"/api/slides/{slide_id}/export-summary?patches=empty").json()
     assert empty["patches"] == total - 1 and empty["annotations"] == 0

@@ -8,6 +8,7 @@ export const DEFAULT_DATASET: DatasetOptions = {
   empty_percent: 0,
   empty_from: "any",
   class_ids: null,
+  image_format: "png",
 };
 
 /** What a run's dataset options come to, in a line or two (for a finished run's page). */
@@ -21,12 +22,13 @@ export function describeDataset(o: DatasetOptions | null | undefined, classNames
   if (o.use === "reviewed") out.push("Only reviewed ones");
   if (o.empty_percent > 0) out.push(`${o.empty_percent} empty for every 100 annotated${o.empty_from === "reviewed" ? " (reviewed ones only)" : ""}`);
   if (o.class_ids) out.push(`Classes: ${classNames(o.class_ids)}`);
+  if (o.image_format) out.push(o.image_format === "png" ? "Images as PNG" : "Images as JPEG");
   return out;
 }
 
 /**
  * How a run's dataset is cut from the slides and which patches go into it: the patch size and stride,
- * tissue or whole slide, empty patches as background, and the classes to learn. Slides are always cut
+ * tissue or whole slide, empty patches as background, the classes to learn, and the images' format. Slides are always cut
  * afresh for the dataset (nothing in the project changes), so the Reviewed mark of the project's own
  * patches plays no part; an image project has no patches to cut and offers that choice instead.
  */
@@ -204,6 +206,33 @@ export function DatasetOptionsPanel({
             <span className="text-label-sm text-on-surface-variant">Shapes of an unticked class are left out, as if they were not drawn.</span>
           </fieldset>
         )}
+
+        <fieldset disabled={disabled} className="flex flex-col gap-1">
+          <legend className="text-label-md text-on-surface-variant mb-1">Image format</legend>
+          <div role="group" aria-label="Image format" className="flex rounded-lg bg-surface-container-high p-0.5 self-start">
+            {(
+              [
+                ["png", "PNG · lossless"],
+                ["jpg", "JPEG · smaller"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={(value.image_format ?? "png") === id}
+                onClick={() => set({ image_format: id })}
+                className={`px-space-md py-1 rounded-md text-label-md ${
+                  (value.image_format ?? "png") === id ? "bg-surface-container-lowest shadow-sm text-primary" : "text-on-surface-variant"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <span className="text-label-sm text-on-surface-variant">
+            What the {nouns} are written as for the training. PNG keeps every pixel; JPEG takes about a sixth of the disk space while the run lasts.
+          </span>
+        </fieldset>
       </div>
     </div>
   );

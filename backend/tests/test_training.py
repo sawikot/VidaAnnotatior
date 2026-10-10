@@ -107,14 +107,17 @@ def test_a_run_goes_from_waiting_to_done_through_the_trainer(project):
     output.mkdir()
     (output / "model.pt").write_bytes(b"weights")
     (output / "train.log").write_text("one\ntwo\nthree\n")
-    trainer(client, f"/runs/{run['id']}/finish", {"status": "done", "result": {"val": {"ap50": 0.8}}})
+    trainer(client, f"/runs/{run['id']}/finish", {"status": "done", "result": {"primary_metric": "ap50", "val": {"ap50": 0.8, "classes": [{"name": "Tumor", "ap50": 0.8}], "figures": [{"type": "matrix"}]}}})
     done = client.get(f"/api/training/runs/{run['id']}").json()
     assert (done["status"], done["result"]["val"]["ap50"], done["has_model"]) == ("done", 0.8, True)
+    assert done["result"]["val"]["figures"] == [{"type": "matrix"}] and done["result"]["val"]["classes"][0]["name"] == "Tumor"
     assert not folder.exists()  # the dataset copy is not kept
     assert client.get(f"/api/training/runs/{run['id']}/log", params={"tail": 2}).text == "two\nthree"
     assert client.get(f"/api/training/runs/{run['id']}/model").content == b"weights"
 
-    assert [r["id"] for r in client.get(f"/api/projects/{pid}/training/runs").json()] == [run["id"]]
+    listed = client.get(f"/api/projects/{pid}/training/runs").json()
+    assert [r["id"] for r in listed] == [run["id"]]
+    assert listed[0]["result"] == {"primary_metric": "ap50", "val": {"ap50": 0.8}}  # the list carries the scores, not the figures
     assert client.delete(f"/api/training/runs/{run['id']}").status_code == 204
     assert not run_dir(run["id"]).exists()
 
@@ -675,3 +678,7 @@ def test_a_run_keeps_its_dataset_options_and_is_cut_with_them(project):
     assert all((folder / layout["sets"]["train"]["images"] / image["file_name"]).is_file() for image in doc["images"])
     kept = client.get(f"/api/training/runs/{run['id']}").json()["dataset"]
     assert kept["sets"]["train"]["empty"] == 2 and kept["options"]["empty_percent"] == 100
+    # PNG unless the run asks for JPEG
+    assert run["dataset_options"]["image_format"] == "png" and all(image["file_name"].endswith(".png") for image in doc["images"])
+    assert start({"image_format": "gif"}).status_code == 422
+    assert start({"image_format": "jpg"}).json()["dataset_options"]["image_format"] == "jpg"

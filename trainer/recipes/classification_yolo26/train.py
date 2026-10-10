@@ -30,6 +30,7 @@ from ultralytics import RTDETR, YOLO
 PRETRAINED = os.environ.get("VP_NO_PRETRAINED") != "1"
 # Downloaded pretrained weights are kept here, beside PyTorch's own, so each is fetched once.
 WEIGHTS = Path(os.environ.get("TORCH_HOME") or Path.home() / ".cache" / "torch") / "ultralytics"
+MAX_CURVES = 8  # at most this many classes get a line of their own
 
 
 def open_model(architecture: str):
@@ -107,6 +108,104 @@ def total(loss) -> float:
     return float(loss or 0)
 
 
+def rounded(value):
+    """The same as plain numbers, every fraction cut to four places: what goes into result.json."""
+    if isinstance(value, dict):
+        return {k: rounded(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [rounded(v) for v in value]
+    if isinstance(value, (bool, int, str)) or value is None:
+        return value
+    return round(float(value), 4)
+
+
+def labels_scores(found, names: list[str]) -> dict:
+    """A classifier's scores, from Ultralytics' count of what was recognised as what."""
+    grid = found.confusion_matrix.matrix.T.astype(int)  # theirs is [recognised as][really]
+    seen, said, right = grid.sum(1), grid.sum(0), grid.diagonal()
+    rows = []
+    for i, name in enumerate(names):
+        if not seen[i]:
+            continue  # a class this set has no image of has no score
+        recall, precision = right[i] / seen[i], (right[i] / said[i] if said[i] else 0.0)
+        rows.append({"name": name, "precision": precision, "recall": recall, "f1": 2 * precision * recall / (precision + recall) if precision + recall else 0.0, "images": int(seen[i])})
+    mean = lambda key: sum(row[key] for row in rows) / len(rows) if rows else 0.0  # noqa: E731
+    out = {"accuracy": found.top1}
+    if len(names) > 5:
+        out["top5_accuracy"] = found.top5
+    out.update(
+        balanced_accuracy=mean("recall"), precision=mean("precision"), recall=mean("recall"), f1=mean("f1"),
+        per_class={row["name"]: row["recall"] for row in rows}, classes=rows,
+        counts={"images": int(grid.sum()), "right": int(right.sum()), "wrong": int(grid.sum() - right.sum())},
+        figures=[
+            {
+                "type": "matrix", "title": "What was recognised as what", "rows": "Really", "columns": "Recognised as",
+                "help": "Each row is the images of one class, spread over the classes the model took them for. The diagonal is right; anything else shows which classes it mixes up.",
+                "row_labels": names, "column_labels": names, "values": grid.tolist(),
+            },
+            {
+                "type": "bars", "title": "Precision, recall and F1 per class",
+                "help": "Recall: of the images of a class, the share recognised as it. Precision: of the images the model called that class, the share that are. F1 balances the two.",
+                "labels": [row["name"] for row in rows],
+                "series": [{"label": label, "values": [row[key] for row in rows]} for key, label in (("precision", "Precision"), ("recall", "Recall"), ("f1", "F1"))],
+            },
+        ],
+    )
+    return out
+
+
+def shapes_scores(found, scores, names: list[str], matrix) -> dict:
+    """A detector's or outliner's scores, from Ultralytics' own: ``scores`` is its box or its mask part.
+    ``matrix(confidence)`` counts what was found as what, keeping detections at least that sure."""
+    order = [int(c) for c in scores.ap_class_index]  # the classes this set has objects of
+    rows = [
+        {"name": names[c], "ap50": scores.ap50[i], "ap75": scores.all_ap[i, 5], "ap": scores.ap[i], "precision": scores.p[i], "recall": scores.r[i], "f1": scores.f1[i], "objects": int(found.nt_per_class[c])}
+        for i, c in enumerate(order)
+    ]
+    out = {
+        "ap50": scores.map50, "ap75": scores.map75, "ap": scores.map, "precision": scores.mp, "recall": scores.mr,
+        "f1": sum(row["f1"] for row in rows) / len(rows) if rows else 0.0,
+        "per_class": {row["name"]: row["ap50"] for row in rows}, "classes": rows, "figures": [],
+    }
+    if not rows:
+        return out
+    # Ultralytics reads its curves off at a thousand confidences; a hundred and one are plenty to draw.
+    steps = list(range(0, len(scores.px), 10)) + [len(scores.px) - 1]
+    along = [float(scores.px[k]) for k in steps]
+    best = int(scores.f1_curve.mean(0).argmax())
+    level = float(scores.px[best])
+    out["best_confidence"] = level
+    lines = ([("All classes", scores.prec_values.mean(0))] if len(rows) > 1 else []) + [(row["name"], scores.prec_values[i]) for i, row in enumerate(rows[:MAX_CURVES])]
+    out["figures"] = [
+        {
+            "type": "curve", "title": "Precision against recall", "x": "Recall", "y": "Precision",
+            "help": "Each point is one confidence the model could be cut off at: further right it finds more of the objects, lower down more of what it finds is wrong. A curve hugging the top right is a good detector; the area under it is AP50.",
+            "series": [{"label": name, "points": [[x, line[k]] for x, k in zip(along, steps)]} for name, line in lines],
+        },
+        {
+            "type": "curve", "title": "Precision, recall and F1 by confidence", "x": "Confidence", "y": "Score",
+            "help": "What happens when only detections at least this sure are kept. The marked confidence is where F1 (the balance of precision and recall) is highest: a good place to set the slider for suggestions.",
+            "mark": {"x": level, "label": "Best F1"},
+            "series": [{"label": label, "points": [[x, line.mean(0)[k]] for x, k in zip(along, steps)]} for label, line in (("Precision", scores.p_curve), ("Recall", scores.r_curve), ("F1", scores.f1_curve))],
+        },
+    ]
+    try:
+        grid = matrix(max(level, 0.001)).T.astype(int)  # theirs is [found as][really], the background last
+    except Exception as exc:  # noqa: BLE001 - a figure less, not a failed run
+        print(f"The table of what was found as what could not be made: {exc}")
+        return out
+    count = len(names)
+    out["counts"] = {
+        "objects": int(found.nt_per_class.sum()), "found": int(grid[:count, :count].trace()), "missed": int(grid[:count].sum() - grid[:count, :count].trace()), "false_alarms": int(grid[count, :count].sum()),
+    }
+    out["figures"].append({
+        "type": "matrix", "title": "What was found as what", "rows": "Really", "columns": "Found as",
+        "help": f"Counted at the best-F1 confidence ({level:.2f}). The diagonal is what was found rightly; the last column is objects not found, the last row detections where nothing was drawn.",
+        "row_labels": [*names, "Nothing there"], "column_labels": [*names, "Not found"], "values": grid.tolist(),
+    })
+    return out
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=Path, required=True)
@@ -134,7 +233,7 @@ def main() -> None:
     def report(trainer) -> None:
         """After each epoch's validation: pass its numbers on. (Ultralytics calls this once more at the end.)"""
         epoch = trainer.epoch + 1
-        if epoch <= told["epoch"]:
+        if epoch <= told["epoch"] or epoch > trainer.epochs:
             return
         told["epoch"] = epoch
         found = trainer.metrics or {}
@@ -164,13 +263,19 @@ def main() -> None:
 
     final = (RTDETR if architecture.startswith("rtdetr") else YOLO)(str(args.output / "model.pt"))  # score the kept (best) epoch
 
+    names = [cls["name"] for cls in classes]
+
     def summary(split: str) -> dict:
         found = final.val(data=str(data), split=split, name=f"score_{split}", **common)
         if labels_only:
-            return {"accuracy": round(float(found.top1), 4)}
-        scores = found.seg if outlines else found.box
-        per_class = {classes[int(c)]["name"]: round(float(scores.ap50[i]), 4) for i, c in enumerate(scores.ap_class_index)}
-        return {"ap50": round(float(scores.map50), 4), "precision": round(float(scores.mp), 4), "recall": round(float(scores.mr), 4), "per_class": per_class}
+            return rounded(labels_scores(found, names))
+
+        def matrix(confidence: float):
+            # Ultralytics counts this only while drawing its own plots, and at the confidence it is given.
+            again = final.val(data=str(data), split=split, name=f"matrix_{split}", conf=confidence, **{**common, "plots": True})
+            return again.confusion_matrix.matrix
+
+        return rounded(shapes_scores(found, found.seg if outlines else found.box, names, matrix))
 
     metric = "accuracy" if labels_only else "ap50"
     result = {"primary_metric": metric, "best_epoch": best["epoch"], "val": summary("val")}

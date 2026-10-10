@@ -67,10 +67,50 @@ Here `sets` gives each set's `labels` file and the folder (`images`) its `file` 
 - Write `<output>/model.pt`, the trained model.
 - Write `<output>/result.json`: the final scores, e.g.
   `{"primary_metric": "ap50", "best_epoch": 12, "val": {"ap50": 0.81}, "test": {"ap50": 0.78}}`.
+  See "The results page" below for everything a set's scores may hold.
 - End with exit code 0. Anything else, or a missing file, marks the run as failed and shows the
   last lines of the log.
 
 When someone presses Stop, the process is ended; whatever `model.pt` was written so far is kept.
+
+## The results page
+
+A finished run's page shows the test set's scores first (images the model never saw), the validation
+set's beside them. Under `"val"` and `"test"` in `result.json`, the app shows whatever it finds:
+
+| Key | Shown as |
+|---|---|
+| any number, e.g. `"ap50": 0.78` | A score. Numbers are shares from 0 to 1 and are shown as percentages. The one named by `primary_metric` is the headline. |
+| `"counts": {"images": 40, "found": 310}` | Whole numbers, in a line under the scores |
+| `"classes": [{"name": "Tumour", "ap50": 0.8, "objects": 120}]` | A table with a row per class and a column per key |
+| `"per_class": {"Tumour": 0.8}` | The primary score per class; used when there is no `classes` |
+| `"figures": [...]` | Figures, drawn by the app from the numbers given |
+
+A figure is one of:
+
+```json
+{"type": "curve", "title": "Precision against recall", "x": "Recall", "y": "Precision", "help": "A sentence under it.",
+ "series": [{"label": "All classes", "points": [[0, 1], [0.5, 0.9], [1, 0.2]]}],
+ "mark": {"x": 0.35, "label": "Best F1"}, "diagonal": false}
+
+{"type": "matrix", "title": "What was found as what", "rows": "Really", "columns": "Found as",
+ "row_labels": ["Tumour", "Nothing there"], "column_labels": ["Tumour", "Not found"], "values": [[41, 9], [6, 0]]}
+
+{"type": "bars", "title": "IoU per class", "labels": ["Tumour", "Stroma"], "series": [{"label": "IoU", "values": [0.7, 0.5]}]}
+```
+
+`mark`, `diagonal` and `help` are optional; a matrix with `"format": "percent"` holds shares of each
+row instead of counts. Keep curves to about a hundred points: the result is stored with the run.
+
+What the built-in recipes give:
+
+- **Detectors and object outliners**: AP50, AP75, AP50-95; precision, recall and F1 at the confidence
+  where F1 is best, and that confidence; objects found, missed and false alarms; the precision-recall
+  curve, precision / recall / F1 by confidence, and what was found as what.
+- **Classifiers**: accuracy, balanced accuracy, precision, recall and F1 averaged over the classes,
+  AUC; what was recognised as what, the scores per class, and a ROC curve per class.
+- **Region segmenters**: mean IoU, Dice, pixel accuracy, precision and recall; what each area was
+  marked as, and the scores per class.
 
 ## predict.py
 

@@ -7,7 +7,7 @@ written into the run's folder instead of a download. Which export depends on the
 
       dataset.json                          {"task", "format": "coco", "classes", "sets"}
       train/annotations/dataset_coco.json   boxes and polygons, in each image's own pixels
-      train/images/<name>.jpg
+      train/images/<name>.png
       val/...   test/...
 
 * **classification** learns one class per patch -- the patch-classification export (a patch's label,
@@ -15,11 +15,11 @@ written into the run's folder instead of a download. Which export depends on the
 
       dataset.json                          {"task", "format": "folders", "classes", "sets"}
       train/labels.csv                      one row per image: file, class, ...
-      train/images/<class>/<name>.jpg
+      train/images/<class>/<name>.png
       val/...   test/...
 
 Slides in no set, and slides without patches, are left out. How the patches are cut and chosen is
-the run's ``DatasetOptions``.
+the run's ``DatasetOptions``, which also choose the images' format (PNG, or JPEG to save disk space).
 """
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ from app.models.slide import Slide
 from app.services import dataset_split
 from app.services.exporter import get_exporter
 from app.services.exporter.bundle import build_bundle
-from app.services.exporter.options import ExportOptions
+from app.services.exporter.options import IMAGE_FORMATS, ExportOptions
 from app.services.patch_grid import GridSpec, active_grid_filter
 
 # The fewest annotated images a set needs before training on it makes sense at all.
@@ -71,6 +71,9 @@ class DatasetOptions:
     empty_from: str = "any"
     # The classes to learn; None: all of them. Annotations of other classes are left out.
     class_ids: tuple[int, ...] | None = None
+    # What the patch images are written as: "png" (every pixel as on the slide) or "jpg" (about a sixth
+    # of the disk space while the run lasts, slightly altered by compression).
+    image_format: str = "png"
 
     def as_dict(self) -> dict:
         return {**asdict(self), "class_ids": list(self.class_ids) if self.class_ids is not None else None}
@@ -90,7 +93,8 @@ def parse_options(raw: dict | None, project: Project) -> DatasetOptions:
     except (TypeError, ValueError):
         raise ValueError("The patch size, stride and share of empty patches must be numbers.") from None
     area, use, empty_from = raw.get("area", "tissue"), raw.get("use", "annotated"), raw.get("empty_from", "any")
-    if area not in ("tissue", "whole") or use not in ("annotated", "reviewed") or empty_from not in ("any", "reviewed"):
+    image_format = raw.get("image_format", "png")
+    if area not in ("tissue", "whole") or use not in ("annotated", "reviewed") or empty_from not in ("any", "reviewed") or image_format not in IMAGE_FORMATS:
         raise ValueError("Unknown choice in the dataset options.")
     if size is not None:
         if project.project_type == "image":
@@ -105,7 +109,7 @@ def parse_options(raw: dict | None, project: Project) -> DatasetOptions:
         raise ValueError("The share of empty patches cannot be negative.")
     if classes is not None and not classes:
         raise ValueError("Choose at least one class to learn.")
-    return DatasetOptions(size, stride if size is not None else None, area, use, empty, empty_from, classes)
+    return DatasetOptions(size, stride if size is not None else None, area, use, empty, empty_from, classes, image_format)
 
 
 def _export_options(db: Session, project: Project, task: str, opts: DatasetOptions, seed: int = 0, **more) -> ExportOptions:
@@ -247,7 +251,7 @@ def build_dataset(db: Session, project: Project, run_dir: Path, task: str, opts:
     target.mkdir(parents=True)
     bundle = build_bundle(
         db, slides, get_exporter("patch_classification" if classification else "coco"),
-        _export_options(db, project, task, opts, seed, content="images", image_format="jpg"),
+        _export_options(db, project, task, opts, seed, content="images", image_format=opts.image_format),
         combine=True, label="dataset", max_images=10**9, split_of={s.id: s.split for s in slides},
     )
     try:

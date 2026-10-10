@@ -29,7 +29,7 @@ export interface ExportOptions {
 export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   patches: "annotated",
   content: "annotations",
-  imageFormat: "jpg",
+  imageFormat: "png",
   masks: false,
   combine: null,
   grid: null,

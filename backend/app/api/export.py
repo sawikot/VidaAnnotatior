@@ -110,7 +110,7 @@ def export_slide(
     format_id: str,
     patches: str = Query("annotated", description="annotated | all | empty | reviewed"),
     content: str = Query("annotations", description="annotations | images (adds the patch images, as a ZIP)"),
-    image_format: str = Query("jpg", description="jpg | png"),
+    image_format: str = Query("png", description="png | jpg"),
     masks: bool = Query(False, description="with content=images: also write label masks"),
     grid: str | None = Query(None, description="export in another patch grid, e.g. 512x512_s512x512_m20_t0.5 (see /slides/{id}/grids)"),
     classify: dict = Depends(classification_params),
@@ -155,7 +155,7 @@ def export_project(
     format_id: str,
     patches: str = Query("annotated", description="annotated | all | empty | reviewed"),
     content: str = Query("annotations", description="annotations | images"),
-    image_format: str = Query("jpg", description="jpg | png"),
+    image_format: str = Query("png", description="png | jpg"),
     masks: bool = Query(False),
     combine: bool | None = Query(None, description="one combined file for dataset-level formats (COCO, CSV)"),
     grid: str | None = Query(None, description="export in another patch grid, e.g. 512x512_s512x512_m20_t0.5 (see /slides/{id}/grids)"),
@@ -288,7 +288,7 @@ def export_selection(
     slides: str | None = Query(None, description="the slides to export, comma-separated ids (default: every slide)"),
     patches: str = Query("annotated", description="annotated | all | empty | reviewed"),
     content: str = Query("annotations", description="annotations | images (adds the patch images)"),
-    image_format: str = Query("jpg", description="jpg | png"),
+    image_format: str = Query("png", description="png | jpg"),
     masks: bool = Query(False),
     combine: bool | None = Query(None, description="one combined file per dataset-level format (COCO, CSV) instead of one per slide"),
     grid: str | None = Query(None, description="export in another patch grid, e.g. 512x512_s512x512_m20_t0.5"),
@@ -380,7 +380,7 @@ def _summary_out(db: Session, slides: list[Slide], options: ExportOptions, image
 @router.get("/slides/{slide_id}/export-summary", response_model=ExportSummaryOut)
 def export_slide_summary(
     patches: str = Query("annotated"),
-    image_format: str = Query("jpg"),
+    image_format: str = Query("png"),
     grid: str | None = Query(None),
     format: str | None = Query(None, description="the export format, when it decides which patches get images"),
     classify: dict = Depends(classification_params),
@@ -394,7 +394,7 @@ def export_slide_summary(
 @router.get("/projects/{project_id}/export-summary", response_model=ExportSummaryOut)
 def export_project_summary(
     patches: str = Query("annotated"),
-    image_format: str = Query("jpg"),
+    image_format: str = Query("png"),
     grid: str | None = Query(None),
     format: str | None = Query(None, description="the export format(s), comma-separated"),
     slides: str | None = Query(None, description="only these slides, comma-separated ids"),

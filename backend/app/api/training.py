@@ -97,14 +97,24 @@ class RunOut(BaseModel):
     started_at: datetime | None
     finished_at: datetime | None
     has_model: bool
-    metrics: list | None = None  # only on a single run; the list of runs leaves it out
+    metrics: list | None = None  # only on a single run; the list of runs leaves it out, and the result's figures too
+
+
+def _headline(result: dict | None) -> dict | None:
+    """A run's result without its figures and per-class table: all that a list of runs shows."""
+    if not isinstance(result, dict):
+        return result
+    return {
+        key: {k: v for k, v in value.items() if k not in ("figures", "classes")} if isinstance(value, dict) else value
+        for key, value in result.items()
+    }
 
 
 def _out(run: TrainingRun, with_metrics: bool = False) -> RunOut:
     return RunOut(
         id=run.id, project_id=run.project_id, recipe_id=run.recipe_id, recipe_name=run.recipe_name, task=run.task,
         settings=run.settings or {}, dataset_options=run.dataset_options, status=run.status, stop_requested=run.stop_requested, error=run.error, stage=run.stage if run.status == "running" else None,
-        dataset=run.dataset, epoch=run.epoch, epochs=run.epochs, result=run.result, device=run.device,
+        dataset=run.dataset, epoch=run.epoch, epochs=run.epochs, result=run.result if with_metrics else _headline(run.result), device=run.device,
         created_by=run.created_by, created_at=run.created_at, started_at=run.started_at, finished_at=run.finished_at,
         has_model=(run_dir(run.id) / "output" / "model.pt").is_file(),
         metrics=list(run.metrics or []) if with_metrics else None,

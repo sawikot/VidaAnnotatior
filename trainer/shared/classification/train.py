@@ -29,6 +29,8 @@ MEAN = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)  # what the pretrained 
 STD = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
 # Set by the recipe check's own tests: build the network without downloading pretrained weights.
 PRETRAINED = os.environ.get("VP_NO_PRETRAINED") != "1"
+GRID = [i / 100 for i in range(101)]  # where the curves are read off
+MAX_CURVES = 8  # at most this many classes get a line of their own
 
 
 class Labelled(Dataset):
@@ -78,27 +80,95 @@ def build_model(architecture: str, classes: int):
 
 
 @torch.no_grad()
-def evaluate(model, loader, device, classes: int) -> dict:
+def evaluate(model, loader, device, names: list[str], full: bool = False) -> dict:
+    """How well the images are given their class. Always: the loss, accuracy, and the precision,
+    recall and F1 averaged over the classes (so that a rare class weighs as much as a common one).
+    ``full`` (the final scoring) adds a table per class, the area under each ROC curve, and figures."""
     model.eval()
-    right = torch.zeros(classes)
-    seen = torch.zeros(classes)
+    count = len(names)
+    sure, real = [torch.zeros(0, count)], [torch.zeros(0, dtype=torch.long)]
     loss, batches = 0.0, 0
     for images, labels in loader:
         scores = model(images.to(device)).float().cpu()
         loss += float(torch.nn.functional.cross_entropy(scores, labels))
         batches += 1
-        guess = scores.argmax(1)
-        for cls in range(classes):
-            mine = labels == cls
-            seen[cls] += int(mine.sum())
-            right[cls] += int((guess[mine] == cls).sum())
-    total = float(seen.sum())
-    return {
+        sure.append(torch.softmax(scores, dim=1))
+        real.append(labels)
+    sure, real = torch.cat(sure), torch.cat(real)
+    # grid[really][recognised as]: how many images of each class were taken for each class.
+    grid = torch.bincount(real * count + sure.argmax(1), minlength=count * count).reshape(count, count)
+    seen, said, right = grid.sum(1), grid.sum(0), grid.diag()
+    rows = []
+    for cls in range(count):
+        if not seen[cls]:
+            continue  # a class this set has no image of has no score
+        recall = float(right[cls] / seen[cls])
+        precision = float(right[cls] / said[cls]) if said[cls] else 0.0
+        rows.append({
+            "name": names[cls], "precision": precision, "recall": recall,
+            "f1": 2 * precision * recall / (precision + recall) if precision + recall else 0.0, "images": int(seen[cls]),
+        })
+    mean = lambda key: sum(row[key] for row in rows) / len(rows) if rows else 0.0  # noqa: E731
+    out = {
         "loss": loss / max(batches, 1),
-        "accuracy": float(right.sum()) / total if total else 0.0,
-        # Of the images of each class, the share recognised as it (only classes this set has).
-        "per_class": {cls: float(right[cls] / seen[cls]) for cls in range(classes) if seen[cls]},
+        "accuracy": float(right.sum() / len(real)) if len(real) else 0.0,
+        "balanced_accuracy": mean("recall"), "precision": mean("precision"), "recall": mean("recall"), "f1": mean("f1"),
+        # Of the images of each class, the share recognised as it.
+        "per_class": {row["name"]: row["recall"] for row in rows},
     }
+    if not full:
+        return out
+
+    curves = []
+    for row in rows:  # each class against all the others: is the model surer of it where it is there?
+        cls = names.index(row["name"])
+        order = sure[:, cls].argsort(descending=True)
+        there = (real[order] == cls).float()
+        if there.sum() == len(there):
+            continue  # nothing else to tell it from
+        found, alarms = there.cumsum(0) / there.sum(), (1 - there).cumsum(0) / (1 - there).sum()
+        zero = torch.zeros(1)
+        row["auc"] = float(torch.trapezoid(torch.cat([zero, found]), torch.cat([zero, alarms])))
+        if len(curves) < MAX_CURVES:
+            curves.append({"label": row["name"], "points": [[level, float(found[alarms <= level].max()) if (alarms <= level).any() else 0.0] for level in GRID]})
+    scored = [row["auc"] for row in rows if "auc" in row]
+    out.pop("loss")
+    if scored:
+        out["auc"] = sum(scored) / len(scored)
+    out.update(
+        classes=rows, counts={"images": len(real), "right": int(right.sum()), "wrong": len(real) - int(right.sum())},
+        figures=[
+            {
+                "type": "matrix", "title": "What was recognised as what", "rows": "Really", "columns": "Recognised as",
+                "help": "Each row is the images of one class, spread over the classes the model took them for. The diagonal is right; anything else shows which classes it mixes up.",
+                "row_labels": names, "column_labels": names, "values": grid.tolist(),
+            },
+            {
+                "type": "bars", "title": "Precision, recall and F1 per class",
+                "help": "Recall: of the images of a class, the share recognised as it. Precision: of the images the model called that class, the share that are. F1 balances the two.",
+                "labels": [row["name"] for row in rows],
+                "series": [{"label": label, "values": [row[key] for row in rows]} for key, label in (("precision", "Precision"), ("recall", "Recall"), ("f1", "F1"))],
+            },
+        ],
+    )
+    if curves:
+        out["figures"].append({
+            "type": "curve", "title": "ROC: each class against the rest", "x": "False alarms (share of the other images)", "y": "Recall",
+            "help": "For each class: how many of its images are caught as the model is allowed more false alarms. A curve in the top left corner tells the class apart well; the diagonal would be guessing. The area under it is the AUC.",
+            "diagonal": True, "series": curves,
+        })
+    return out
+
+
+def rounded(value):
+    """The same, with every fraction cut to four places: what goes into result.json."""
+    if isinstance(value, float):
+        return round(value, 4)
+    if isinstance(value, dict):
+        return {k: rounded(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [rounded(v) for v in value]
+    return value
 
 
 def main() -> None:
@@ -112,6 +182,7 @@ def main() -> None:
 
     classes = dataset["classes"]
     index_of = {cls["name"]: i for i, cls in enumerate(classes)}
+    names = [cls["name"] for cls in classes]
     epochs, batch, size = int(settings["epochs"]), int(settings["batch_size"]), int(settings["image_size"])
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {torch.cuda.get_device_name(0) if device.type == 'cuda' else 'CPU (slow)'}")
@@ -145,7 +216,7 @@ def main() -> None:
             total, seen = total + loss.item(), seen + 1
         schedule.step()
 
-        val = evaluate(model, val_loader, device, len(classes))
+        val = evaluate(model, val_loader, device, names)
         if val["accuracy"] > best["accuracy"]:
             best = {"accuracy": val["accuracy"], "epoch": epoch}
             torch.save({**saved, "state_dict": model.state_dict(), "epoch": epoch}, args.output / "model.pt")
@@ -156,12 +227,9 @@ def main() -> None:
 
     model.load_state_dict(torch.load(args.output / "model.pt", map_location=device)["state_dict"])  # score the kept (best) epoch
 
-    def summary(scores: dict) -> dict:
-        return {"accuracy": round(scores["accuracy"], 4), "per_class": {classes[i]["name"]: round(v, 4) for i, v in scores["per_class"].items()}}
-
-    result = {"primary_metric": "accuracy", "best_epoch": best["epoch"], "val": summary(evaluate(model, val_loader, device, len(classes)))}
+    result = {"primary_metric": "accuracy", "best_epoch": best["epoch"], "val": rounded(evaluate(model, val_loader, device, names, full=True))}
     if "test" in dataset["sets"]:
-        result["test"] = summary(evaluate(model, loader("test", False), device, len(classes)))
+        result["test"] = rounded(evaluate(model, loader("test", False), device, names, full=True))
     (args.output / "result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
     print(f"Done. Best epoch {best['epoch']}, validation accuracy {result['val']['accuracy']:.3f}" + (f", test accuracy {result['test']['accuracy']:.3f}" if "test" in result else ""))
 

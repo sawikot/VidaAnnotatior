@@ -90,30 +90,71 @@ def build_model(architecture: str, outputs: int):
 
 
 @torch.no_grad()
-def evaluate(model, loader, device, outputs: int) -> dict:
-    """Mean IoU over the classes (not the background) that this set or the model's answer has."""
+def evaluate(model, loader, device, names: list[str], full: bool = False) -> dict:
+    """How well the marked areas match the drawn ones, pixel by pixel. The background is counted in
+    the pixel accuracy only; every other number is a mean over the classes that this set or the
+    model's answer has. ``full`` (the final scoring) adds a table per class and the figures."""
     model.eval()
-    overlap, union = torch.zeros(outputs), torch.zeros(outputs)
-    right = total = 0
+    outputs = len(names) + 1
+    grid = torch.zeros(outputs, outputs, dtype=torch.long)  # grid[really][marked as], in pixels; 0 is the background
     loss, batches = 0.0, 0
     for images, targets in loader:
         scores = model(images.to(device))["out"].float().cpu()
         loss += float(torch.nn.functional.cross_entropy(scores, targets))
         batches += 1
-        guess = scores.argmax(1)
-        right += int((guess == targets).sum())
-        total += targets.numel()
-        for cls in range(1, outputs):
-            mine, theirs = targets == cls, guess == cls
-            overlap[cls] += int((mine & theirs).sum())
-            union[cls] += int((mine | theirs).sum())
-    per_class = {cls: float(overlap[cls] / union[cls]) for cls in range(1, outputs) if union[cls]}
-    return {
+        grid += torch.bincount((targets * outputs + scores.argmax(1)).flatten(), minlength=outputs * outputs).reshape(outputs, outputs)
+    drawn, marked, shared = grid.sum(1), grid.sum(0), grid.diag()
+    total = int(grid.sum())
+    rows = []
+    for cls in range(1, outputs):
+        either = int(drawn[cls] + marked[cls] - shared[cls])
+        if not either:
+            continue
+        rows.append({
+            "name": names[cls - 1], "iou": int(shared[cls]) / either, "dice": 2 * int(shared[cls]) / int(drawn[cls] + marked[cls]),
+            "precision": float(shared[cls] / marked[cls]) if marked[cls] else 0.0, "recall": float(shared[cls] / drawn[cls]) if drawn[cls] else 0.0,
+            "area": int(drawn[cls]) / total,
+        })
+    mean = lambda key: sum(row[key] for row in rows) / len(rows) if rows else 0.0  # noqa: E731
+    out = {
         "loss": loss / max(batches, 1),
-        "miou": sum(per_class.values()) / len(per_class) if per_class else 0.0,
-        "pixel_accuracy": right / total if total else 0.0,
-        "per_class": per_class,
+        "miou": mean("iou"), "dice": mean("dice"), "pixel_accuracy": int(shared.sum()) / total if total else 0.0,
+        "precision": mean("precision"), "recall": mean("recall"),
+        "per_class": {row["name"]: row["iou"] for row in rows},
     }
+    if not full:
+        return out
+    out.pop("loss")
+    labels = ["Background", *names]
+    out.update(
+        classes=rows, counts={"images": len(loader.dataset)},
+        figures=[
+            {
+                "type": "matrix", "title": "What each area was marked as", "rows": "Really", "columns": "Marked as", "format": "percent",
+                "help": "Each row is the pixels drawn as one class (the first: not drawn at all), as shares of where the model put them. The diagonal is right; the first column is area the model left out, the first row area it marked where nothing was drawn.",
+                "row_labels": labels, "column_labels": labels,
+                "values": [[int(v) / max(int(drawn[r]), 1) for v in grid[r]] for r in range(outputs)],
+            },
+            {
+                "type": "bars", "title": "IoU, Dice, precision and recall per class",
+                "help": "IoU and Dice both compare the marked area with the drawn one (Dice is the more forgiving). Precision: how much of what the model marked was drawn. Recall: how much of what was drawn it marked.",
+                "labels": [row["name"] for row in rows],
+                "series": [{"label": label, "values": [row[key] for row in rows]} for key, label in (("iou", "IoU"), ("dice", "Dice"), ("precision", "Precision"), ("recall", "Recall"))],
+            },
+        ],
+    )
+    return out
+
+
+def rounded(value):
+    """The same, with every fraction cut to four places: what goes into result.json."""
+    if isinstance(value, float):
+        return round(value, 4)
+    if isinstance(value, dict):
+        return {k: rounded(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [rounded(v) for v in value]
+    return value
 
 
 def main() -> None:
@@ -128,6 +169,7 @@ def main() -> None:
     classes = dataset["classes"]
     label_of = {cls["id"]: i for i, cls in enumerate(classes, start=1)}  # 0 is the background
     outputs = len(classes) + 1
+    names = [cls["name"] for cls in classes]
     epochs, batch, size = int(settings["epochs"]), int(settings["batch_size"]), int(settings["image_size"])
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {torch.cuda.get_device_name(0) if device.type == 'cuda' else 'CPU (slow)'}")
@@ -164,7 +206,7 @@ def main() -> None:
             total, seen = total + loss.item(), seen + 1
         schedule.step()
 
-        val = evaluate(model, val_loader, device, outputs)
+        val = evaluate(model, val_loader, device, names)
         if val["miou"] > best["miou"]:
             best = {"miou": val["miou"], "epoch": epoch}
             torch.save({**saved, "state_dict": model.state_dict(), "epoch": epoch}, args.output / "model.pt")
@@ -176,15 +218,9 @@ def main() -> None:
 
     model.load_state_dict(torch.load(args.output / "model.pt", map_location=device)["state_dict"])  # score the kept (best) epoch
 
-    def summary(scores: dict) -> dict:
-        return {
-            "miou": round(scores["miou"], 4), "pixel_accuracy": round(scores["pixel_accuracy"], 4),
-            "per_class": {classes[i - 1]["name"]: round(v, 4) for i, v in scores["per_class"].items()},
-        }
-
-    result = {"primary_metric": "miou", "best_epoch": best["epoch"], "val": summary(evaluate(model, val_loader, device, outputs))}
+    result = {"primary_metric": "miou", "best_epoch": best["epoch"], "val": rounded(evaluate(model, val_loader, device, names, full=True))}
     if "test" in dataset["sets"]:
-        result["test"] = summary(evaluate(model, loader("test", False), device, outputs))
+        result["test"] = rounded(evaluate(model, loader("test", False), device, names, full=True))
     (args.output / "result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
     print(f"Done. Best epoch {best['epoch']}, validation mean IoU {result['val']['miou']:.3f}" + (f", test mean IoU {result['test']['miou']:.3f}" if "test" in result else ""))
 
