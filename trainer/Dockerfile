@@ -14,7 +14,9 @@ ENV APP_VERSION=$APP_VERSION \
     TRAINING_DIR=/data/training \
     TORCH_HOME=/cache/torch
 
-RUN apt-get update && apt-get install -y --no-install-recommends libglib2.0-0 && rm -rf /var/lib/apt/lists/*
+# libgl1 and libxcb1: packages a recipe installs for itself (Ultralytics) bring the full OpenCV, which
+# will not load without the system's display libraries even though nothing is ever shown.
+RUN apt-get update && apt-get install -y --no-install-recommends libglib2.0-0 libgl1 libxcb1 && rm -rf /var/lib/apt/lists/*
 COPY trainer/requirements.txt /app/trainer/requirements.txt
 RUN pip install --no-cache-dir torch torchvision --index-url $TORCH_INDEX \
     && pip install --no-cache-dir -r /app/trainer/requirements.txt
