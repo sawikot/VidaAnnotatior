@@ -74,10 +74,10 @@ export function ImportAnnotationsModal({ open, onClose, slideId, onImported }: P
       setParsed(p);
       setNewNames({});
       // A label matching a class by name goes to it; shapes without a label come in without a class;
-      // anything else is left out until the person picks a class for it.
+      // any other label becomes a new class of its name unless the person chooses otherwise.
       setLabelMap(
         Object.fromEntries(
-          p.labels.map((l) => [l.label, l.class_id ?? (l.label === "" ? "unlabeled" : "skip")] as [string, ImportLabelTarget]),
+          p.labels.map((l) => [l.label, l.class_id ?? (l.label === "" ? "unlabeled" : "new")] as [string, ImportLabelTarget]),
         ),
       );
     } catch (e) {
