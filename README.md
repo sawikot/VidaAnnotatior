@@ -28,7 +28,7 @@ Backend service modules (`backend/app/services/`):
 |---|---|
 | `wsi_reader.py` | `WSIReader` interface. `OpenSlideReader` (real .svs/.tif/.tiff/.ndpi) and `ImageReader` (plain images for image projects) |
 | `deepzoom_service.py` | Generates DZI tiles on the fly for the OpenSeadragon viewer — a *display* concern, unrelated to annotation patches |
-| `tissue_detector.py` | `TissueDetector` interface. `HSVOtsuDetector`: HSV→Otsu threshold→morphology→small-component removal |
+| `tissue_detector.py` | `TissueDetector` interface. `HSVOtsuDetector`: HSV→saturation threshold set from the glass (so pale tissue counts) and Otsu→morphology→small-component removal |
 | `patch_generator.py` | Walks the Level-0 grid at the configured patch/stride size, keeps patches meeting the tissue threshold |
 | `coordinate_transform.py` | The **single** source of truth for Level-0 ⇄ patch-local math (mirrored in `frontend/src/utils/coordinates.ts`) |
 | `config_versioning.py` | Editing rules for the project's one configuration (tissue method fixed once patches exist) and diagnostic-class sync |
@@ -664,8 +664,10 @@ to `[A-Za-z0-9._-]`. Adding a format means one `Exporter` subclass registered in
   `.mrxs` file. Upload with *Choose folder*, or zip the `.mrxs` and its folder together.
 - **"Failed to read WSI metadata"** on import: confirm the file is a real OpenSlide-supported format;
   check the backend log for the underlying OpenSlide error.
-- **Tissue detection finds ~0% coverage**: lower the Otsu sensitivity slider, or check the slide isn't
-  mostly background glass at the macro level.
+- **Tissue detection misses pale tissue, or finds ~0% coverage**: lower the tissue threshold slider and re-run
+  detection (0.65, the default, takes everything stained however pale; 0.80 keeps only the strongly stained
+  tissue), or check the slide isn't mostly background glass at the macro level. What it still misses can be
+  added by hand with *Add tissue*.
 - **"0 of N candidate patches met the minimum tissue fraction"**: run tissue detection first, or lower
   `min_tissue_fraction` in Settings (existing patches keep their grid; generate again to apply it).
 - **CORS errors in the browser console**: `VITE_API_BASE` (frontend `.env`) must match the backend's

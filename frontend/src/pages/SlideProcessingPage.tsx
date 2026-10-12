@@ -426,6 +426,10 @@ export function SlideProcessingPage() {
             onChange={setOtsuSensitivity}
             display={otsuSensitivity.toFixed(2)}
           />
+          <p className="text-label-sm text-slate-500 -mt-2">
+            Lower counts more as tissue. 0.65 takes everything stained, however pale; 0.80 keeps only the strongly stained tissue. Press
+            Re-run Detection to apply.
+          </p>
           <SliderField label="Morph Open (px)" value={morphOpen} min={0} max={15} step={1} onChange={setMorphOpen} display={String(morphOpen)} />
           <SliderField label="Morph Close (px)" value={morphClose} min={0} max={15} step={1} onChange={setMorphClose} display={String(morphClose)} />
           </div>
