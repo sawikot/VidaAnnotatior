@@ -509,6 +509,29 @@ the ones for the current page first.
     every format, patch images and masks included (`?grid=<key>` on the export endpoints, e.g.
     `512x512_s256x256_m20_t0.5`; see `GET /api/slides/{id}/grids`).
 
+12. **Versions** (the *Versions* card on the project dashboard; managers and administrators): **Save as new
+    version** keeps the project exactly as it is now — its slides or images, tissue, patches, every annotation
+    and suggestion, the classes and the settings. Keep working (annotate more, remove images, predict with
+    another model) and save again: each save is a new version, and earlier ones never change. **Open** on a
+    version makes the project show only what that version holds — an image added later is not there, one
+    removed later is back — and work goes on from it; saving then makes a version beside the later ones
+    (*Made from* says which version each came from). With unsaved changes, opening another version asks first:
+    save them as a new version, or discard them. **Discard changes** puts the open version back as saved.
+    Trained models and training runs belong to the project and are the same in every version.
+
+    **Export** and **Training** read the work as it is now (the open version, with any unsaved changes) unless
+    another is picked in their *Version to export / train on* menu. Picking one there only changes what that
+    export or training run reads — the project stays on the version that is open — and a run records what it
+    was trained on (`?version=<id>` on the project's read and export endpoints; `version_id` when starting a run).
+
+    The Training page also shows the **train / validation / test split**, starting from the project's own (the
+    one in Settings, or the chosen version's). Changing it there — other shares, another shuffle, or sets given
+    by hand — applies to that training run only; the split in Settings stays as it is (`split` when starting a
+    run, and on the readiness endpoint).
+
+    A version is a file of its own (`data/uploads/<project id>/_versions/<id>/`); slide files are not copied,
+    and a removed slide's file stays on disk until no version has it. See `backend/app/services/versioning.py`.
+
 ## Database
 
 SQLite file at `data/database/app.db` (WAL mode + a busy-timeout pragma, so light concurrent access from

@@ -28,6 +28,14 @@ class TrainingRun(Base, TimestampMixin):
     settings: Mapped[dict] = mapped_column(JSON, default=dict)  # the recipe's settings, as chosen
     # How its dataset is cut and which patches go into it (services/training_data.DatasetOptions).
     dataset_options: Mapped[dict | None] = mapped_column(JSON, default=None)
+    # The saved version it trains on (models/version.py; no foreign key: the run outlives the
+    # version), None for the work as it is when the run starts. The label says which, in words, and is
+    # kept: "v2 · After review", or for the work "v3 · Name + unsaved changes".
+    version_id: Mapped[int | None] = mapped_column(Integer, default=None)
+    version_label: Mapped[str | None] = mapped_column(String(250), default=None)
+    # A train / val / test split of the run's own, chosen when it was started; None: the project's
+    # split as it is when the dataset is cut (services/training_data.parse_split).
+    split_override: Mapped[dict | None] = mapped_column(JSON, default=None)
 
     status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
     stop_requested: Mapped[bool] = mapped_column(Boolean, default=False)

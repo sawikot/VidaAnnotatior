@@ -17,7 +17,9 @@ import type {
   PatchStatus,
   Project,
   ProjectDetail,
+  ProjectVersions,
   Recipe,
+  RunSplit,
   RecipeDetail,
   Slide,
   SlideBatchImportResult,
@@ -100,12 +102,31 @@ function qs(params: Record<string, string | number | boolean | undefined | null>
 
 // ---- Projects ----
 export const listProjects = () => request<Project[]>("/projects");
-export const getProject = (id: number) => request<ProjectDetail>(`/projects/${id}`);
+/** `?version=` on a read: a saved version of the project instead of the work as it is now (not opened by it). */
+const withVersion = (path: string, version?: number | null) =>
+  version == null ? path : `${path}${path.includes("?") ? "&" : "?"}version=${version}`;
+
+export const getProject = (id: number, version?: number | null) => request<ProjectDetail>(withVersion(`/projects/${id}`, version));
 export const createProject = (payload: unknown) =>
   request<ProjectDetail>("/projects", { method: "POST", body: JSON.stringify(payload) });
 export const updateProject = (id: number, payload: unknown) =>
   request<ProjectDetail>(`/projects/${id}`, { method: "PUT", body: JSON.stringify(payload) });
 export const deleteProject = (id: number) => request<void>(`/projects/${id}`, { method: "DELETE" });
+
+// ---- Versions of a project's work ----
+export const listProjectVersions = (projectId: number) => request<ProjectVersions>(`/projects/${projectId}/versions`);
+export const saveProjectVersion = (projectId: number, payload: { name: string | null; note: string | null }) =>
+  request<ProjectVersions>(`/projects/${projectId}/versions`, { method: "POST", body: JSON.stringify(payload) });
+/** Opens a version: the project then shows what it holds. Unsaved changes are refused unless discarded. */
+export const openProjectVersion = (projectId: number, versionId: number, discardChanges: boolean) =>
+  request<ProjectVersions>(`/projects/${projectId}/versions/${versionId}/switch`, {
+    method: "POST",
+    body: JSON.stringify({ discard_changes: discardChanges }),
+  });
+export const updateProjectVersion = (projectId: number, versionId: number, payload: { name: string; note: string | null }) =>
+  request<ProjectVersions>(`/projects/${projectId}/versions/${versionId}`, { method: "PUT", body: JSON.stringify(payload) });
+export const deleteProjectVersion = (projectId: number, versionId: number) =>
+  request<ProjectVersions>(`/projects/${projectId}/versions/${versionId}`, { method: "DELETE" });
 
 // ---- Config versions ----
 export const getConfig = (id: number) => request<ConfigVersion>(`/configs/${id}`);
@@ -120,7 +141,9 @@ export interface ClassSyncItem {
 export const getConfigUsage = (id: number) => request<ConfigUsage>(`/configs/${id}/usage`);
 
 // ---- Slides ----
-export const listSlides = (projectId: number) => request<Slide[]>(`/projects/${projectId}/slides`);
+/** With a version: that version's slides, under the ids they have in it (only meaningful with the same version). */
+export const listSlides = (projectId: number, version?: number | null) =>
+  request<Slide[]>(withVersion(`/projects/${projectId}/slides`, version));
 export const getSlide = (id: number) => request<Slide>(`/slides/${id}`);
 export const deleteSlide = (id: number) => request<void>(`/slides/${id}`, { method: "DELETE" });
 export const getWsiFormats = () => request<WsiFormats>("/wsi-formats");
@@ -224,7 +247,8 @@ export const getTissueMaskOutline = (slideId: number) => request<{ rings: [numbe
 
 // ---- Processing ----
 export const listGrids = (slideId: number) => request<PatchGrid[]>(`/slides/${slideId}/grids`);
-export const listProjectGrids = (projectId: number) => request<ProjectGrid[]>(`/projects/${projectId}/grids`);
+export const listProjectGrids = (projectId: number, version?: number | null) =>
+  request<ProjectGrid[]>(withVersion(`/projects/${projectId}/grids`, version));
 /** Remove a patch size (from every slide, or one); its annotations are kept as whole-slide annotations. */
 /** Cut every slide with tissue into another patch size (optionally making it the project's grid). */
 export const addProjectGrid = (projectId: number, grid: GridSpec, makeDefault: boolean) =>
@@ -498,11 +522,28 @@ function datasetQuery(o?: DatasetOptions): string {
   const text = params.toString();
   return text ? `&${text}` : "";
 }
-export const getTrainingReadiness = (projectId: number, task = "detection", dataset?: DatasetOptions) =>
-  request<TrainingReadiness>(`/projects/${projectId}/training/readiness?task=${task}${datasetQuery(dataset)}`);
+/** `split`: a split for the run alone, in place of the project's (which is not changed). */
+export const getTrainingReadiness = (projectId: number, task = "detection", dataset?: DatasetOptions, version?: number | null, split?: RunSplit | null) =>
+  request<TrainingReadiness>(
+    withVersion(
+      `/projects/${projectId}/training/readiness?task=${task}${datasetQuery(dataset)}${split ? `&split=${encodeURIComponent(JSON.stringify(split))}` : ""}`,
+      version,
+    ),
+  );
 export const listTrainingRuns = (projectId: number) => request<TrainingRun[]>(`/projects/${projectId}/training/runs`);
-export const startTrainingRun = (projectId: number, recipeId: string, settings: Record<string, unknown>, dataset?: DatasetOptions) =>
-  request<TrainingRun>(`/projects/${projectId}/training/runs`, { method: "POST", body: JSON.stringify({ recipe_id: recipeId, settings, dataset: dataset ?? {} }) });
+/** `versionId`: train on that saved version; left out, on the work as it is when the run starts. */
+export const startTrainingRun = (
+  projectId: number,
+  recipeId: string,
+  settings: Record<string, unknown>,
+  dataset?: DatasetOptions,
+  versionId?: number | null,
+  split?: RunSplit | null,
+) =>
+  request<TrainingRun>(`/projects/${projectId}/training/runs`, {
+    method: "POST",
+    body: JSON.stringify({ recipe_id: recipeId, settings, dataset: dataset ?? {}, version_id: versionId ?? null, split: split ?? null }),
+  });
 export const getTrainingRun = (runId: number) => request<TrainingRun>(`/training/runs/${runId}`);
 export const stopTrainingRun = (runId: number) => request<TrainingRun>(`/training/runs/${runId}/stop`, { method: "POST" });
 export const deleteTrainingRun = (runId: number) => request<void>(`/training/runs/${runId}`, { method: "DELETE" });
@@ -561,7 +602,8 @@ export interface SplitUpdate extends SplitSettings {
   /** Manual: slide id -> its set, or null for none. Slides not named keep theirs. */
   assignments?: Record<number, SplitName | null>;
 }
-export const getSplit = (projectId: number) => request<DatasetSplit>(`/projects/${projectId}/split`);
+export const getSplit = (projectId: number, version?: number | null) =>
+  request<DatasetSplit>(withVersion(`/projects/${projectId}/split`, version));
 export const saveSplit = (projectId: number, payload: SplitUpdate) =>
   request<DatasetSplit>(`/projects/${projectId}/split`, { method: "PUT", body: JSON.stringify(payload) });
 
@@ -573,12 +615,12 @@ export const exportProjectUrl = (projectId: number, formatId: string, options?: 
   `${API_BASE}/projects/${projectId}/export/${formatId}${options ? optionsQuery(options, { project: true }) : ""}`;
 
 /** What an export with these options would cover (counts only; nothing is rendered). */
-export const getExportSummary = (scope: "slide" | "project", id: number, options: ExportOptions, formats?: string | string[], slides?: number[]) =>
-  request<ExportSummary>(`/${scope === "slide" ? "slides" : "projects"}/${id}/export-summary${summaryQuery(options, formats, slides)}`);
+export const getExportSummary = (scope: "slide" | "project", id: number, options: ExportOptions, formats?: string | string[], slides?: number[], version?: number | null) =>
+  request<ExportSummary>(withVersion(`/${scope === "slide" ? "slides" : "projects"}/${id}/export-summary${summaryQuery(options, formats, slides)}`, version));
 
 /** The export screen's download: the chosen slides, in one or several formats (see `selectionDownloadKind`). */
-export const exportSelectionUrl = (projectId: number, options: ExportOptions, formats: string[], slides: number[], allSlides: number) =>
-  `${API_BASE}/projects/${projectId}/export${selectionQuery(options, formats, slides, allSlides)}`;
+export const exportSelectionUrl = (projectId: number, options: ExportOptions, formats: string[], slides: number[], allSlides: number, version?: number | null) =>
+  withVersion(`${API_BASE}/projects/${projectId}/export${selectionQuery(options, formats, slides, allSlides)}`, version);
 
 /**
  * Starts a download the browser itself carries out: the server's file streams straight to disk, under

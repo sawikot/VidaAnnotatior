@@ -8,7 +8,7 @@ from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.api.deps import forbid_for_image_project, get_project_or_404, get_slide_or_404
+from app.api.deps import forbid_for_image_project, get_project_or_404, get_slide_or_404, project_view
 from app.core.config import get_settings
 from app.database.session import get_db
 from app.models.annotation import GeometryAnnotation
@@ -386,8 +386,9 @@ def remove_slide_grid(grid_key: str, slide: Slide = Depends(get_slide_or_404), d
 
 
 @router.get("/projects/{project_id}/grids", response_model=list[ProjectGridOut])
-def list_project_grids(project: Project = Depends(get_project_or_404), db: Session = Depends(get_db)):
+def list_project_grids(view: tuple[Session, Project] = Depends(project_view)):
     """Every patch size used in the project (and the project's own, even if not generated yet)."""
+    db, project = view  # the work, or a saved version (?version=)
     config = db.get(ProjectConfigVersion, project.active_config_version_id) if project.active_config_version_id else None
     if config is None or project.project_type == "image":
         return []

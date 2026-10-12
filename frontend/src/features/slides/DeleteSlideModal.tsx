@@ -54,7 +54,8 @@ export function DeleteSlideModal({
         <>
           This permanently deletes <strong className="break-all">{target?.filename}</strong> and everything under it --
           {noun === "slide" ? " its tissue masks, patches and" : ""} every annotation{target?.detail ? <> ({target.detail})</> : null}.
-          The {noun} file stored by the app is removed too. This cannot be undone.
+          The {noun} file stored by the app is removed too. This cannot be undone -- except by opening a saved version
+          that still has this {noun}.
         </>
       }
     />

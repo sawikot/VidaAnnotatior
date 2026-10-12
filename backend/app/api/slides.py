@@ -14,7 +14,7 @@ from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.api.deps import forbid_for_image_project, get_project_or_404, get_slide_or_404
+from app.api.deps import forbid_for_image_project, get_project_or_404, get_slide_or_404, project_view
 from app.core.config import get_settings
 from app.database.session import get_db
 from app.models.annotation import GeometryAnnotation
@@ -30,7 +30,7 @@ from app.schemas.slide import (
     WsiFormatOut,
     WsiFormatsOut,
 )
-from app.services import reader_cache
+from app.services import reader_cache, versioning
 from app.services.patch_grid import IMAGE_GRID_KEY, active_grid_filter, grid_key_of
 from app.services.tissue_mask import auto_mask_path
 from app.services.image_import import IMAGE_EXTENSIONS, ImageDiscovery, ImageItem, discover_images
@@ -74,9 +74,10 @@ def _extract_and_store_metadata(db: Session, slide: Slide) -> None:
 
 
 @router.get("/projects/{project_id}/slides", response_model=list[SlideOut])
-def list_slides(project: Project = Depends(get_project_or_404), db: Session = Depends(get_db)):
+def list_slides(view: tuple[Session, Project] = Depends(project_view)):
     """The project's slides, each with its progress in its active grid (patches, annotated, reviewed),
-    so a list can say what each slide needs next."""
+    so a list can say what each slide needs next. With ``?version=``: the slides of that saved version."""
+    db, project = view
     slides = db.query(Slide).filter(Slide.project_id == project.id).order_by(Slide.created_at.desc()).all()
     out = []
     for slide in slides:
@@ -503,23 +504,15 @@ def get_slide(slide: Slide = Depends(get_slide_or_404)):
 @router.delete("/slides/{slide_id}", status_code=204, response_model=None)
 def delete_slide(slide: Slide = Depends(get_slide_or_404), db: Session = Depends(get_db)):
     """Delete a slide or image and everything under it: its patches, annotations, tissue masks,
-    cached tiles and stored files. Files it was imported from (a server path) are never touched."""
+    cached tiles and stored files. Files it was imported from (a server path) are never touched.
+    A saved version that has the slide keeps its own copy of all that, and the slide's files stay
+    for it (services/versioning.py)."""
     # Close the open file first: Windows will not delete a file that is still open.
     reader_cache.invalidate(slide.id)
     purge_slide_tiles(slide.id)
     settings = get_settings()
-    storage = settings.wsi_storage_dir.resolve()
-    project_dir = (storage / str(slide.project_id)).resolve()
-    doomed_dirs: list[Path] = []
+    project_id, file_path = slide.project_id, slide.file_path
     doomed_files = [auto_mask_path(settings.wsi_storage_dir, slide)]
-    if slide.file_path:
-        primary = (storage / slide.file_path).resolve()
-        slide_dir = primary.parent
-        if slide_dir != project_dir and project_dir in slide_dir.parents:
-            # Current layout: each slide owns a directory (a .mrxs slide keeps its data folder in it).
-            doomed_dirs.append(slide_dir)
-        elif project_dir in primary.parents:
-            doomed_files.append(primary)  # older layout: one flat file per slide
     if slide.tissue_mask_path:
         doomed_files.append(settings.wsi_storage_dir / slide.tissue_mask_path)
 
@@ -531,8 +524,7 @@ def delete_slide(slide: Slide = Depends(get_slide_or_404), db: Session = Depends
     db.commit()
 
     # Only once the rows are gone: a failed commit must not leave a slide whose files were deleted.
-    for directory in doomed_dirs:
-        shutil.rmtree(directory, ignore_errors=True)
+    versioning.release_slide_files(db, settings.wsi_storage_dir, project_id, [file_path])
     for path in doomed_files:
         path.unlink(missing_ok=True)
 

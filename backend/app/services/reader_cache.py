@@ -16,14 +16,19 @@ from app.services.wsi_reader import ImageReader, OpenSlideReader, WSIReader
 
 _lock = threading.Lock()
 _cache: dict[int, WSIReader] = {}
+_files: dict[int, str | None] = {}  # the file each open reader is of (Slide.file_path)
 _MAX_OPEN = 8
 
 
 def get_reader_for_slide(slide: Slide) -> WSIReader:
     with _lock:
         reader = _cache.get(slide.id)
-        if reader is not None:
+        if reader is not None and _files.get(slide.id) == slide.file_path:
             return reader
+        if reader is not None:
+            # The same id, another file: a slide of a saved version read beside the work
+            # (services/versioning.py), where ids deleted since may have been given out again.
+            _cache.pop(slide.id).close()
 
         settings = get_settings()
         if not slide.file_path:
@@ -39,11 +44,13 @@ def get_reader_for_slide(slide: Slide) -> WSIReader:
             oldest_id = next(iter(_cache))
             _cache.pop(oldest_id).close()
         _cache[slide.id] = reader
+        _files[slide.id] = slide.file_path
         return reader
 
 
 def invalidate(slide_id: int) -> None:
     with _lock:
+        _files.pop(slide_id, None)
         reader = _cache.pop(slide_id, None)
         if reader is not None:
             reader.close()

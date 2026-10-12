@@ -13,7 +13,7 @@ from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_project_or_404, get_slide_or_404
+from app.api.deps import get_slide_or_404, project_view
 from app.core.config import get_settings
 from app.database.session import get_db
 from app.models.patch import Patch
@@ -160,8 +160,7 @@ def export_project(
     combine: bool | None = Query(None, description="one combined file for dataset-level formats (COCO, CSV)"),
     grid: str | None = Query(None, description="export in another patch grid, e.g. 512x512_s512x512_m20_t0.5 (see /slides/{id}/grids)"),
     classify: dict = Depends(classification_params),
-    project: Project = Depends(get_project_or_404),
-    db: Session = Depends(get_db),
+    view: tuple[Session, Project] = Depends(project_view),
 ):
     """Every processed slide of the project, exported in one format.
 
@@ -174,6 +173,7 @@ def export_project(
 
     With ``content=images`` the ZIP also holds the patch images (cut from the slides on the fly).
     """
+    db, project = view  # the work, or a saved version (?version=)
     try:
         exporter = get_exporter(format_id)
     except ValueError as exc:
@@ -294,15 +294,18 @@ def export_selection(
     grid: str | None = Query(None, description="export in another patch grid, e.g. 512x512_s512x512_m20_t0.5"),
     split: bool = Query(False, description="sort the download into train / val / test folders, by the project's split"),
     classify: dict = Depends(classification_params),
-    project: Project = Depends(get_project_or_404),
-    db: Session = Depends(get_db),
+    view: tuple[Session, Project] = Depends(project_view),
 ):
     """The export screen's download: the chosen slides, in one or several formats, optionally with images.
 
     One format for one slide (or combined into one file) without images arrives as that file;
     anything else is a ZIP (annotation files under ``annotations/``, images under ``images/``, and a
     ``manifest.json`` listing slides that were skipped and why). With ``split`` it is always a ZIP, each
-    set of the project's train / val / test split in a folder of its own."""
+    set of the project's train / val / test split in a folder of its own.
+
+    With ``version`` it is a saved version that is exported, not the work as it is now (which is left
+    alone); ``slides`` are then that version's slide ids (``GET /projects/{id}/slides?version=``)."""
+    db, project = view
     exporters = _exporters(formats)
     options = _options(patches, content, image_format, masks, combine, grid, classify)
     chosen = _chosen_slides(project, _ids(slides, "slides"))
@@ -399,9 +402,9 @@ def export_project_summary(
     format: str | None = Query(None, description="the export format(s), comma-separated"),
     slides: str | None = Query(None, description="only these slides, comma-separated ids"),
     classify: dict = Depends(classification_params),
-    project: Project = Depends(get_project_or_404),
-    db: Session = Depends(get_db),
+    view: tuple[Session, Project] = Depends(project_view),
 ):
+    db, project = view
     return _summary_out(
         db, _chosen_slides(project, _ids(slides, "slides")),
         _options(patches, "annotations", image_format, False, None, grid, classify), image_format, format,

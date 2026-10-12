@@ -7,7 +7,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.api.access import current_user
-from app.api.deps import get_project_or_404
+from app.api.deps import get_project_or_404, project_view
 from app.api.training import run_dir, training_dir
 from app.models.user import ProjectMember, User
 from app.core.config import get_settings
@@ -18,6 +18,7 @@ from app.models.patch import Patch
 from app.models.project import Project
 from app.models.slide import Slide
 from app.models.training import TrainedModel, TrainingRun
+from app.models.version import ProjectVersion
 from app.schemas.project import ProjectCreate, ProjectDetailOut, ProjectOut, ProjectStats, ProjectUpdate
 from app.services import dataset_split, project_storage, reader_cache
 from app.services.deepzoom_service import purge_slide_tiles
@@ -89,7 +90,8 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db), user: 
 
 
 @router.get("/{project_id}", response_model=ProjectDetailOut)
-def get_project(project: Project = Depends(get_project_or_404), db: Session = Depends(get_db)) -> Project:
+def get_project(view: tuple[Session, Project] = Depends(project_view)) -> Project:
+    db, project = view  # the work, or a saved version (?version=)
     return _to_detail(db, project)
 
 
@@ -152,6 +154,8 @@ def delete_project(project: Project = Depends(get_project_or_404), db: Session =
     # ...and the files of models added from elsewhere (those of a run live in the run's folder).
     run_dirs += [training_dir() / Path(row[0]).parent for row in db.query(TrainedModel.code_path).filter(TrainedModel.project_id == project.id, TrainedModel.source == "import")]
     db.query(TrainingRun).filter(TrainingRun.project_id == project.id).delete(synchronize_session=False)
+
+    db.query(ProjectVersion).filter(ProjectVersion.project_id == project.id).delete(synchronize_session=False)
 
     project_dir = project_storage.project_dir(get_settings().wsi_storage_dir, project.id)
     db.delete(project)

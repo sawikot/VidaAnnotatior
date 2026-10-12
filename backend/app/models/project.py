@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import JSON, ForeignKey, String
+from sqlalchemy import JSON, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base, TimestampMixin
@@ -27,6 +27,16 @@ class Project(Base, TimestampMixin):
         ForeignKey("project_config_versions.id", use_alter=True, name="fk_project_active_config"),
         default=None,
     )
+
+    # Saved versions of the work (models/version.py, services/versioning.py): the one the work is
+    # on, and what the work looked like when it last matched a version -- anything else is unsaved.
+    # (Stored as "work_version_id": some databases carry a "current_version_id" column of an earlier,
+    # unrelated experiment, whose values mean nothing here.)
+    current_version_id: Mapped[int | None] = mapped_column("work_version_id", Integer, default=None)
+    saved_state: Mapped[str | None] = mapped_column(String(64), default=None)
+    # Class ids that had to change when a version was opened ({"old": new}): versions and models
+    # saved with the old id mean the new one.
+    class_aliases: Mapped[dict | None] = mapped_column(JSON, default=None)
 
     config_versions: Mapped[list["ProjectConfigVersion"]] = relationship(
         "ProjectConfigVersion",

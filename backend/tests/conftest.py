@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.database.base import Base
-from app.models import annotation, config_version, patch, project, slide, training, user  # noqa: F401
+from app.models import annotation, config_version, patch, project, slide, training, user, version  # noqa: F401
 
 
 @pytest.fixture(autouse=True)

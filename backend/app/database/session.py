@@ -30,6 +30,7 @@ def init_db() -> None:
         slide,
         training,
         user,
+        version,
     )
 
     if settings.database_url.startswith("sqlite"):
@@ -64,7 +65,13 @@ def _add_missing_columns(bind=None) -> None:
     from sqlalchemy import inspect, text
 
     additions = {
-        "projects": [("project_type", "VARCHAR(20) NOT NULL DEFAULT 'wsi'"), ("split_config", "JSON")],
+        "projects": [
+            ("project_type", "VARCHAR(20) NOT NULL DEFAULT 'wsi'"),
+            ("split_config", "JSON"),
+            ("work_version_id", "INTEGER"),
+            ("saved_state", "VARCHAR(64)"),
+            ("class_aliases", "JSON"),
+        ],
         "slides": [
             ("tissue_source", "VARCHAR(20) NOT NULL DEFAULT 'auto'"),
             ("tissue_regions", "JSON"),
@@ -74,7 +81,7 @@ def _add_missing_columns(bind=None) -> None:
         "patches": [("grid_key", "VARCHAR(80)"), ("label_class_id", "INTEGER REFERENCES annotation_classes(id)"), ("reviewed_by_id", "INTEGER REFERENCES users(id) ON DELETE SET NULL")],
         "annotation_classes": [("code", "BIGINT")],
         "project_config_versions": [("saved_grids", "JSON")],
-        "training_runs": [("stage", "VARCHAR(400)"), ("dataset_options", "JSON")],
+        "training_runs": [("stage", "VARCHAR(400)"), ("dataset_options", "JSON"), ("version_id", "INTEGER"), ("version_label", "VARCHAR(250)"), ("split_override", "JSON")],
         "trained_models": [("source", "VARCHAR(20) NOT NULL DEFAULT 'run'"), ("class_map", "JSON")],
         "geometry_annotations": [("whole_patch", "BOOLEAN NOT NULL DEFAULT 0"), ("created_by_id", "INTEGER REFERENCES users(id) ON DELETE SET NULL")],
     }

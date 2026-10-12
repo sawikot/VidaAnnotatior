@@ -112,6 +112,41 @@ def parse_options(raw: dict | None, project: Project) -> DatasetOptions:
     return DatasetOptions(size, stride if size is not None else None, area, use, empty, empty_from, classes, image_format)
 
 
+def parse_split(raw: dict | None) -> dict | None:
+    """A split of a run's own, checked: None (the project's split, as it is), a random one
+    ({"mode": "random", "train", "val", "test", "seed"}) or sets given slide by slide ({"mode": "manual",
+    "assignments": {slide id: set or None}}; slides not named keep the project's). It is used for that
+    run only: the project's split is not changed. Raises ValueError saying what is wrong."""
+    if not raw:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError("The split must be an object.")
+    mode = raw.get("mode")
+    try:
+        if mode == "random":
+            return dataset_split.make_config("random", int(raw.get("train", 0)), int(raw.get("val", 0)), int(raw.get("test", 0)), seed=int(raw.get("seed") or 1))
+        if mode == "manual":
+            assignments = {str(int(slide_id)): name for slide_id, name in (raw.get("assignments") or {}).items()}
+            if any(name is not None and name not in dataset_split.SPLITS for name in assignments.values()):
+                raise ValueError("A slide's set is train, val or test.")
+            return {"mode": "manual", "assignments": assignments}
+    except TypeError:
+        raise ValueError("The split's shares and slide ids must be numbers.") from None
+    raise ValueError("A run's own split is random or manual.")
+
+
+def _sets(project: Project, split: dict | None) -> tuple[str, dict[int, str | None]]:
+    """How the slides are split for a run -- the mode, and the set of each slide: the project's
+    split, or the run's own in its place (``parse_split``)."""
+    slides = sorted(project.slides, key=lambda s: s.id)
+    own = {s.id: s.split if s.split in dataset_split.SPLITS else None for s in slides}
+    if split is None:
+        return dataset_split.mode_of(project), own
+    if split["mode"] == "random":
+        return "random", dict(dataset_split.deal([s.id for s in slides], split))
+    return "manual", {slide_id: split["assignments"].get(str(slide_id), name) for slide_id, name in own.items()}
+
+
 def _export_options(db: Session, project: Project, task: str, opts: DatasetOptions, seed: int = 0, **more) -> ExportOptions:
     grid = None
     if opts.patch_size is not None:
@@ -139,9 +174,9 @@ def _usable(db: Session, slide: Slide, opts: DatasetOptions) -> bool:
     return active_grid_filter(db.query(Patch.id).filter(Patch.slide_id == slide.id), slide).first() is not None
 
 
-def _by_set(db: Session, project: Project, opts: DatasetOptions) -> dict[str, list[Slide]]:
+def _by_set(db: Session, project: Project, opts: DatasetOptions, sets: dict[int, str | None]) -> dict[str, list[Slide]]:
     slides = sorted(project.slides, key=lambda s: s.id)
-    return {name: [s for s in slides if s.split == name and _usable(db, s, opts)] for name in dataset_split.SPLITS}
+    return {name: [s for s in slides if sets.get(s.id) == name and _usable(db, s, opts)] for name in dataset_split.SPLITS}
 
 
 def _class_ids(db: Session, project: Project) -> dict[str, int]:
@@ -174,17 +209,19 @@ def _count(db: Session, slide: Slide, task: str, export: ExportOptions, opts: Da
     return with_objects, len(doc["images"]) - with_objects, per_class
 
 
-def readiness(db: Session, project: Project, task: str, opts: DatasetOptions | None = None) -> dict:
-    """What a training run would learn from, per set, and what stands in the way of starting one."""
+def readiness(db: Session, project: Project, task: str, opts: DatasetOptions | None = None, split: dict | None = None) -> dict:
+    """What a training run would learn from, per set, and what stands in the way of starting one.
+    ``split``: a split of the run's own (``parse_split``) in place of the project's."""
     opts = opts or DatasetOptions()
     if dataset_split.fill(project, list(project.slides)):  # slides added since the last random deal
         db.commit()
+    mode, slide_sets = _sets(project, split)
     ids = _class_ids(db, project)
     export = _export_options(db, project, task, opts)
     classes: dict[int, dict] = {}
     sets: dict[str, dict] = {}
     problems: list[str] = []
-    for name, slides in _by_set(db, project, opts).items():
+    for name, slides in _by_set(db, project, opts, slide_sets).items():
         images = empty = 0
         per_class: dict[int, int] = {}
         for slide in slides:
@@ -202,7 +239,7 @@ def readiness(db: Session, project: Project, task: str, opts: DatasetOptions | N
     image_project = project.project_type == "image"
     unit = "images" if image_project else "patches"
     what = f"labelled {unit}" if task == "classification" else f"annotated {unit}"
-    if dataset_split.mode_of(project) == "off":
+    if mode == "off":
         problems.insert(0, f"Set up the train / validation / test split first, so the model is tested on {'images' if image_project else 'slides'} it has not seen.")
     elif not problems:
         if sets["train"]["images"] < MIN_TRAIN_IMAGES:
@@ -223,7 +260,7 @@ def readiness(db: Session, project: Project, task: str, opts: DatasetOptions | N
 
     return {
         "task": task,
-        "split_mode": dataset_split.mode_of(project),
+        "split_mode": mode,
         "classes": sorted(classes.values(), key=lambda c: c["id"]),
         # Every class of the project, for choosing which to learn.
         "project_classes": [{"id": i, "name": n} for n, i in sorted(ids.items(), key=lambda item: item[1])],
@@ -234,13 +271,15 @@ def readiness(db: Session, project: Project, task: str, opts: DatasetOptions | N
     }
 
 
-def build_dataset(db: Session, project: Project, run_dir: Path, task: str, opts: DatasetOptions | None = None, seed: int = 0) -> dict:
+def build_dataset(db: Session, project: Project, run_dir: Path, task: str, opts: DatasetOptions | None = None, seed: int = 0, split: dict | None = None) -> dict:
     """Write the run's dataset into ``run_dir/dataset`` and return what it holds (kept with the run).
+    ``split``: a split of the run's own (``parse_split``) in place of the project's.
     Raises ValueError when there is nothing to train on."""
     opts = opts or DatasetOptions()
     if dataset_split.fill(project, list(project.slides)):
         db.commit()
-    by_set = _by_set(db, project, opts)
+    slide_sets = _sets(project, split)[1]
+    by_set = _by_set(db, project, opts, slide_sets)
     slides = [s for group in by_set.values() for s in group]
     if not by_set["train"] or not by_set["val"]:
         raise ValueError("The training and validation sets both need at least one slide with patches.")
@@ -252,7 +291,7 @@ def build_dataset(db: Session, project: Project, run_dir: Path, task: str, opts:
     bundle = build_bundle(
         db, slides, get_exporter("patch_classification" if classification else "coco"),
         _export_options(db, project, task, opts, seed, content="images", image_format=opts.image_format),
-        combine=True, label="dataset", max_images=10**9, split_of={s.id: s.split for s in slides},
+        combine=True, label="dataset", max_images=10**9, split_of={s.id: slide_sets[s.id] for s in slides},
     )
     try:
         with zipfile.ZipFile(bundle.file) as archive:

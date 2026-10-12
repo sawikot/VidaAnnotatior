@@ -7,6 +7,7 @@ import { EditProjectModal } from "../features/projects/EditProjectModal";
 import { AddSlideModal } from "../features/slides/AddSlideModal";
 import { DeleteSlideModal, type DeleteTarget } from "../features/slides/DeleteSlideModal";
 import { ProjectChecklist } from "../features/projects/ProjectChecklist";
+import { VersionsPanel } from "../features/versions/VersionsPanel";
 import { slideNextStep } from "../utils/nextStep";
 import { getProject, listSlides } from "../services/api";
 import type { ProjectDetail, Slide } from "../types/api";
@@ -23,6 +24,7 @@ export function ProjectDashboardPage() {
 
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [slides, setSlides] = useState<Slide[]>([]);
+  const [revision, setRevision] = useState(0); // goes up with every reload of the project
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
@@ -41,6 +43,7 @@ export function ProjectDashboardPage() {
         setProject(p);
         setSlides(s);
         setActiveProject(p);
+        setRevision((n) => n + 1);
       })
       .catch(() => pushToast("Failed to load project", "error"));
   }
@@ -127,6 +130,8 @@ export function ProjectDashboardPage() {
           <ChipKv k="Segmentation" v={config.tissue_method} />
         </Card>
       )}
+
+      <VersionsPanel projectId={pid} projectType={project.project_type} revision={revision} onSwitched={refresh} />
 
       <ProjectChecklist project={project} slides={slides} onAdd={() => setAddOpen(true)} />
 

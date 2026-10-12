@@ -682,3 +682,48 @@ def test_a_run_keeps_its_dataset_options_and_is_cut_with_them(project):
     assert run["dataset_options"]["image_format"] == "png" and all(image["file_name"].endswith(".png") for image in doc["images"])
     assert start({"image_format": "gif"}).status_code == 422
     assert start({"image_format": "jpg"}).json()["dataset_options"]["image_format"] == "jpg"
+
+
+def test_a_run_can_have_a_split_of_its_own_and_the_projects_stays(project):
+    client, pid, ids = project
+    a, b, c = ids
+
+    def sets(split=None):
+        params = {"split": json.dumps(split)} if split else {}
+        res = client.get(f"/api/projects/{pid}/training/readiness", params=params)
+        assert res.status_code == 200, res.text
+        body = res.json()
+        return body["split_mode"], {name: s["slides"] for name, s in body["sets"].items()}, body["problems"]
+
+    def project_split():
+        body = client.get(f"/api/projects/{pid}/split").json()
+        return body["mode"], {s["slide_id"]: s["split"] for s in body["slides"]}
+
+    # The project has no split; the run brings its own, and the project still has none afterwards.
+    by_hand = {"mode": "manual", "assignments": {a: "train", b: "val", c: "test"}}
+    assert sets()[0] == "off" and sets()[2]
+    assert sets(by_hand) == ("manual", {"train": 1, "val": 1, "test": 1}, [])
+    assert project_split() == ("off", {a: None, b: None, c: None})
+
+    run = client.post(f"/api/projects/{pid}/training/runs", json={"recipe_id": RECIPE, "split": by_hand})
+    assert run.status_code == 201, run.text
+    run = run.json()
+    assert run["split_override"] == {"mode": "manual", "assignments": {str(a): "train", str(b): "val", str(c): "test"}}
+    assert trainer(client, "/claim").json()["run"]["id"] == run["id"]
+    cut = client.get(f"/api/training/runs/{run['id']}").json()["dataset"]["sets"]
+    assert (cut["train"]["slides"], cut["val"]["slides"], cut["test"]["slides"]) == (["a.tif"], ["b.tif"], ["c.tif"])
+    assert project_split() == ("off", {a: None, b: None, c: None})
+
+    # With a split in the project: the run's own takes its place, slide by slide or dealt at random.
+    split(client, pid, ids)
+    assert sets() == ("manual", {"train": 1, "val": 1, "test": 1}, [])
+    swapped = {"mode": "manual", "assignments": {a: "val", b: "train", c: None}}
+    assert sets(swapped)[1] == {"train": 1, "val": 1, "test": 0}
+    dealt = {"mode": "random", "train": 34, "val": 33, "test": 33, "seed": 7}
+    assert sets(dealt)[:2] == ("random", {"train": 1, "val": 1, "test": 1}) and sets(dealt) == sets(dealt)  # the same deal each time
+    assert sets({"mode": "random", "train": 100, "val": 0, "test": 0, "seed": 7})[1] == {"train": 3, "val": 0, "test": 0}
+    assert project_split() == ("manual", {a: "train", b: "val", c: "test"})
+
+    for bad in ({"mode": "random", "train": 50, "val": 10, "test": 10}, {"mode": "manual", "assignments": {a: "holdout"}}, {"mode": "off"}):
+        assert client.get(f"/api/projects/{pid}/training/readiness", params={"split": json.dumps(bad)}).status_code == 422
+        assert client.post(f"/api/projects/{pid}/training/runs", json={"recipe_id": RECIPE, "split": bad}).status_code == 422

@@ -47,15 +47,29 @@ def counts(slides: list[Slide]) -> dict[str, int]:
     return out
 
 
-def _deal(waiting: list[Slide], assigned: dict[str, int], config: dict, rng: random.Random) -> None:
-    """Give each waiting slide to the set furthest below its share, in a random order."""
-    waiting = sorted(waiting, key=lambda s: s.id)
+def _dealt(slide_ids: list[int], assigned: dict[str, int], config: dict, rng: random.Random) -> dict[int, str]:
+    """The set of each waiting slide: each goes to the set furthest below its share, in a random order."""
+    waiting = sorted(slide_ids)
     rng.shuffle(waiting)
-    for slide in waiting:
+    sets: dict[int, str] = {}
+    for slide_id in waiting:
         total = sum(assigned.values()) + 1
         open_sets = [name for name in SPLITS if config[name] > 0]
-        slide.split = max(open_sets, key=lambda name: config[name] / 100 * total - assigned[name])
-        assigned[slide.split] += 1
+        sets[slide_id] = max(open_sets, key=lambda name: config[name] / 100 * total - assigned[name])
+        assigned[sets[slide_id]] += 1
+    return sets
+
+
+def _deal(waiting: list[Slide], assigned: dict[str, int], config: dict, rng: random.Random) -> None:
+    sets = _dealt([s.id for s in waiting], assigned, config, rng)
+    for slide in waiting:
+        slide.split = sets[slide.id]
+
+
+def deal(slide_ids: list[int], config: dict) -> dict[int, str]:
+    """A random split of these slides by ``config``'s shares and seed, without touching any slide: a
+    split used once (a training run's own), where the project's stays as it is."""
+    return _dealt(slide_ids, {name: 0 for name in SPLITS}, config, random.Random(config["seed"]))
 
 
 def reshuffle(project: Project, slides: list[Slide]) -> None:

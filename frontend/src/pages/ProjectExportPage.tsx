@@ -5,6 +5,7 @@ import { Button, Card } from "../components/primitives";
 import { EXPORT_FORMATS, type ExportFormat } from "../features/export/formats";
 import { ExportOptionsPanel } from "../features/export/ExportOptionsPanel";
 import { SplitPanel } from "../features/split/SplitPanel";
+import { VersionSelect } from "../features/versions/VersionSelect";
 import { formatBytes } from "../features/slides/uploadSelection";
 import {
   exportSelectionUrl,
@@ -55,6 +56,8 @@ export function ProjectExportPage() {
 
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [slides, setSlides] = useState<Slide[] | null>(null);
+  // The saved version exported; null: the work as it is now. Its slides have their own ids.
+  const [version, setVersion] = useState<number | null>(null);
   const [chosen, setChosen] = useState<Set<number>>(new Set());
   const [query, setQuery] = useState("");
   const [formats, setFormats] = useState<string[]>(["wsi_json"]);
@@ -76,22 +79,27 @@ export function ProjectExportPage() {
   const setOptions = (next: ExportOptions) => setOptionsState(normalizeOptions(next));
 
   useEffect(() => {
-    getProject(pid).then(setProject).catch(() => undefined);
-    listProjectGrids(pid)
+    getProject(pid, version)
+      .then((p) => {
+        setProject(p);
+        if (version !== null) splitModeChanged(p.split_config?.mode ?? "off"); // a version's split is its own
+      })
+      .catch(() => undefined);
+    listProjectGrids(pid, version)
       .then((grids) => setDefaultGrid((grids.find((g) => g.is_default) ?? grids[0])?.spec ?? null))
       .catch(() => setDefaultGrid(null));
-    listSlides(pid)
+    listSlides(pid, version)
       .then((list) => {
         const sorted = [...list].sort((a, b) => a.id - b.id);
         setSlides(sorted);
         // Straight from a slide's own Export button: just that slide. Otherwise every slide that is ready.
-        const only = (searchParams.get("slides") ?? "").split(",").map(Number).filter(Boolean);
+        const only = version === null ? (searchParams.get("slides") ?? "").split(",").map(Number).filter(Boolean) : [];
         const start = only.length ? sorted.filter((s) => only.includes(s.id)) : sorted;
         setChosen(new Set(start.map((s) => s.id)));
       })
       .catch(() => setSlides([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pid]);
+  }, [pid, version]);
 
   const readyOf = useMemo(() => {
     const out = new Map<number, string | null>();
@@ -111,14 +119,14 @@ export function ProjectExportPage() {
     setSummary(null);
     if (!selectedIds.length) return;
     let stale = false;
-    getExportSummary("project", pid, options, formats, selectedIds)
+    getExportSummary("project", pid, options, formats, selectedIds, version)
       .then((s) => !stale && setSummary(s))
       .catch(() => undefined);
     return () => {
       stale = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slides, selectedKey, formats.join(","), options.patches, options.imageFormat, options.content, gridParam, classParam]);
+  }, [slides, selectedKey, formats.join(","), options.patches, options.imageFormat, options.content, gridParam, classParam, version]);
 
   // The preview: one chosen file for one chosen slide, fetched only while it is open.
   const shownFormat = previewFormat && formats.includes(previewFormat) ? previewFormat : formats[0];
@@ -128,7 +136,9 @@ export function ProjectExportPage() {
     let stale = false;
     setLoadingPreview(true);
     setPreview("");
-    fetch(exportSlideUrl(shownSlide, shownFormat, { ...options, content: "annotations", masks: false }))
+    const one = { ...options, content: "annotations" as const, masks: false, split: false };
+    // A version's slide is not a slide of the work: it is asked for through the project, by version.
+    fetch(version === null ? exportSlideUrl(shownSlide, shownFormat, one) : exportSelectionUrl(pid, one, [shownFormat], [shownSlide], -1, version))
       .then(async (r) => {
         const text = await r.text();
         if (!r.ok) throw new Error(text);
@@ -141,7 +151,7 @@ export function ProjectExportPage() {
       stale = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [previewOpen, shownFormat, shownSlide, options.patches, gridParam, classParam]);
+  }, [previewOpen, shownFormat, shownSlide, options.patches, gridParam, classParam, version]);
 
   const kind = selectionDownloadKind(project?.project_type, formats, options, selected.length);
   const problem = selectionProblem(summary, options, formats, selected.length, noun);
@@ -169,7 +179,7 @@ export function ProjectExportPage() {
   function handleDownload() {
     if (problem || !slides) return;
     // Straight from the click: the browser downloads the file itself (see startDownload).
-    startDownload(exportSelectionUrl(pid, options, formats, selectedIds, slides.length));
+    startDownload(exportSelectionUrl(pid, options, formats, selectedIds, slides.length, version));
     pushToast(
       images || selected.length > 1 || formats.length > 1 || options.split
         ? "Building the download on the server. Your browser saves it as soon as it is ready; large exports can take a few minutes."
@@ -218,6 +228,16 @@ export function ProjectExportPage() {
           Choose the {nouns}, the files you want -- JSON, CSV and the {isImage ? "images" : "patch images"} -- and get them in one download.
           Coordinates are always kept in Level-0 pixels of the original {noun}.
         </p>
+        <VersionSelect
+          projectId={pid}
+          value={version}
+          purpose="export"
+          onChange={(v) => {
+            setSlides(null); // the list is the chosen version's own
+            setPreviewSlide(null);
+            setVersion(v);
+          }}
+        />
       </div>
 
       {/* 1. Slides */}
@@ -334,7 +354,15 @@ export function ProjectExportPage() {
       {/* 2. Split */}
       <section>
         <h2 className="font-headline-md text-headline-md mb-space-sm">2. Train / Validation / Test Split</h2>
-        <SplitPanel projectId={pid} isImageProject={isImage} onModeChange={splitModeChanged} />
+        {version === null ? (
+          <SplitPanel projectId={pid} isImageProject={isImage} onModeChange={splitModeChanged} />
+        ) : (
+          <p className="text-body-md text-on-surface-variant">
+            {splitMode !== null && splitMode !== "off"
+              ? `This version has its own split, as it was when the version was saved.`
+              : `This version was saved without a split, so it is exported as one set.`}
+          </p>
+        )}
         {splitMode !== null && splitMode !== "off" && (
           <label className="mt-space-md flex items-start gap-space-sm text-body-md cursor-pointer">
             <input type="checkbox" className="w-4 h-4 mt-1" checked={options.split} onChange={(e) => setOptions({ ...options, split: e.target.checked })} />

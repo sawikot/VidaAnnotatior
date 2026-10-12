@@ -29,18 +29,21 @@ export function SplitFields({
   onChange,
   nouns,
   disabled = false,
+  hideOff = false,
 }: {
   value: SplitSettings;
   onChange: (next: SplitSettings) => void;
   /** "Slides" or "Images": what is assigned to a set. */
   nouns: string;
   disabled?: boolean;
+  /** Leave out "No split", where a split is needed (training). */
+  hideOff?: boolean;
 }) {
   const problem = sharesProblem(value);
   return (
     <div className="flex flex-col gap-space-md">
-      <div role="radiogroup" aria-label="How to split" className="grid sm:grid-cols-3 gap-space-sm">
-        {MODES.map((m) => {
+      <div role="radiogroup" aria-label="How to split" className={`grid gap-space-sm ${hideOff ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
+        {MODES.filter((m) => !(hideOff && m.id === "off")).map((m) => {
           const selected = value.mode === m.id;
           return (
             <button

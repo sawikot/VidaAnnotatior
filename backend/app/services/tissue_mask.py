@@ -50,12 +50,20 @@ def mask_dir(storage_root: Path, slide: Slide) -> Path:
     return storage_root / str(slide.project_id) / "_masks"
 
 
+def auto_mask_name(slide_id: int) -> str:
+    return f"{slide_id}_tissue_auto.png"
+
+
+def final_mask_name(slide_id: int) -> str:
+    return f"{slide_id}_tissue_mask.png"
+
+
 def auto_mask_path(storage_root: Path, slide: Slide) -> Path:
-    return mask_dir(storage_root, slide) / f"{slide.id}_tissue_auto.png"
+    return mask_dir(storage_root, slide) / auto_mask_name(slide.id)
 
 
 def final_mask_path(storage_root: Path, slide: Slide) -> Path:
-    return mask_dir(storage_root, slide) / f"{slide.id}_tissue_mask.png"
+    return mask_dir(storage_root, slide) / final_mask_name(slide.id)
 
 
 def load_mask(path: Path) -> np.ndarray:

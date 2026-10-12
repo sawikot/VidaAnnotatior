@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_project_or_404
+from app.api.deps import get_project_or_404, project_view
 from app.database.session import get_db
 from app.models.project import Project
 from app.schemas.project import SplitSettings
@@ -52,8 +52,10 @@ def _out(project: Project) -> SplitOut:
 
 
 @router.get("/projects/{project_id}/split", response_model=SplitOut)
-def get_split(project: Project = Depends(get_project_or_404), db: Session = Depends(get_db)) -> SplitOut:
-    """How the project's slides are split into train / validation / test, and where each slide is."""
+def get_split(view: tuple[Session, Project] = Depends(project_view)) -> SplitOut:
+    """How the project's slides are split into train / validation / test, and where each slide is.
+    With ``?version=``: the split of that saved version."""
+    db, project = view
     if dataset_split.fill(project, list(project.slides)):  # slides added since the last random deal
         db.commit()
     return _out(project)

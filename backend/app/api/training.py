@@ -10,11 +10,14 @@ Two sides:
 """
 from __future__ import annotations
 
+import json
 import logging
 import secrets
 import shutil
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -24,13 +27,14 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.access import current_user
-from app.api.deps import get_project_or_404
+from app.api.deps import get_project_or_404, project_view
 from app.core.config import get_settings
 from app.database.session import get_db
 from app.models.project import Project
 from app.models.training import ACTIVE_STATUSES, TrainedModel, TrainingRun
 from app.models.user import User
-from app.services import recipes, training_data
+from app.models.version import ProjectVersion
+from app.services import recipes, training_data, versioning
 
 router = APIRouter(tags=["training"])
 trainer_router = APIRouter(prefix="/trainer", tags=["trainer"])
@@ -72,6 +76,16 @@ def get_run_or_404(run_id: int, db: Session = Depends(get_db)) -> TrainingRun:
     return run
 
 
+@contextmanager
+def _source(db: Session, project: Project, version: ProjectVersion | None) -> Iterator[tuple[Session, Project]]:
+    """Where a run's dataset is read from: the work, or a saved version read beside it."""
+    if version is None:
+        yield db, project
+    else:
+        with versioning.read_only(db, project, version, get_settings().wsi_storage_dir) as view:
+            yield view
+
+
 # ------------------------------------------------------------------------------ what people use
 
 
@@ -83,6 +97,10 @@ class RunOut(BaseModel):
     task: str
     settings: dict
     dataset_options: dict | None = None
+    # What it trains on: a saved version (version_id), or the work as it was when its dataset was cut.
+    version_id: int | None = None
+    version_label: str | None = None
+    split_override: dict | None = None  # a split of its own; None: the project's
     status: str
     stop_requested: bool
     error: str | None
@@ -113,7 +131,7 @@ def _headline(result: dict | None) -> dict | None:
 def _out(run: TrainingRun, with_metrics: bool = False) -> RunOut:
     return RunOut(
         id=run.id, project_id=run.project_id, recipe_id=run.recipe_id, recipe_name=run.recipe_name, task=run.task,
-        settings=run.settings or {}, dataset_options=run.dataset_options, status=run.status, stop_requested=run.stop_requested, error=run.error, stage=run.stage if run.status == "running" else None,
+        settings=run.settings or {}, dataset_options=run.dataset_options, version_id=run.version_id, version_label=run.version_label, split_override=run.split_override, status=run.status, stop_requested=run.stop_requested, error=run.error, stage=run.stage if run.status == "running" else None,
         dataset=run.dataset, epoch=run.epoch, epochs=run.epochs, result=run.result if with_metrics else _headline(run.result), device=run.device,
         created_by=run.created_by, created_at=run.created_at, started_at=run.started_at, finished_at=run.finished_at,
         has_model=(run_dir(run.id) / "output" / "model.pt").is_file(),
@@ -151,10 +169,12 @@ def get_readiness(
     empty_percent: float = Query(0, description="empty patches to add for every 100 annotated ones"),
     empty_from: str = Query("any", description="any | reviewed (only empty patches marked Reviewed)"),
     classes: str | None = Query(None, description="the class ids to learn, comma-separated (default: all)"),
-    project: Project = Depends(get_project_or_404),
-    db: Session = Depends(get_db),
+    split: str | None = Query(None, description="a split for this run alone, as JSON (default: the project's); see services/training_data.parse_split"),
+    view: tuple[Session, Project] = Depends(project_view),
 ) -> dict:
-    """What a run with these dataset options would learn from, and what stands in the way of starting it."""
+    """What a run with these dataset options would learn from, and what stands in the way of starting it.
+    With ``version``: learning from that saved version instead of the work as it is now."""
+    db, project = view
     if task not in recipes.TASKS:
         raise HTTPException(status_code=422, detail=f"task must be one of: {', '.join(recipes.TASKS)}")
     try:
@@ -162,9 +182,10 @@ def get_readiness(
         opts = training_data.parse_options(
             {"patch_size": patch_size, "stride": stride, "area": area, "use": use, "empty_percent": empty_percent, "empty_from": empty_from, "class_ids": class_ids}, project
         )
-    except ValueError as exc:
+        own_split = training_data.parse_split(json.loads(split)) if split else None
+    except ValueError as exc:  # (a JSON error is one)
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return training_data.readiness(db, project, task, opts)
+    return training_data.readiness(db, project, task, opts, own_split)
 
 
 @router.get("/projects/{project_id}/training/runs", response_model=list[RunOut])
@@ -178,6 +199,10 @@ class RunCreate(BaseModel):
     settings: dict = {}
     # How the dataset is cut and which patches go into it (services/training_data.DatasetOptions).
     dataset: dict = {}
+    # Train on this saved version instead of the work as it is when the run starts.
+    version_id: int | None = None
+    # A train / val / test split for this run alone; the project's own split is not changed.
+    split: dict | None = None
 
 
 @router.post("/projects/{project_id}/training/runs", response_model=RunOut, status_code=201)
@@ -199,15 +224,26 @@ def start_run(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     try:
         opts = training_data.parse_options(payload.dataset, project)
+        own_split = training_data.parse_split(payload.split)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    problems = training_data.readiness(db, project, recipe["task"], opts)["problems"]
+    version = None
+    if payload.version_id is not None:
+        version = db.get(ProjectVersion, payload.version_id)
+        if version is None or version.project_id != project.id:
+            raise HTTPException(status_code=404, detail=f"Version {payload.version_id} not found")
+    try:
+        with _source(db, project, version) as (source_db, source):
+            problems = training_data.readiness(source_db, source, recipe["task"], opts, own_split)["problems"]
+    except versioning.VersionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if problems:
         raise HTTPException(status_code=422, detail=problems[0])
 
     run = TrainingRun(
         project_id=project.id, recipe_id=recipe["id"], recipe_name=recipe["name"], task=recipe["task"], settings=settings,
-        dataset_options=opts.as_dict(),
+        dataset_options=opts.as_dict(), split_override=own_split,
+        version_id=version.id if version else None, version_label=versioning.describe(version) if version else None,
         status="queued", epochs=int(settings.get("epochs", 0) or 0), created_by=user.name, created_by_id=user.id,
     )
     db.add(run)
@@ -312,7 +348,15 @@ def trainer_claim(payload: Hello, db: Session = Depends(get_db)) -> dict:
             raise ValueError("The model recipe was deleted before the run started.")
         project = db.get(Project, run.project_id)
         opts = training_data.parse_options(run.dataset_options, project)
-        run.dataset = training_data.build_dataset(db, project, folder, run.task, opts, seed=run.id)
+        version = None
+        if run.version_id is not None:
+            version = db.get(ProjectVersion, run.version_id)
+            if version is None:
+                raise ValueError(f"The version this run was to train on ({run.version_label}) was deleted before the run started.")
+        else:
+            run.version_label = versioning.describe_work(db, project)
+        with _source(db, project, version) as (source_db, source):
+            run.dataset = training_data.build_dataset(source_db, source, folder, run.task, opts, seed=run.id, split=run.split_override)
     except Exception as exc:  # noqa: BLE001 - whatever went wrong, the run must not stay "preparing"
         if not isinstance(exc, ValueError):
             log.exception("Cutting the dataset of training run %s failed", run.id)

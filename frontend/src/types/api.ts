@@ -270,6 +270,12 @@ export interface TrainingRun {
   task: string;
   settings: Record<string, string | number | boolean>;
   dataset_options?: DatasetOptions | null;
+  /** The saved version it trains on; null: the work as it was when its dataset was cut. */
+  version_id?: number | null;
+  /** Which, in words: "v2 · After review", or for the work "v3 · Name + unsaved changes". */
+  version_label?: string | null;
+  /** A split of its own, chosen when it was started; null: the project's split. */
+  split_override?: RunSplit | null;
   status: "queued" | "preparing" | "running" | "done" | "failed" | "stopped";
   stop_requested: boolean;
   error: string | null;
@@ -338,6 +344,12 @@ export interface SplitSettings {
   test: number;
 }
 /** The split with where each slide (or image) is. */
+/** A split used by one training run in place of the project's (which it does not change). */
+export type RunSplit =
+  | { mode: "random"; train: number; val: number; test: number; seed: number }
+  /** Sets given by hand, for the slides where they differ from the project's (null: not used). */
+  | { mode: "manual"; assignments: Record<number, SplitName | null> };
+
 export interface DatasetSplit extends SplitSettings {
   slides: { slide_id: number; filename: string; split: SplitName | null }[];
   counts: Record<SplitName | "unassigned", number>;
@@ -362,6 +374,28 @@ export interface Project {
 export interface ProjectDetail extends Project {
   stats: ProjectStats;
   active_config: ConfigVersion | null;
+}
+
+/** A saved state of the project's work: its slides, tissue, patches, annotations, classes and settings. */
+export interface ProjectVersion {
+  id: number;
+  /** 1, 2, 3... within the project. */
+  number: number;
+  name: string;
+  note: string | null;
+  /** The version the work was on when this one was saved. */
+  parent_id: number | null;
+  created_by: string | null;
+  created_at: string;
+  summary: { slides?: number; patches?: number; annotated_patches?: number; annotations?: number; suggestions?: number; classes?: number };
+}
+
+export interface ProjectVersions {
+  /** The version the work is on; null when nothing is saved yet (or that version was deleted). */
+  current_version_id: number | null;
+  has_unsaved_changes: boolean;
+  /** Newest first. */
+  versions: ProjectVersion[];
 }
 
 export interface Slide {

@@ -5,6 +5,8 @@ import { Button, Card } from "../components/primitives";
 import { ModelsSection } from "../features/models/ModelsSection";
 import { CompareRuns, MAX_COMPARED } from "../features/training/CompareRuns";
 import { DEFAULT_DATASET, DatasetOptionsPanel, describeDataset } from "../features/training/DatasetOptionsPanel";
+import { RunSplitPanel } from "../features/training/RunSplitPanel";
+import { VersionSelect } from "../features/versions/VersionSelect";
 import { MetricChart, SERIES_COLORS, type Series } from "../features/training/MetricChart";
 import { RunResults } from "../features/training/RunResults";
 import { SettingField, defaultSettings, type SettingValue } from "../features/training/SettingField";
@@ -25,7 +27,7 @@ import {
 } from "../services/api";
 import { useCan } from "../stores/authStore";
 import { useUiStore } from "../stores/uiStore";
-import type { DatasetOptions, ProjectDetail, Recipe, TrainerStatus, TrainingReadiness, TrainingRun } from "../types/api";
+import type { DatasetOptions, ProjectDetail, Recipe, RunSplit, TrainerStatus, TrainingReadiness, TrainingRun } from "../types/api";
 
 const ACTIVE = ["queued", "preparing", "running"];
 const STATUS: Record<string, { label: string; tone: string }> = {
@@ -81,6 +83,11 @@ export function ProjectTrainingPage() {
   const [compared, setCompared] = useState<number[]>([]); // finished runs ticked to compare
   const [dataset, setDataset] = useState<DatasetOptions>(DEFAULT_DATASET);
   const [counting, setCounting] = useState(false);
+  // The saved version trained on; null: the work as it is when the run starts.
+  const [version, setVersion] = useState<number | null>(null);
+  // A train / val / test split for this run alone; null: the project's own, as in its settings.
+  const [split, setSplit] = useState<RunSplit | null>(null);
+  const splitKey = JSON.stringify(split);
 
   const isImage = project?.project_type === "image";
   const recipe = recipes?.find((r) => r.id === recipeId) ?? null;
@@ -88,7 +95,6 @@ export function ProjectTrainingPage() {
   openRef.current = openId;
 
   useEffect(() => {
-    getProject(pid).then(setProject).catch(() => undefined);
     listRecipes()
       .then((list) => {
         setRecipes(list);
@@ -96,6 +102,9 @@ export function ProjectTrainingPage() {
       })
       .catch(() => setRecipes([]));
   }, [pid]);
+  useEffect(() => {
+    getProject(pid, version).then(setProject).catch(() => undefined);
+  }, [pid, version]);
 
   // What there is to learn from depends on the kind of model: drawn shapes, or one class per patch.
   const task = recipe?.task ?? null;
@@ -120,7 +129,7 @@ export function ProjectTrainingPage() {
     let stale = false;
     setCounting(true);
     const timer = window.setTimeout(() => {
-      getTrainingReadiness(pid, task, dataset)
+      getTrainingReadiness(pid, task, dataset, version, split)
         .then((r) => !stale && setReadiness(r))
         .catch((e) => !stale && pushToast(e instanceof ApiError ? e.message : "Could not count the dataset", "error"))
         .finally(() => !stale && setCounting(false));
@@ -130,7 +139,7 @@ export function ProjectTrainingPage() {
       window.clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pid, task, datasetKey, projectPatchSize]);
+  }, [pid, task, datasetKey, projectPatchSize, version, splitKey]);
 
   // A newly picked recipe starts from its own defaults.
   useEffect(() => {
@@ -168,7 +177,7 @@ export function ProjectTrainingPage() {
     if (!recipe) return;
     setStarting(true);
     try {
-      const run = await startTrainingRun(pid, recipe.id, values, dataset);
+      const run = await startTrainingRun(pid, recipe.id, values, dataset, version, split);
       setOpen(null);
       setLog("");
       setOpenId(run.id);
@@ -208,6 +217,17 @@ export function ProjectTrainingPage() {
           Teach a model from this project&apos;s annotations. It learns from the training set, is checked on the validation set while it
           learns, and gets its final score on the test set.
         </p>
+        <VersionSelect
+          projectId={pid}
+          value={version}
+          purpose="train on"
+          disabled={!canManage}
+          onChange={(v) => {
+            setReadiness(null); // counted again, from the chosen version
+            setSplit(null); // ...whose split is the starting point
+            setVersion(v);
+          }}
+        />
         <div className="mt-space-md flex items-center gap-space-sm text-body-sm" role="status">
           {trainer === null ? (
             <span className="text-on-surface-variant">Looking for the trainer...</span>
@@ -245,6 +265,8 @@ export function ProjectTrainingPage() {
               {datasetProblem}
             </p>
           )}
+          <div className="h-px bg-outline-variant/40" />
+          <RunSplitPanel projectId={pid} version={version} isImageProject={isImage} value={split} onChange={setSplit} disabled={!canManage} />
           <div className="h-px bg-outline-variant/40" />
           {!readiness ? (
             <span className="text-body-sm text-on-surface-variant">Counting annotations...</span>
@@ -292,12 +314,8 @@ export function ProjectTrainingPage() {
                 <p key={p} className="flex items-start gap-1.5 text-body-sm text-error" role="alert">
                   <MaterialIcon name="error" className="!text-[18px] shrink-0" />
                   <span>
-                    {p}{" "}
-                    {readiness.split_mode === "off" && (
-                      <Link to={`/projects/${pid}/settings`} className="text-primary hover:underline">
-                        Open the project settings
-                      </Link>
-                    )}
+                    {p}
+                    {readiness.split_mode === "off" && " Choose Random or Manual above."}
                   </span>
                 </p>
               ))}
@@ -468,6 +486,8 @@ export function ProjectTrainingPage() {
                     </div>
                     <div className="text-body-sm text-on-surface-variant">
                       {open.recipe_name} · started by {open.created_by ?? "someone"} · {when(open.created_at)}
+                      {open.version_label ? ` · trained on ${open.version_label}` : ""}
+                      {open.split_override ? " · with a split of its own" : ""}
                       {open.device && ` · ${open.device}`}
                     </div>
                   </div>
