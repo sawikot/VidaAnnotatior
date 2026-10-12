@@ -376,6 +376,47 @@ export interface ProjectDetail extends Project {
   active_config: ConfigVersion | null;
 }
 
+/** What an uploaded dataset holds, before anything is imported (POST .../imports/{id}/analyse). */
+export interface DatasetImportPreview {
+  image_project: boolean;
+  /** Images or slides the project does not have yet. */
+  new_images: number;
+  /** Uploaded again but already there: not added twice (annotations for them are still used). */
+  already_in_project: number;
+  skipped_images: { name: string; reason: string }[];
+  skipped_image_count: number;
+  files_not_understood: number;
+  annotation_files: { format: string; name: string; count: number }[];
+  shapes: number;
+  /** Labels for a whole image (classification), from a table or the folder names. */
+  image_labels: number;
+  images_with_annotations: number;
+  new_images_without_annotations: number;
+  /** Images the project already had that get annotations from this upload. */
+  existing_images_annotated: number;
+  /** The files' labels ("" for shapes without one) and the class of the same name, if there is one. */
+  labels: { label: string; shapes: number; images: number; class_id: number | null }[];
+  classes: { id: number; name: string; color_hex: string }[];
+  /** The images' folders were taken as their classes. */
+  folder_labels: boolean;
+  class_list: string | null;
+  /** Annotation files (or parts of them) that could not be used, and why. */
+  unmatched: { file: string; reason: string }[];
+  unmatched_count: number;
+  unreadable: Record<string, number>;
+  warnings: string[];
+}
+
+export interface DatasetImportResult {
+  images_imported: number;
+  images_failed: { name: string; reason: string }[];
+  annotations_imported: number;
+  image_labels_set: number;
+  classes_created: string[];
+  /** Annotations not imported, by reason. */
+  left_out: Record<string, number>;
+}
+
 /** A saved state of the project's work: its slides, tissue, patches, annotations, classes and settings. */
 export interface ProjectVersion {
   id: number;

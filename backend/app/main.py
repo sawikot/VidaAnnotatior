@@ -4,7 +4,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from app.api import annotations, auth, configs, export, images, patches, processing, projects, recipes, slides, splits, suggestions, system, training, versions
+from app.api import annotations, auth, configs, dataset_import, export, images, patches, processing, projects, recipes, slides, splits, suggestions, system, training, versions
 from app.api.access import authorize
 from app.core.config import get_settings
 from app.database.session import SessionLocal, init_db
@@ -50,7 +50,7 @@ app.include_router(system.router, prefix=settings.api_prefix)  # administrators 
 app.include_router(recipes.router, prefix=settings.api_prefix)  # everyone reads; administrators change
 for trainer_routes in (training.trainer_router, suggestions.trainer_router, recipes.trainer_router):  # the trainer program, by its secret
     app.include_router(trainer_routes, prefix=settings.api_prefix)
-for module in (projects, configs, slides, processing, patches, annotations, export, images, splits, training, suggestions, versions):
+for module in (projects, configs, slides, processing, patches, annotations, export, images, splits, training, suggestions, versions, dataset_import):
     app.include_router(module.router, prefix=settings.api_prefix, dependencies=[Depends(authorize)])
 
 

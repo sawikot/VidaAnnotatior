@@ -2,6 +2,8 @@ import { optionsQuery, selectionQuery, summaryQuery, type ExportOptions, type Ex
 import type {
   ConfigUsage,
   ConfigVersion,
+  DatasetImportPreview,
+  DatasetImportResult,
   DatasetOptions,
   DatasetSplit,
   GeometryAnnotation,
@@ -181,13 +183,22 @@ export function uploadSlides(
     onSent?: () => void;
   } = {},
 ): { promise: Promise<SlideBatchImportResult>; abort: () => void } {
+  return sendFiles<SlideBatchImportResult>(`/projects/${projectId}/slides/upload${qs({ config_version_id: opts.configVersionId })}`, items, opts);
+}
+
+/** Sends files with their paths (a manifest) to an upload route, reporting progress. */
+function sendFiles<T>(
+  path: string,
+  items: UploadItem[],
+  opts: { onProgress?: (sentBytes: number, totalBytes: number) => void; onSent?: () => void } = {},
+): { promise: Promise<T>; abort: () => void } {
   const xhr = new XMLHttpRequest();
-  const promise = new Promise<SlideBatchImportResult>((resolve, reject) => {
+  const promise = new Promise<T>((resolve, reject) => {
     const form = new FormData();
     for (const item of items) form.append("files", item.file, item.file.name);
     form.append("manifest", JSON.stringify(items.map((i) => i.path)));
 
-    xhr.open("POST", `${API_BASE}/projects/${projectId}/slides/upload${qs({ config_version_id: opts.configVersionId })}`);
+    xhr.open("POST", `${API_BASE}${path}`);
     xhr.upload.onprogress = (e) => e.lengthComputable && opts.onProgress?.(e.loaded, e.total);
     xhr.upload.onload = () => opts.onSent?.();
     xhr.onload = () => {
@@ -197,7 +208,7 @@ export function uploadSlides(
       } catch {
         /* non-JSON error body */
       }
-      if (xhr.status >= 200 && xhr.status < 300) resolve(body as SlideBatchImportResult);
+      if (xhr.status >= 200 && xhr.status < 300) resolve(body as T);
       else reject(new ApiError(xhr.status, (body as { detail?: unknown } | null)?.detail ?? (xhr.responseText || xhr.statusText)));
     };
     xhr.onerror = () => reject(new Error("Network error -- is the backend running?"));
@@ -206,6 +217,33 @@ export function uploadSlides(
   });
   return { promise, abort: () => xhr.abort() };
 }
+
+// ---- Importing a dataset: images or slides with their annotations ----
+/** What to do with a label of the files: a class (by id), make a class of that name, import without a class, or leave out. */
+export type ImportLabelChoice = number | "new" | "skip" | "unlabeled";
+export const startDatasetImport = (projectId: number) => request<{ id: string }>(`/projects/${projectId}/imports`, { method: "POST" });
+export const sendDatasetImportFiles = (
+  projectId: number,
+  importId: string,
+  items: UploadItem[],
+  opts: { onProgress?: (sentBytes: number, totalBytes: number) => void; onSent?: () => void } = {},
+) => sendFiles<{ files: number; skipped: { name: string; reason: string }[]; warnings: string[] }>(`/projects/${projectId}/imports/${importId}/files`, items, opts);
+export const analyseDatasetImport = (projectId: number, importId: string) =>
+  request<DatasetImportPreview>(`/projects/${projectId}/imports/${importId}/analyse`, { method: "POST" });
+/** `newNames`: for labels made into classes, the class's name when it is not the label itself. */
+export const commitDatasetImport = (
+  projectId: number,
+  importId: string,
+  labelMap: Record<string, ImportLabelChoice>,
+  folderLabels: boolean,
+  newNames: Record<string, string> = {},
+) =>
+  request<DatasetImportResult>(`/projects/${projectId}/imports/${importId}/commit`, {
+    method: "POST",
+    body: JSON.stringify({ label_map: labelMap, folder_labels: folderLabels, new_names: newNames }),
+  });
+export const cancelDatasetImport = (projectId: number, importId: string) =>
+  request<void>(`/projects/${projectId}/imports/${importId}`, { method: "DELETE" });
 
 // A slide's pixels never change, so image URLs carrying its `image_version` are cached by the browser for good
 // (the server says so only when the version matches -- an id reused after a delete gets a new one).

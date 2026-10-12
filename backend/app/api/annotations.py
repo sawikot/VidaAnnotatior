@@ -18,6 +18,7 @@ from app.schemas.annotation import (
     GeometryAnnotationCreate,
     GeometryAnnotationOut,
     GeometryAnnotationUpdate,
+    ImportAnnotationEntry,
     ImportAnnotationsRequest,
     ImportAnnotationsResponse,
     ImportClassOut,
@@ -322,9 +323,44 @@ def import_annotations(
     skipped so re-running an import is safe.
     """
     config = _import_config(db, slide, payload.config_version_id)
+    counts = import_entries(
+        db, slide, config, payload.annotations, payload.label_map, user,
+        assign_to_patches=payload.assign_to_patches, area=payload.area, created_by=payload.created_by,
+    )
+    db.commit()
+
+    return ImportAnnotationsResponse(
+        total=len(payload.annotations),
+        imported=counts["to_patches"] + counts["on_slide"],
+        imported_to_patches=counts["to_patches"],
+        imported_on_slide=counts["on_slide"],
+        skipped_no_matching_patch=counts["no_patch"],
+        skipped_unknown_class=counts["no_class"],
+        skipped_duplicate=counts["duplicate"],
+        skipped_invalid_shape=counts["invalid"],
+        skipped_outside_slide=counts["outside"],
+        skipped_outside_patch_area=counts["outside_patches"],
+        skipped_by_choice=counts["by_choice"],
+    )
+
+
+def import_entries(
+    db: Session,
+    slide: Slide,
+    config: ProjectConfigVersion,
+    entries: list[ImportAnnotationEntry],
+    label_map: dict | None,
+    user: User,
+    *,
+    assign_to_patches: bool = False,
+    area: str = "slide",
+    created_by: str | None = None,
+) -> Counter:
+    """Add import entries (Level-0 coordinates) to one slide, as the import endpoint describes. Returns
+    how many went where and how many were left out, by reason. Not committed."""
     classes_by_id = {c.id: c for c in config.annotation_classes}
     classes_by_name = {c.name.strip().lower(): c for c in config.annotation_classes}
-    label_map = {label.strip(): target for label, target in (payload.label_map or {}).items()}
+    label_map = {label.strip(): target for label, target in (label_map or {}).items()}
     for target in label_map.values():
         if isinstance(target, int) and target not in classes_by_id:
             raise HTTPException(status_code=422, detail=f"Class {target} is not a class of this slide's configuration")
@@ -332,8 +368,8 @@ def import_annotations(
 
     patches = _import_patches(db, slide, config)
     patch_by_origin = {(p.x, p.y): p for p in patches}
-    place = payload.assign_to_patches or image_project
-    patches_only = payload.area == "patches" and not image_project
+    place = assign_to_patches or image_project
+    patches_only = area == "patches" and not image_project
     finder = _PatchFinder(patches) if place or patches_only else None
 
     duplicates = _Duplicates()
@@ -341,9 +377,9 @@ def import_annotations(
         duplicates.add(ann.patch_id, ann.type, ann.coordinates_level0)
 
     counts: Counter = Counter()
-    created_by = payload.created_by or f"Imported by {user.name}"
+    created_by = created_by or f"Imported by {user.name}"
 
-    for entry in payload.annotations:
+    for entry in entries:
         try:
             validate_shape(entry.type, entry.coordinates)
         except ValueError:
@@ -411,21 +447,8 @@ def import_annotations(
         else:
             counts["on_slide"] += 1
 
-    db.commit()
-
-    return ImportAnnotationsResponse(
-        total=len(payload.annotations),
-        imported=counts["to_patches"] + counts["on_slide"],
-        imported_to_patches=counts["to_patches"],
-        imported_on_slide=counts["on_slide"],
-        skipped_no_matching_patch=counts["no_patch"],
-        skipped_unknown_class=counts["no_class"],
-        skipped_duplicate=counts["duplicate"],
-        skipped_invalid_shape=counts["invalid"],
-        skipped_outside_slide=counts["outside"],
-        skipped_outside_patch_area=counts["outside_patches"],
-        skipped_by_choice=counts["by_choice"],
-    )
+    db.flush()
+    return counts
 
 
 @router.get("/patches/{patch_id}/annotations", response_model=list[GeometryAnnotationOut])

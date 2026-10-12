@@ -5,6 +5,7 @@ import { Button, Card, IconButton, StatusPill } from "../components/primitives";
 import { ExportAllMenu } from "../features/export/ExportAllMenu";
 import { EditProjectModal } from "../features/projects/EditProjectModal";
 import { AddSlideModal } from "../features/slides/AddSlideModal";
+import { DatasetImportModal } from "../features/import/DatasetImportModal";
 import { DeleteSlideModal, type DeleteTarget } from "../features/slides/DeleteSlideModal";
 import { ProjectChecklist } from "../features/projects/ProjectChecklist";
 import { VersionsPanel } from "../features/versions/VersionsPanel";
@@ -26,6 +27,7 @@ export function ProjectDashboardPage() {
   const [slides, setSlides] = useState<Slide[]>([]);
   const [revision, setRevision] = useState(0); // goes up with every reload of the project
   const [addOpen, setAddOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [filterTab, setFilterTab] = useState<"all" | "needs_annotation" | "needs_review" | "completed">("all");
@@ -87,6 +89,11 @@ export function ProjectDashboardPage() {
             {canManage && (
               <Button icon="add_photo_alternate" onClick={() => setAddOpen(true)}>
                 {isImage ? "Add Images" : "Add WSI Slides"}
+              </Button>
+            )}
+            {canManage && (
+              <Button icon="dataset" onClick={() => setImportOpen(true)} title={`Import ${isImage ? "images" : "slides"} together with their annotation files, or annotation files for the ${isImage ? "images" : "slides"} already here`}>
+                Import with Annotations
               </Button>
             )}
             <ExportAllMenu
@@ -259,6 +266,8 @@ export function ProjectDashboardPage() {
       />
 
       <DeleteSlideModal target={deleteTarget} noun="slide" onClose={() => setDeleteTarget(null)} onDeleted={refresh} />
+
+      <DatasetImportModal open={importOpen} onClose={() => setImportOpen(false)} projectId={pid} projectType={project.project_type} onImported={refresh} />
 
       <AddSlideModal
         open={addOpen}

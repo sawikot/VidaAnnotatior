@@ -532,6 +532,30 @@ the ones for the current page first.
     A version is a file of its own (`data/uploads/<project id>/_versions/<id>/`); slide files are not copied,
     and a removed slide's file stays on disk until no version has it. See `backend/app/services/versioning.py`.
 
+13. **Import with Annotations** (project dashboard; managers and administrators): pick the images (or slides)
+    and their annotation files together — loose files, a whole dataset folder, or `.zip` archives, in whatever
+    layout they come. The files are sent and looked at first, and nothing is imported until you confirm what
+    was found:
+    - which annotation goes with which image, by the name the file gives or the file's own name
+      (`labels/train/a.txt` is about `images/train/a.png`). Annotation files sent **on their own** go to the
+      images the project already has, so a whole project can be annotated from one upload;
+    - the formats read: YOLO `.txt` (with `classes.txt` / `data.yaml`), Pascal VOC, LabelMe, COCO, CVAT,
+      Label Studio, **mask images** (each pixel value or colour a class, turned into outlines), CSV tables with
+      a file column — and everything the per-slide import reads (GeoJSON/QuPath, ASAP, Aperio, Cytomine, this
+      app's JSON), as a file named like its image or slide;
+    - **slide-sized masks**: a mask stored like a slide (a pyramidal TIFF, as the PANDA dataset's are) is told
+      from a scan by what is in it and annotates the slide of its name. An area with holes comes as several
+      outlines that together leave the holes open;
+    - whole-image labels (classification): folders named after classes, or a table of file and label;
+    - the **labels to match to classes**: each label of the files goes to a class you pick, becomes a new
+      class (named there: a mask's "class 1" is better called what it is), is imported without a class, or
+      is left out.
+
+    Images the project already has are not added twice, annotations already there are skipped, and files that
+    could not be used are listed with the reason. See `backend/app/services/dataset_import.py` and
+    `dataset_formats.py`; the routes are `POST /api/projects/{id}/imports` (start), `.../files`, `.../analyse`
+    and `.../commit`.
+
 ## Database
 
 SQLite file at `data/database/app.db` (WAL mode + a busy-timeout pragma, so light concurrent access from
