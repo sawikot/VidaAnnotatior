@@ -87,6 +87,22 @@ def config_usage(db: Session, config_id: int) -> dict:
     }
 
 
+# Colours for classes made from the labels of imported files, told apart at a glance.
+_PALETTE = ["#dc2626", "#2563eb", "#16a34a", "#d97706", "#9333ea", "#0891b2", "#db2777", "#65a30d", "#4f46e5", "#ea580c", "#0d9488", "#be123c"]
+
+
+def add_class(db: Session, config: ProjectConfigVersion, name: str) -> AnnotationClass:
+    """A new class at the end of the list, in a colour no class has yet (not committed)."""
+    used = {c.color_hex.lower() for c in config.annotation_classes}
+    colour = next((c for c in _PALETTE if c not in used), _PALETTE[len(config.annotation_classes) % len(_PALETTE)])
+    cls = AnnotationClass(
+        config_version_id=config.id, name=name[:100], color_hex=colour, order_index=max((c.order_index for c in config.annotation_classes), default=-1) + 1
+    )
+    config.annotation_classes.append(cls)
+    db.flush()
+    return cls
+
+
 def sync_annotation_classes(db: Session, config: ProjectConfigVersion, items: list) -> None:
     """Replace `config`'s diagnostic classes with `items` (objects with
     id/name/color_hex/hotkey), preserving ids so existing annotations keep

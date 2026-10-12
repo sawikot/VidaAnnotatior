@@ -67,9 +67,10 @@ class ImportAnnotationEntry(BaseModel):
     coordinates: list[list[float]]
 
 
-# What to do with every shape carrying one label of the file: give it this class (by id), import it
-# without a class, or leave it out.
-LabelTarget = int | Literal["skip", "unlabeled"]
+# What to do with every shape carrying one label of the file: give it this class (by id), make a
+# class for it ("new": named after the label, or as ``new_names`` says), import it without a class, or
+# leave it out.
+LabelTarget = int | Literal["new", "skip", "unlabeled"]
 
 
 class ImportAnnotationsRequest(BaseModel):
@@ -83,6 +84,8 @@ class ImportAnnotationsRequest(BaseModel):
     # File label ("" for shapes without one) -> target. Labels not listed are matched to a class by
     # name, and skipped when no class has that name.
     label_map: dict[str, LabelTarget] | None = None
+    # For labels mapped to "new": the class's name, when it is not to be the label itself.
+    new_names: dict[str, str] = {}
     # Put each shape that names no patch into the patch that wholly contains it (patch annotations
     # count toward the patch's status); shapes no patch contains stay on the whole slide.
     assign_to_patches: bool = False
@@ -102,6 +105,7 @@ class ImportAnnotationsResponse(BaseModel):
     skipped_outside_slide: int = 0
     skipped_outside_patch_area: int = 0  # only the area covered by patches was asked for
     skipped_by_choice: int = 0  # their label was mapped to "skip"
+    classes_created: list[str] = []  # classes made for labels mapped to "new"
 
 
 class ImportLabelOut(BaseModel):

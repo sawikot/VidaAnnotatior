@@ -8,7 +8,10 @@ project:
 * which files are annotations, in which format (services/dataset_formats.py), and which image each
   part of them is about -- by the name the file gives, else by the file's own name, among the images
   uploaded now *and* those already in the project (so annotations can be uploaded on their own);
-* which images are really masks of other images;
+* which images are really masks of other images -- by their name or folder and what is in them, or
+  because the person said which folders hold the masks (``mask_folders``);
+* where names say nothing (``case1/image.png`` beside ``case1/mask.png`` or ``case1/labels.json``, the
+  same in every case's folder), which files sit alone together in a folder: those belong together;
 * in an image project with no other annotations, whether the folders the images sit in name their
   classes.
 
@@ -19,6 +22,7 @@ labels to the project's classes.
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -53,6 +57,7 @@ class Target:
     height: int | None = None
     mpp: tuple[float | None, float | None] = (None, None)
     file: Path | None = None  # a new slide whose size is read when first needed
+    folder: str | None = None  # where it sits in the upload (None: it is in the project already)
 
     @property
     def stem(self) -> str:
@@ -83,10 +88,14 @@ class _Analysis:
     unmatched: list[dict] = field(default_factory=list)
     unreadable: Counter = field(default_factory=Counter)
     warnings: list[str] = field(default_factory=list)
+    by_folder: dict[str, list[Target]] = field(default_factory=dict)
+    paired_by_folder: list[str] = field(default_factory=list)  # files matched to the only image beside them
 
     def add_target(self, target: Target) -> None:
         self.targets.append(target)
         self.by_stem.setdefault(target.stem, []).append(target)
+        if target.folder is not None:
+            self.by_folder.setdefault(target.folder, []).append(target)
 
     def problem(self, file: str, reason: str) -> None:
         self.unmatched.append({"file": file, "reason": reason})
@@ -101,12 +110,16 @@ class _Analysis:
         found = self.by_stem.get(stem)
         if not found and "-" in stem:
             found = self.by_stem.get(stem.split("-", 1)[1])  # Label Studio puts an id in front of an uploaded name
+        here = self.by_folder.get(near.parent.as_posix(), [])
         if not found:
             return None
         if len(found) > 1 and ref and name.suffix:
             found = [t for t in found if t.name.lower().endswith(name.suffix.lower())] or found
         if len(found) == 1:
             return found[0]
+        beside_it = [t for t in found if t in here]
+        if len(beside_it) == 1:
+            return beside_it[0]  # "case1/image.png" for "case1/image.json", not another case's
         # The same name in several folders ("train/a.png", "val/a.png"): the one whose folders the
         # file shares the most of ("labels/train/a.txt" is about the one in "train").
         near_folders = {part.lower() for part in (*near.parts[:-1], *name.parts[:-1])} - KIND_FOLDERS
@@ -167,10 +180,20 @@ def _folder_label(name: str) -> str | None:
     return None
 
 
-def analyse(db: Session, project: Project, tree: Path, max_image_pixels: int) -> dict:
+_MASK_WORD = re.compile(r"(.*[-_. ])?(mask|masks|label|labels|seg|segmentation|gt|groundtruth|annotation|anno)\d*", re.I)
+
+
+def _within(folder: str, folders: set[str]) -> bool:
+    return any(folder == f or folder.startswith(f + "/") for f in folders)
+
+
+def analyse(db: Session, project: Project, tree: Path, max_image_pixels: int, mask_folders: list[str] | None = None) -> dict:
     """Work out what an upload holds (see the module's description). Returns the plan; its
-    ``"preview"`` is what is shown before importing. Nothing in the project is changed."""
+    ``"preview"`` is what is shown before importing. Nothing in the project is changed.
+    ``mask_folders``: folders of the upload (as the preview lists them) whose images are masks,
+    whatever they look like or are called."""
     image_project = project.project_type == "image"
+    said = {f.strip("/") for f in mask_folders or []}
     a = _Analysis()
     existing = {s.filename.lower(): s for s in db.query(Slide).filter(Slide.project_id == project.id).order_by(Slide.id.desc())}
     for slide in existing.values():
@@ -179,6 +202,7 @@ def analyse(db: Session, project: Project, tree: Path, max_image_pixels: int) ->
     new: list[dict] = []
     skipped: list[dict] = []
     masks: list[Path] = []  # images that are class masks of other images
+    folders: list[dict] = []  # an image project's folders with images, for saying which hold masks
     media: set[Path] = set()  # files that are (part of) an image or slide, whatever became of them
     already = 0
 
@@ -189,16 +213,32 @@ def analyse(db: Session, project: Project, tree: Path, max_image_pixels: int) ->
         by_stem: dict[str, list] = {}
         for item in found.items:
             by_stem.setdefault(Path(item.name).stem.lower(), []).append(item)
-        mask_of: set[Path] = set()
+        folder_of = {item.path: Path(_rel(item.path, tree)).parent.as_posix() for item in found.items}
+        for folder in sorted(set(folder_of.values())):
+            folders.append({"folder": folder, "images": sum(1 for f in folder_of.values() if f == folder), "masks": folder in said})
+        # Masks, three ways: the person said so; the name or folder says so and the content agrees...
+        mask_of: set[Path] = {item.path for item in found.items if _within(folder_of[item.path], said)}
         for item in found.items:
             base, named = formats.mask_stem(Path(item.name).stem)
             in_mask_folder = any(part.lower() in formats.MASK_FOLDERS for part in Path(item.name).parts[:-1])
-            if not (named or in_mask_folder):
+            if item.path in mask_of or not (named or in_mask_folder):
                 continue
-            partners = [o for o in by_stem.get(base.lower(), []) if o is not item and (o.width, o.height) == (item.width, item.height)]
+            partners = [o for o in by_stem.get(base.lower(), []) if o is not item and o.path not in mask_of and (o.width, o.height) == (item.width, item.height)]
             partners = [o for o in partners if not any(p.lower() in formats.MASK_FOLDERS for p in Path(o.name).parts[:-1])]
             in_project = [s for s in existing.values() if Path(s.filename).stem.lower() == base.lower() and (s.width_l0, s.height_l0) == (item.width, item.height)]
             if (partners or in_project) and _looks_like_mask(item.path):
+                mask_of.add(item.path)
+        # ...or it sits alone with one picture in a folder (a folder per case: "image.png", "mask.png"),
+        # is the one of the two that is flat classes, and is called a mask -- or every case has the pair.
+        pairs = []
+        for folder in set(folder_of.values()):
+            two = [item for item in found.items if folder_of[item.path] == folder and item.path not in mask_of]
+            if len(two) == 2 and (two[0].width, two[0].height) == (two[1].width, two[1].height):
+                flat = [item for item in two if _looks_like_mask(item.path)]
+                if len(flat) == 1:
+                    pairs.append(flat[0])
+        for item in pairs:
+            if len(pairs) >= 2 or _MASK_WORD.fullmatch(Path(item.name).stem):
                 mask_of.add(item.path)
         for item in found.items:
             if item.path in mask_of:
@@ -207,7 +247,7 @@ def analyse(db: Session, project: Project, tree: Path, max_image_pixels: int) ->
             if have is not None and (have.width_l0, have.height_l0) == (item.width, item.height):
                 already += 1  # the project has it: nothing to add, but annotations for it are welcome
                 continue
-            target = Target(f"new:{len(new)}", item.name, item.width, item.height)
+            target = Target(f"new:{len(new)}", item.name, item.width, item.height, folder=folder_of[item.path])
             new.append({"key": target.key, "name": item.name, "rel": _rel(item.path, tree), "width": item.width, "height": item.height})
             a.add_target(target)
         masks = sorted(mask_of)
@@ -222,6 +262,7 @@ def analyse(db: Session, project: Project, tree: Path, max_image_pixels: int) ->
         for bundle in found.bundles:
             stems.setdefault(formats.mask_stem(bundle.primary.stem)[0].lower(), []).append(bundle)
         mask_bundles: set[Path] = set()
+        lonely: list[tuple[Path, str]] = []  # masks no slide is named like
         for stem, group in stems.items():
             in_project = [s for s in existing.values() if Path(s.filename).stem.lower() == stem]
             sizes = {bundle.primary: formats.slide_mask_size(bundle.primary) for bundle in group}
@@ -234,17 +275,25 @@ def analyse(db: Session, project: Project, tree: Path, max_image_pixels: int) ->
                 if pictures or any((s.width_l0, s.height_l0) == size for s in in_project):
                     masks.append(bundle.primary)
                 else:
-                    a.files["mask"] += 1
-                    a.problem(_rel(bundle.primary, tree), f"a mask, but no slide named {stem} is in the upload or the project")
+                    lonely.append((bundle.primary, stem))
+        slides = [b for b in found.bundles if b.primary not in mask_bundles]
+        # A folder per case ("case1/slide.tif", "case2/slide.tif"): the slides are told apart by their folders.
+        shared = {name for name, n in Counter(b.name.lower() for b in slides).items() if n > 1}
+        for path, stem in lonely:
+            beside = [b for b in slides if b.primary.parent == path.parent]
+            if len(beside) == 1:
+                masks.append(path)  # the mask of the one slide in its folder
+            else:
+                a.files["mask"] += 1
+                a.problem(_rel(path, tree), f"a mask, but no slide named {stem} is in the upload or the project")
         masks.sort()
-        for bundle in found.bundles:
-            if bundle.primary in mask_bundles:
-                continue
-            if bundle.name.lower() in existing:
+        for bundle in slides:
+            name = f"{bundle.primary.parent.name}_{bundle.name}" if bundle.name.lower() in shared and bundle.primary.parent != tree else bundle.name
+            if name.lower() in existing:
                 already += 1
                 continue
-            target = Target(f"new:{len(new)}", bundle.name, file=bundle.primary)
-            new.append({"key": target.key, "name": bundle.name, "rel": _rel(bundle.primary, tree)})
+            target = Target(f"new:{len(new)}", name, file=bundle.primary, folder=Path(_rel(bundle.primary, tree)).parent.as_posix())
+            new.append({"key": target.key, "name": name, "rel": _rel(bundle.primary, tree)})
             a.add_target(target)
 
     others = [p for p in _files(tree) if p not in media]
@@ -254,6 +303,7 @@ def analyse(db: Session, project: Project, tree: Path, max_image_pixels: int) ->
         a.warnings.append(f"Several class lists were found; {_rel(class_lists[0], tree)} was used.")
 
     not_understood = 0
+    nameless: list[tuple[str, str, formats.ImagePart]] = []  # files about one image that no image is named like
     for path in others:
         if path in class_lists:
             continue
@@ -280,8 +330,8 @@ def analyse(db: Session, project: Project, tree: Path, max_image_pixels: int) ->
                 a.take(rel, kind, part, target)
             elif target is None:
                 missing += 1
-                if not part.ref or kind in ("voc", "labelme"):
-                    a.problem(rel, f"no image named {Path(part.ref or rel).stem}")
+                if not part.ref or kind in ("voc", "labelme"):  # a file about one image
+                    nameless.append((rel, kind, part))
             else:
                 a.problem(rel, target)
         if missing and kind not in ("yolo", "voc", "labelme", "single"):
@@ -290,11 +340,29 @@ def analyse(db: Session, project: Project, tree: Path, max_image_pixels: int) ->
     for path in masks:
         rel = _rel(path, tree)
         a.files["mask"] += 1
+        part = next((formats.read_mask if image_project else formats.read_slide_mask)(path, names))
         target = a.resolve("", Path(rel), mask=True)
         if isinstance(target, Target):
-            a.take(rel, "mask", next((formats.read_mask if image_project else formats.read_slide_mask)(path, names)), target)
+            a.take(rel, "mask", part, target)
+        elif target is None:
+            nameless.append((rel, "mask", part))
         else:
-            a.problem(rel, target or "no image with the mask's name")
+            a.problem(rel, target)
+
+    # A folder per case: a file named like no image is about the one image in its own folder -- when
+    # it is the only such file there, and that image has nothing of that kind yet.
+    beside: dict[tuple[str, bool], list] = {}
+    for rel, kind, part in nameless:
+        beside.setdefault((Path(rel).parent.as_posix(), kind == "mask"), []).append((rel, kind, part))
+    for (folder, _is_mask), group in beside.items():
+        here = a.by_folder.get(folder, [])
+        if len(group) == 1 and len(here) == 1 and (group[0][1] == "mask" or here[0].key not in a.work):
+            rel, kind, part = group[0]
+            a.paired_by_folder.append(rel)
+            a.take(rel, kind, part, here[0])
+        else:
+            for rel, kind, part in group:
+                a.problem(rel, f"no {'image' if image_project else 'slide'} named {Path(part.ref or rel).stem}" if kind != "mask" else "no image with the mask's name")
 
     # Folders as classes: only when nothing else says what the images are.
     folder_labels: dict[str, str] = {}
@@ -313,8 +381,16 @@ def analyse(db: Session, project: Project, tree: Path, max_image_pixels: int) ->
     class_by_name = {c.name.strip().lower(): c.id for c in classes}
     with_annotations = {key for key, slot in a.work.items() if slot["entries"] or slot["label"]} | set(folder_labels)
 
+    if a.paired_by_folder:
+        shown = ", ".join(a.paired_by_folder[:3]) + ("..." if len(a.paired_by_folder) > 3 else "")
+        a.warnings.append(
+            f"{len(a.paired_by_folder)} file(s) are not named like any {'image' if image_project else 'slide'} and were matched to "
+            f"the only one in their folder ({shown}). Check that this is what you meant."
+        )
+
     preview = {
         "image_project": image_project,
+        "folders": folders if len(folders) > 1 else [],
         "new_images": len(new),
         "already_in_project": already,
         "skipped_images": skipped[:_LISTED],

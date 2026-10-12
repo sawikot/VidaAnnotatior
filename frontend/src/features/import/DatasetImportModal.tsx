@@ -81,6 +81,7 @@ export function DatasetImportModal({
   const [newNames, setNewNames] = useState<Record<string, string>>({}); // label -> the name of the class made of it
   const [sendNotes, setSendNotes] = useState<string[]>([]);
   const [result, setResult] = useState<DatasetImportResult | null>(null);
+  const [rechecking, setRechecking] = useState(false);
   const abortRef = useRef<(() => void) | null>(null);
   const filesInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
@@ -140,11 +141,7 @@ export function DatasetImportModal({
       abortRef.current = null;
       setSendNotes(notes);
       setPhase("checking");
-      const found = await analyseDatasetImport(projectId, id);
-      setPreview(found);
-      setFolderLabels(found.folder_labels);
-      // A label with a class of its name goes to it; any other becomes a new class unless changed.
-      setChoices(Object.fromEntries(found.labels.map((l) => [l.label, l.class_id ?? (l.label ? "new" : "unlabeled")])));
+      show(await analyseDatasetImport(projectId, id));
       setPhase("review");
     } catch (e) {
       abortRef.current = null;
@@ -152,6 +149,27 @@ export function DatasetImportModal({
       setImportId(null);
       setPhase("pick");
       if (!(e instanceof UploadAborted)) pushToast(e instanceof ApiError || e instanceof Error ? e.message : "The files could not be sent", "error");
+    }
+  }
+
+  function show(found: DatasetImportPreview) {
+    setPreview(found);
+    setFolderLabels(found.folder_labels);
+    setNewNames({});
+    // A label with a class of its name goes to it; any other becomes a new class unless changed.
+    setChoices(Object.fromEntries(found.labels.map((l) => [l.label, l.class_id ?? (l.label ? "new" : "unlabeled")])));
+  }
+
+  /** Looks at the same files again, with these folders taken as masks. */
+  async function recheck(maskFolders: string[]) {
+    if (!importId) return;
+    setRechecking(true);
+    try {
+      show(await analyseDatasetImport(projectId, importId, maskFolders));
+    } catch (e) {
+      pushToast(e instanceof ApiError ? e.message : "The files could not be checked again", "error");
+    } finally {
+      setRechecking(false);
     }
   }
 
@@ -272,7 +290,9 @@ export function DatasetImportModal({
             folderLabels={folderLabels}
             setFolderLabels={setFolderLabels}
             sendNotes={sendNotes}
-            disabled={phase === "importing"}
+            disabled={phase === "importing" || rechecking}
+            onMaskFolders={recheck}
+            rechecking={rechecking}
           />
         )}
         {(phase === "review" || phase === "importing") && preview && (
@@ -280,7 +300,7 @@ export function DatasetImportModal({
             <Button variant="ghost" onClick={close} disabled={busy}>
               Cancel
             </Button>
-            <Button variant="primary" icon="download_done" disabled={busy || nothing} onClick={confirm}>
+            <Button variant="primary" icon="download_done" disabled={busy || rechecking || nothing} onClick={confirm}>
               {phase === "importing" ? "Importing..." : nothing ? "Nothing to import" : "Import"}
             </Button>
           </div>
@@ -342,6 +362,8 @@ function Review({
   setFolderLabels,
   sendNotes,
   disabled,
+  onMaskFolders,
+  rechecking,
 }: {
   preview: DatasetImportPreview;
   noun: string;
@@ -353,8 +375,14 @@ function Review({
   setFolderLabels: (on: boolean) => void;
   sendNotes: string[];
   disabled: boolean;
+  /** Check the files again with these folders taken as masks. */
+  onMaskFolders: (folders: string[]) => void;
+  rechecking: boolean;
 }) {
   const p = preview;
+  const said = p.folders.filter((f) => f.masks).map((f) => f.folder);
+  const [ticked, setTicked] = useState<string[]>(said);
+  const changed = ticked.length !== said.length || ticked.some((f) => !said.includes(f));
   const facts = [
     [p.new_images, `new ${noun}${p.new_images === 1 ? "" : "s"}`],
     [p.shapes, p.shapes === 1 ? "annotation" : "annotations"],
@@ -383,6 +411,38 @@ function Review({
         )}
         {p.files_not_understood > 0 && <li>{count(p.files_not_understood, "other file")} ignored.</li>}
       </ul>
+
+      {p.folders.length > 0 && (
+        <details className="rounded border border-outline-variant/60 p-space-sm" open={said.length > 0}>
+          <summary className="text-label-md text-on-surface-variant cursor-pointer">
+            Masks imported as {noun}s? Say which folders hold masks
+          </summary>
+          <p className="text-body-sm text-on-surface-variant mt-1">
+            A mask is recognised by its name, its folder, or sitting alone beside its {noun}. Where nothing gives it away, tick its
+            folder: every image in it is then the mask of the {noun} with the same name.
+          </p>
+          <div className="flex flex-col gap-1 mt-space-sm max-h-40 overflow-auto">
+            {p.folders.map((f) => (
+              <label key={f.folder} className="flex items-center gap-space-sm text-body-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4"
+                  disabled={disabled}
+                  checked={ticked.includes(f.folder)}
+                  onChange={(e) => setTicked((cur) => (e.target.checked ? [...cur, f.folder] : cur.filter((x) => x !== f.folder)))}
+                />
+                <span className="font-mono break-all">{f.folder === "." ? "(top folder)" : f.folder}</span>
+                <span className="text-on-surface-variant whitespace-nowrap">· {count(f.images, "image")}</span>
+              </label>
+            ))}
+          </div>
+          <div className="mt-space-sm">
+            <Button icon="refresh" disabled={disabled || !changed} onClick={() => onMaskFolders(ticked)}>
+              {rechecking ? "Checking..." : "Check again"}
+            </Button>
+          </div>
+        </details>
+      )}
 
       {p.folder_labels && (
         <label className="flex items-start gap-space-sm text-body-md cursor-pointer">

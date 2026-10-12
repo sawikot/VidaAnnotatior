@@ -31,22 +31,20 @@ from app.api.annotations import import_entries
 from app.api.deps import get_project_or_404
 from app.core.config import get_settings
 from app.database.session import get_db
-from app.models.config_version import AnnotationClass, ProjectConfigVersion
+from app.models.config_version import ProjectConfigVersion
 from app.models.patch import Patch
 from app.models.project import Project
 from app.models.slide import Slide
 from app.models.user import User
 from app.schemas.annotation import ImportAnnotationEntry
 from app.services import dataset_import
+from app.services.config_versioning import add_class
 from app.services.image_import import ImageItem
 from app.services.multipart_stream import receive_multipart
 from app.services.patch_labels import set_patch_label
 from app.services.wsi_bundles import ARCHIVE_EXTENSIONS, ArchiveError, UnsafePathError, discover_bundles, extract_zip, safe_parts
 
 router = APIRouter(tags=["dataset import"])
-
-# Colours for classes made from a file's labels, told apart at a glance.
-_PALETTE = ["#dc2626", "#2563eb", "#16a34a", "#d97706", "#9333ea", "#0891b2", "#db2777", "#65a30d", "#4f46e5", "#ea580c", "#0d9488", "#be123c"]
 
 
 def _folder(project: Project, import_id: str) -> Path:
@@ -138,12 +136,24 @@ async def add_import_files(import_id: str, request: Request, project: Project = 
         shutil.rmtree(received, ignore_errors=True)
 
 
+class ImportAnalyse(BaseModel):
+    # Folders of the upload (as the preview's ``folders`` lists them) whose images are masks of the
+    # images named like them elsewhere -- for masks nothing else gives away.
+    mask_folders: list[str] = []
+
+
 @router.post("/projects/{project_id}/imports/{import_id}/analyse")
-def analyse_import(import_id: str, project: Project = Depends(get_project_or_404), db: Session = Depends(get_db)) -> dict:
+def analyse_import(
+    import_id: str,
+    payload: ImportAnalyse | None = None,
+    project: Project = Depends(get_project_or_404),
+    db: Session = Depends(get_db),
+) -> dict:
     """What the files sent so far hold: images, annotations and their formats, which image each
-    annotation is for, the labels used -- and what could not be used, with the reason."""
+    annotation is for, the labels used -- and what could not be used, with the reason. It can be
+    asked again, saying which folders hold masks."""
     folder = _folder(project, import_id)
-    plan = dataset_import.analyse(db, project, folder / "tree", get_settings().max_image_pixels)
+    plan = dataset_import.analyse(db, project, folder / "tree", get_settings().max_image_pixels, payload.mask_folders if payload else None)
     dataset_import.save_plan(folder, plan)
     return plan["preview"]
 
@@ -158,15 +168,6 @@ class ImportCommit(BaseModel):
     # For labels made into classes ("new"): the class's name, when it is not to be the label itself
     # (a mask's "class 1" is better called what it is).
     new_names: dict[str, str] = {}
-
-
-def _new_class(db: Session, config: ProjectConfigVersion, label: str) -> AnnotationClass:
-    used = {c.color_hex.lower() for c in config.annotation_classes}
-    colour = next((c for c in _PALETTE if c not in used), _PALETTE[len(config.annotation_classes) % len(_PALETTE)])
-    cls = AnnotationClass(config_version_id=config.id, name=label[:100], color_hex=colour, order_index=max((c.order_index for c in config.annotation_classes), default=-1) + 1)
-    config.annotation_classes.append(cls)
-    db.flush()
-    return cls
 
 
 @router.post("/projects/{project_id}/imports/{import_id}/commit")
@@ -203,7 +204,7 @@ def commit_import(
             name = (payload.new_names.get(label) or "").strip() or label.strip()
             cls = by_name.get(name.lower())
             if cls is None:
-                cls = by_name[name.lower()] = _new_class(db, config, name)
+                cls = by_name[name.lower()] = add_class(db, config, name)
                 by_id[cls.id] = cls
                 created.append(cls.name)
             choice = cls.id
@@ -226,6 +227,9 @@ def commit_import(
             failed.append({"name": item["name"], "reason": "its files are no longer in the import"})
             continue
         if isinstance(outcome, Slide):
+            if outcome.filename != item["name"]:
+                outcome.filename = item["name"][:255]  # one of several slides of the same file name: named by its folder
+                db.commit()
             slide_of[item["key"]] = outcome
         else:
             failed.append({"name": outcome.name, "reason": outcome.reason})

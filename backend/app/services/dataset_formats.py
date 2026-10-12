@@ -514,20 +514,36 @@ def _mask_labels(values: list[int], colours: bool, names: list[str] | None) -> d
     return {v: "foreground" if values == [255] and not names else _class_label(v, names) for v in values}
 
 
-def read_mask(path: Path, names: list[str] | None) -> Iterator[ImagePart]:
+def _fit(width: int, height: int, size: Size, scale: float | None, fit: bool) -> tuple[float, str | None]:
+    """(what a mask's pixels are multiplied by to be its image's, why that is not 1). A mask is as
+    large as its image; with ``fit`` it may be a smaller copy of the same shape (or ``scale`` given)."""
+    if scale is not None:
+        return scale, None
+    if not size.width or not size.height or (width, height) == (size.width, size.height):
+        return 1.0, None
+    rx, ry = size.width / width, size.height / height
+    if fit and rx > 1 and abs(rx - ry) / rx < 0.02:
+        factor = round((rx + ry) / 2, 4)
+        return factor, f"The mask is {width} × {height} px, the whole image {factor:g}× smaller, so its outlines were scaled up to full size."
+    raise ImportFormatError(f"The mask is {width} x {height} px but its image is {size.width} x {size.height} px.")
+
+
+def read_mask(path: Path, names: list[str] | None, *, fit: bool = False, scale: float | None = None) -> Iterator[ImagePart]:
     """A mask image: every pixel value other than 0 (or colour other than black) is a class, and every
     connected area of it an outline (an area with holes: several, see ``_hole_free``)."""
 
     def read(size: Size) -> ParsedFile:
-        out = ParsedFile(format="mask")
         with Image.open(path) as image:
+            if image.width * image.height > _SLIDE_MASK_PIXELS:
+                raise ImportFormatError("The mask is too large to read as a plain image; save it as a pyramidal TIFF.")
             indexed = image.mode in ("P", "L", "1", "I", "I;16", "F")
             pixels = np.array(image if indexed else image.convert("RGB"))
-        if size.width and size.height and pixels.shape[:2] != (size.height, size.width):
-            raise ImportFormatError(f"The mask is {pixels.shape[1]} x {pixels.shape[0]} px but its image is {size.width} x {size.height} px.")
+        factor, note = _fit(pixels.shape[1], pixels.shape[0], size, scale, fit)
+        out = ParsedFile(format="mask", scale=factor)
         pixels, colours = _class_numbers(pixels)
         values = [int(v) for v in np.unique(pixels) if v != 0]
         _mask_outlines(pixels, _mask_labels(values, colours, names), out, min_area=4)
+        out.scale_note = note
         return out
 
     yield ImagePart("", read)
@@ -566,7 +582,7 @@ def slide_mask_size(path: Path) -> tuple[int, int] | None:
         reader.close()
 
 
-def read_slide_mask(path: Path, names: list[str] | None) -> Iterator[ImagePart]:
+def read_slide_mask(path: Path, names: list[str] | None, *, fit: bool = False, scale: float | None = None) -> Iterator[ImagePart]:
     """A mask as large as its slide, stored like one (a pyramidal TIFF): read at the finest level
     that fits in memory, its outlines scaled up to the slide's own pixels."""
 
@@ -576,8 +592,7 @@ def read_slide_mask(path: Path, names: list[str] | None) -> Iterator[ImagePart]:
         reader = OpenSlideReader(path)
         try:
             meta = reader.get_metadata()
-            if size.width and size.height and (meta.width, meta.height) != (size.width, size.height):
-                raise ImportFormatError(f"The mask is {meta.width} x {meta.height} px but its slide is {size.width} x {size.height} px.")
+            factor, note = _fit(meta.width, meta.height, size, scale, fit)
             level = next((i for i, (w, h) in enumerate(meta.level_dimensions) if w * h <= _SLIDE_MASK_PIXELS), None)
             if level is None:
                 raise ImportFormatError("The mask has no level small enough to read; save it with a pyramid (smaller copies of itself).")
@@ -596,11 +611,47 @@ def read_slide_mask(path: Path, names: list[str] | None) -> Iterator[ImagePart]:
         finally:
             reader.close()
         pixels = np.vstack(strips)
-        out = ParsedFile(format="mask", scale=downsample)
+        out = ParsedFile(format="mask", scale=downsample * factor)
         values = [int(v) for v in np.unique(pixels) if v != 0]
         _mask_outlines(pixels, _mask_labels(values, colours, names), out, min_area=4)
         if level:
             out.warn(f"Slide masks were read at 1/{downsample:g} of full size; their outlines are that exact.")
+        out.scale, out.scale_note = factor, note  # what the file's own pixels were multiplied by
         return out
 
     yield ImagePart("", read)
+
+
+_IMAGE_MAGIC = (b"\x89PNG", b"II*\x00", b"MM\x00*", b"II+\x00", b"MM\x00+", b"BM", b"GIF8", b"\xff\xd8\xff", b"RIFF")
+_IMAGE_SUFFIXES = {".png", ".tif", ".tiff", ".bmp", ".gif", ".jpg", ".jpeg", ".webp", ".svs", ".ndpi", ".scn", ".mrxs", ".bif"}
+
+
+def is_image_file(filename: str, raw: bytes) -> bool:
+    """Whether an uploaded annotation file is a picture (so: a mask), not text."""
+    return raw.startswith(_IMAGE_MAGIC) or Path(filename).suffix.lower() in _IMAGE_SUFFIXES
+
+
+def read_mask_file(path: Path, size: Size, scale: float | None = None) -> ParsedFile:
+    """A mask for one image or slide, whichever way it is stored: like a slide (a pyramidal TIFF) or
+    as a plain image -- the size of its image, or a smaller copy of the same shape (its outlines are
+    then scaled up; ``scale`` says by how much when that is not to be worked out)."""
+    from app.services.wsi_reader import OpenSlideReader
+
+    try:
+        OpenSlideReader(path).close()
+        like_a_slide = True
+    except Exception:  # noqa: BLE001 - not a slide file: a plain image, or nothing readable
+        like_a_slide = False
+    if like_a_slide:
+        if slide_mask_size(path) is None:
+            raise ImportFormatError("This file is a picture of tissue, not a mask: a mask has a few flat values, one per class.")
+        out = next(read_slide_mask(path, None, fit=True, scale=scale)).read(size)
+    else:
+        try:
+            out = next(read_mask(path, None, fit=True, scale=scale)).read(size)
+        except ImportFormatError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - PIL raises many types; all mean "not usable"
+            raise ImportFormatError(f"The file could not be read as an image ({exc.__class__.__name__}).") from None
+    out.auto_scale = scale is None
+    return out

@@ -379,6 +379,8 @@ export interface ProjectDetail extends Project {
 /** What an uploaded dataset holds, before anything is imported (POST .../imports/{id}/analyse). */
 export interface DatasetImportPreview {
   image_project: boolean;
+  /** An image project's folders with images (when there are several), and which were said to hold masks. */
+  folders: { folder: string; images: number; masks: boolean }[];
   /** Images or slides the project does not have yet. */
   new_images: number;
   /** Uploaded again but already there: not added twice (annotations for them are still used). */

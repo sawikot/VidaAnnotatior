@@ -228,8 +228,12 @@ export const sendDatasetImportFiles = (
   items: UploadItem[],
   opts: { onProgress?: (sentBytes: number, totalBytes: number) => void; onSent?: () => void } = {},
 ) => sendFiles<{ files: number; skipped: { name: string; reason: string }[]; warnings: string[] }>(`/projects/${projectId}/imports/${importId}/files`, items, opts);
-export const analyseDatasetImport = (projectId: number, importId: string) =>
-  request<DatasetImportPreview>(`/projects/${projectId}/imports/${importId}/analyse`, { method: "POST" });
+/** `maskFolders`: folders of the upload (as the preview lists them) whose images are masks, said by hand. */
+export const analyseDatasetImport = (projectId: number, importId: string, maskFolders: string[] = []) =>
+  request<DatasetImportPreview>(`/projects/${projectId}/imports/${importId}/analyse`, {
+    method: "POST",
+    body: JSON.stringify({ mask_folders: maskFolders }),
+  });
 /** `newNames`: for labels made into classes, the class's name when it is not the label itself. */
 export const commitDatasetImport = (
   projectId: number,
@@ -454,9 +458,12 @@ export interface ImportAnnotationsResult {
   skipped_outside_patch_area: number;
   /** Their label was mapped to "skip". */
   skipped_by_choice: number;
+  /** Classes made for labels mapped to "new". */
+  classes_created?: string[];
 }
 /** What to do with the shapes carrying one label of the file: a class id, no class, or leave them out. */
-export type ImportLabelTarget = number | "skip" | "unlabeled";
+/** A class (by id), a class made for the label ("new"), no class, or left out. */
+export type ImportLabelTarget = number | "new" | "skip" | "unlabeled";
 export interface ImportEntry {
   type: GeometryType;
   label: string | null;
@@ -504,6 +511,8 @@ export const importAnnotations = (
     config_version_id?: number;
     created_by?: string;
     label_map?: Record<string, ImportLabelTarget>;
+    /** For labels mapped to "new": the class's name, when it is not the label itself. */
+    new_names?: Record<string, string>;
     assign_to_patches?: boolean;
     /** "patches": leave out shapes lying where the slide has no patch. */
     area?: "slide" | "patches";

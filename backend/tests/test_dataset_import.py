@@ -26,13 +26,13 @@ def img(color=(200, 30, 30)) -> bytes:
     return image_bytes(W, H, color=color)
 
 
-def analysed(client, pid, files: dict[str, bytes | str]):
+def analysed(client, pid, files: dict[str, bytes | str], mask_folders: list[str] | None = None):
     """Start an import, send ``files`` ({path: content}) and return (import id, preview)."""
     import_id = client.post(f"/api/projects/{pid}/imports").json()["id"]
     parts = [("files", (path.rsplit("/", 1)[-1], data.encode() if isinstance(data, str) else data, "application/octet-stream")) for path, data in files.items()]
     res = client.post(f"/api/projects/{pid}/imports/{import_id}/files", files=parts, data={"manifest": json.dumps(list(files))})
     assert res.status_code == 200, res.text
-    res = client.post(f"/api/projects/{pid}/imports/{import_id}/analyse")
+    res = client.post(f"/api/projects/{pid}/imports/{import_id}/analyse", json={"mask_folders": mask_folders} if mask_folders is not None else None)
     assert res.status_code == 200, res.text
     return import_id, res.json()
 
@@ -253,7 +253,7 @@ def test_a_slide_project_takes_a_file_per_slide_in_the_formats_it_already_reads(
     ]}
     import_id, preview = analysed(client, pid, {"case1.tif": SLIDE, "qupath/case1.geojson": json.dumps(geojson), "qupath/other.geojson": json.dumps(geojson)})
     assert (preview["new_images"], preview["shapes"], preview["image_project"]) == (1, 1, False)
-    assert preview["unmatched"] == [{"file": "qupath/other.geojson", "reason": "no image named other"}]
+    assert preview["unmatched"] == [{"file": "qupath/other.geojson", "reason": "no slide named other"}]
     result = commit(client, pid, import_id, {"Tumor": "new"})
     assert (result["images_imported"], result["annotations_imported"]) == (1, 1)
     slide = client.get(f"/api/projects/{pid}/slides").json()[0]
@@ -328,3 +328,154 @@ def test_a_mask_stored_like_a_slide_annotates_the_slide_of_its_name(env, monkeyp
     assert commit(client, pid, import_id, {"class 1": "new", "class 3": "new"}, new_names={"class 1": "Stroma", "class 3": "Gleason 3"})["left_out"] == {"already there": 3}
     import_id, preview = analysed(client, pid, {"masks/case1_mask.tif": other})
     assert commit(client, pid, import_id, {"class 1": "new"}, new_names={"class 1": "Stroma"})["annotations_imported"] == 1
+
+
+# ------------------------------------------------------------------ a folder per case; masks by say-so
+
+
+def png_mask(regions: dict[int, tuple[int, int, int, int]]) -> bytes:
+    labels = np.zeros((H, W), dtype=np.uint8)
+    for value, (x0, y0, x1, y1) in regions.items():
+        labels[y0:y1, x0:x1] = value
+    buf = io.BytesIO()
+    Image.fromarray(labels).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def photo(seed: int) -> bytes:
+    """A picture with thousands of colours, as a scan has (a flat one would pass for a mask)."""
+    buf = io.BytesIO()
+    Image.fromarray(np.random.default_rng(seed).integers(0, 256, (H, W, 3), dtype=np.uint8)).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def test_files_alone_together_in_a_folder_belong_together(proj):
+    client, pid, _ = proj
+    labelme = {"imagePath": "scan_0042.png", "shapes": [{"label": "Tumor", "shape_type": "rectangle", "points": [[10, 20], [60, 70]]}]}
+    import_id, preview = analysed(client, pid, {
+        "set/case1/image.png": photo(1), "set/case1/mask.png": png_mask({1: (10, 20, 60, 70)}),
+        "set/case2/image.png": photo(2), "set/case2/shapes.json": json.dumps(labelme),
+        "set/case3/image.png": photo(3), "set/case3/first.txt": "0 0.5 0.5 0.2 0.2\n", "set/case3/second.txt": "0 0.5 0.5 0.4 0.4\n",
+        "set/classes.txt": "Tumor\n",
+    })
+    assert preview["new_images"] == 3 and preview["shapes"] == 2  # the mask is no image; case 3 is not guessed at
+    assert sorted(u["file"] for u in preview["unmatched"]) == ["set/case3/first.txt", "set/case3/second.txt"]
+    assert any("only one in their folder" in w and "2 file(s)" in w for w in preview["warnings"])
+    commit(client, pid, import_id, {"class 1": preview["classes"][0]["id"]})
+    assert shapes(client, pid) == {
+        "case1/image.png": [("polygon", "Tumor", [10, 20, 60, 70])],
+        "case2/image.png": [("rectangle", "Tumor", [10, 20, 60, 70])],
+        "case3/image.png": [],
+    }
+
+
+def test_a_file_named_like_no_image_is_not_given_to_an_image_that_has_its_own(proj):
+    client, pid, _ = proj
+    _, preview = analysed(client, pid, {"a.png": img(), "a.txt": "0 0.5 0.5 0.2 0.2\n", "zzz.txt": "0 0.5 0.5 0.4 0.4\n", "classes.txt": "Tumor\n"})
+    assert preview["shapes"] == 1 and preview["unmatched"] == [{"file": "zzz.txt", "reason": "no image named zzz"}]
+
+
+def test_pairs_of_picture_and_mask_in_every_folder_need_no_telling_name(proj):
+    client, pid, _ = proj
+    _, preview = analysed(client, pid, {
+        "p1/scan.png": photo(1), "p1/truth.png": png_mask({1: (10, 20, 60, 70)}),
+        "p2/scan.png": photo(2), "p2/truth.png": png_mask({2: (0, 0, 50, 50)}),
+    })
+    assert (preview["new_images"], preview["shapes"], preview["unmatched_count"]) == (2, 2, 0)
+    # One such pair alone, with nothing calling it a mask, is left as two images.
+    _, preview = analysed(client, pid, {"p1/scan.png": photo(1), "p1/truth.png": png_mask({1: (10, 20, 60, 70)})})
+    assert (preview["new_images"], preview["shapes"]) == (2, 0)
+
+
+def test_the_person_can_say_which_folder_holds_the_masks(proj):
+    client, pid, _ = proj
+    files = {"photos/a.png": photo(1), "photos/b.png": photo(2), "output2/a.png": png_mask({1: (10, 20, 60, 70)}), "output2/b.png": photo(3), "output2/c.png": png_mask({1: (0, 0, 9, 9)})}
+    _, preview = analysed(client, pid, files)
+    assert (preview["new_images"], preview["shapes"]) == (5, 0)  # nothing gives the masks away
+    assert preview["folders"] == [{"folder": "output2", "images": 3, "masks": False}, {"folder": "photos", "images": 2, "masks": False}]
+
+    import_id, preview = analysed(client, pid, files, mask_folders=["output2"])
+    assert (preview["new_images"], preview["shapes"]) == (2, 1)
+    assert [f["masks"] for f in preview["folders"]] == [True, False]
+    reasons = {u["file"]: u["reason"] for u in preview["unmatched"]}
+    assert "does not look like a class mask" in reasons["output2/b.png"] and reasons["output2/c.png"] == "no image with the mask's name"
+    commit(client, pid, import_id, {"class 1": preview["classes"][0]["id"]})
+    assert shapes(client, pid) == {"photos/a.png": [("polygon", "Tumor", [10, 20, 60, 70])], "photos/b.png": []}
+
+
+def test_slides_in_a_folder_per_case_are_named_by_their_folders(env, monkeypatch):  # noqa: F811
+    from tests.test_slide_import_api import SLIDE
+
+    client, pid, settings = env
+    monkeypatch.setattr("app.api.dataset_import.get_settings", lambda: settings)
+    mask, _ = slide_mask_tiff({1: (64, 64, 704, 832)})
+    import_id, preview = analysed(client, pid, {"c1/slide.tif": SLIDE, "c1/truth.tif": mask, "c2/slide.tif": SLIDE})
+    assert (preview["new_images"], preview["shapes"], preview["unmatched"]) == (2, 1, [])
+    result = commit(client, pid, import_id, {"class 1": "new"}, new_names={"class 1": "Stroma"})
+    assert (result["images_imported"], result["annotations_imported"]) == (2, 1)
+    slides = {s["filename"]: s["id"] for s in client.get(f"/api/projects/{pid}/slides").json()}
+    assert sorted(slides) == ["c1_slide.tif", "c2_slide.tif"]
+    assert len(client.get(f"/api/slides/{slides['c1_slide.tif']}/annotations").json()) == 1
+    assert client.get(f"/api/slides/{slides['c2_slide.tif']}/annotations").json() == []
+
+
+# ------------------------------------------------------------------ a mask for one slide, from the workspace
+
+
+def parse_one(client, slide_id, name, data, **form):
+    return client.post(f"/api/slides/{slide_id}/import-annotations/parse", files={"file": (name, data, "application/octet-stream")}, data=form or None)
+
+
+def test_the_per_slide_import_reads_a_mask_too(proj, monkeypatch):
+    from tests.test_slide_import_api import SLIDE, upload
+
+    client, pid, settings = proj
+    import_id, _ = analysed(client, pid, {"a.png": photo(1)})
+    commit(client, pid, import_id)
+    image = client.get(f"/api/projects/{pid}/slides").json()[0]
+
+    # The image's own size.
+    res = parse_one(client, image["id"], "a_mask.png", png_mask({1: (10, 20, 60, 70), 2: (100, 10, 150, 60)}))
+    assert res.status_code == 200, res.text
+    parsed = res.json()
+    assert (parsed["format"], parsed["scale"], parsed["outside_slide"]) == ("mask", 1, 0)
+    assert {l["label"]: l["count"] for l in parsed["labels"]} == {"class 1": 1, "class 2": 1}
+    assert parsed["bounds"] == [10, 10, 150, 70]
+
+    # A smaller copy of the same shape: scaled up, and said so.
+    small = np.zeros((H // 2, W // 2), dtype=np.uint8)
+    small[10:35, 5:30] = 1
+    buf = io.BytesIO()
+    Image.fromarray(small).save(buf, format="PNG")
+    parsed = parse_one(client, image["id"], "half.png", buf.getvalue()).json()
+    assert (parsed["scale"], parsed["scale_auto"], parsed["bounds"]) == (2, True, [10, 20, 60, 70]) and "scaled up" in parsed["scale_note"]
+    tumor = parsed["classes"][0]["id"]
+    done = client.post(f"/api/slides/{image['id']}/import-annotations", json={"annotations": parsed["annotations"], "label_map": {"class 1": tumor}}).json()
+    assert done["imported"] == 1
+    assert shapes(client, pid) == {"a.png": [("polygon", "Tumor", [10, 20, 60, 70])]}
+
+    # A label can become a new class there too, named as wished (or after the label).
+    parsed = parse_one(client, image["id"], "a_mask.png", png_mask({2: (100, 10, 150, 60), 3: (160, 70, 190, 95)})).json()
+    done = client.post(f"/api/slides/{image['id']}/import-annotations", json={
+        "annotations": parsed["annotations"], "label_map": {"class 2": "new", "class 3": "new"}, "new_names": {"class 2": "Stroma"},
+    }).json()
+    assert (done["imported"], done["classes_created"]) == (2, ["Stroma", "class 3"])
+    assert shapes(client, pid)["a.png"] == sorted([("polygon", "Tumor", [10, 20, 60, 70]), ("polygon", "Stroma", [100, 10, 150, 60]), ("polygon", "class 3", [160, 70, 190, 95])], key=str)
+    bad = client.post(f"/api/slides/{image['id']}/import-annotations", json={"annotations": parsed["annotations"], "label_map": {"class 2": "new"}, "new_names": {"class 2": "  "}})
+    assert bad.status_code == 200 and bad.json()["classes_created"] == ["class 2"]  # a blank name: the label itself
+
+    # Not a mask, or not this image's shape: refused with the reason.
+    assert "does not look like a class mask" in parse_one(client, image["id"], "photo.png", photo(2)).json()["detail"]
+    odd = io.BytesIO()
+    Image.fromarray(np.ones((30, 30), dtype=np.uint8)).save(odd, format="PNG")
+    assert "30 x 30 px" in parse_one(client, image["id"], "odd.png", odd.getvalue()).json()["detail"]
+
+    # A slide and a mask stored like a slide.
+    wsi = client.post("/api/projects", json={"name": "Slides"}).json()["id"]
+    slide = upload(client, wsi, [("case1.tif", SLIDE)]).json()["slides"][0]
+    mask, _ = slide_mask_tiff({1: (64, 64, 704, 832), 3: (896, 128, 1408, 640)})
+    parsed = parse_one(client, slide["id"], "case1_mask.tif", mask).json()
+    assert (parsed["format"], parsed["scale"]) == ("mask", 1)
+    assert {l["label"]: l["count"] for l in parsed["labels"]} == {"class 1": 1, "class 3": 1}
+    assert parsed["bounds"] == [64, 64, 1408, 832]
+    assert "picture of tissue" in parse_one(client, slide["id"], "again.tif", SLIDE).json()["detail"]

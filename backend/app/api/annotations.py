@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import math
+import tempfile
 from collections import Counter, defaultdict
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
@@ -29,7 +31,9 @@ from app.schemas.annotation import (
 )
 from app.api.access import current_user
 from app.models.user import User
+from app.services import dataset_formats
 from app.services.annotation_import import FORMAT_NAMES, ImportFormatError, parse_annotation_file, shape_bounds
+from app.services.config_versioning import add_class
 from app.services.patch_grid import GridSpec
 from app.services.patch_labels import on_fill_class_changed, on_fill_deleted
 from app.services.geometry import circle_center_radius, polygon_bounds, validate_shape
@@ -170,7 +174,7 @@ async def parse_annotation_import(
     db: Session = Depends(get_db),
 ):
     """Reads an annotation file of any supported format (WSI JSON, GeoJSON, COCO, ASAP XML, Aperio
-    XML, CSV) and returns its shapes as import entries in Level-0 pixels, with the labels it uses,
+    XML, CSV, or a mask image whose pixel values are the classes) and returns its shapes as import entries in Level-0 pixels, with the labels it uses,
     so the person can map them to classes before `/import-annotations` saves anything."""
     raw = await file.read(MAX_IMPORT_FILE_BYTES + 1)
     if len(raw) > MAX_IMPORT_FILE_BYTES:
@@ -178,14 +182,23 @@ async def parse_annotation_import(
     config = _import_config(db, slide)
     classes = sorted(config.annotation_classes, key=lambda c: (c.order_index, c.id))
     try:
-        parsed = parse_annotation_file(
-            file.filename or "",
-            raw,
-            scale=scale,
-            mpp=(slide.mpp_x, slide.mpp_y),
-            slide_size=(slide.width_l0, slide.height_l0),
-            class_codes=[(c.code, c.name) for c in classes if c.code is not None],
-        )
+        if dataset_formats.is_image_file(file.filename or "", raw):
+            # A mask: an image whose pixel values are the classes (as the dataset import reads them).
+            if scale is not None and (not math.isfinite(scale) or scale <= 0):
+                raise ImportFormatError("The scale must be a positive number.")
+            with tempfile.TemporaryDirectory() as folder:
+                path = Path(folder) / f"mask{Path(file.filename or '').suffix.lower()}"
+                path.write_bytes(raw)
+                parsed = dataset_formats.read_mask_file(path, dataset_formats.Size(slide.width_l0, slide.height_l0, (slide.mpp_x, slide.mpp_y)), scale)
+        else:
+            parsed = parse_annotation_file(
+                file.filename or "",
+                raw,
+                scale=scale,
+                mpp=(slide.mpp_x, slide.mpp_y),
+                slide_size=(slide.width_l0, slide.height_l0),
+                class_codes=[(c.code, c.name) for c in classes if c.code is not None],
+            )
     except ImportFormatError as e:
         raise HTTPException(status_code=422, detail=str(e)) from None
 
@@ -323,8 +336,23 @@ def import_annotations(
     skipped so re-running an import is safe.
     """
     config = _import_config(db, slide, payload.config_version_id)
+    # Labels to make classes of: made first, then they are classes like any other.
+    label_map = dict(payload.label_map or {})
+    by_name = {c.name.strip().lower(): c for c in config.annotation_classes}
+    created: list[str] = []
+    for label, target in list(label_map.items()):
+        if target != "new":
+            continue
+        name = (payload.new_names.get(label) or "").strip() or label.strip()
+        if not name:  # shapes without a label, and no name given
+            raise HTTPException(status_code=422, detail="A new class needs a name.")
+        cls = by_name.get(name.lower())
+        if cls is None:
+            cls = by_name[name.lower()] = add_class(db, config, name)
+            created.append(cls.name)
+        label_map[label] = cls.id
     counts = import_entries(
-        db, slide, config, payload.annotations, payload.label_map, user,
+        db, slide, config, payload.annotations, label_map, user,
         assign_to_patches=payload.assign_to_patches, area=payload.area, created_by=payload.created_by,
     )
     db.commit()
@@ -341,6 +369,7 @@ def import_annotations(
         skipped_outside_slide=counts["outside"],
         skipped_outside_patch_area=counts["outside_patches"],
         skipped_by_choice=counts["by_choice"],
+        classes_created=created,
     )
 
 

@@ -546,6 +546,11 @@ the ones for the current page first.
     - **slide-sized masks**: a mask stored like a slide (a pyramidal TIFF, as the PANDA dataset's are) is told
       from a scan by what is in it and annotates the slide of its name. An area with holes comes as several
       outlines that together leave the holes open;
+    - **a folder per case** (`case1/image.png` beside `case1/mask.png` or `case1/shapes.json`, the same names in
+      every case's folder): a file named like no image is about the one image in its own folder, and the
+      preview says which files were matched that way. Slides of the same file name are named by their folders;
+    - **masks nothing gives away**: the preview lists the folders with images; tick the ones that hold masks
+      and check again -- every image in them is then the mask of the image with the same name;
     - whole-image labels (classification): folders named after classes, or a table of file and label;
     - the **labels to match to classes**: each label of the files goes to a class you pick, becomes a new
       class (named there: a mask's "class 1" is better called what it is), is imported without a class, or

@@ -338,6 +338,11 @@ export function MainWorkspacePage() {
 
   /** Shapes arrived from outside the drawing tools -- an import, or accepted suggestions: they land in this
    * patch, its neighbours and on the whole slide, so reload all three. */
+  /** The classes changed under the page (an import made new ones). */
+  function reloadConfig() {
+    if (slide?.active_config_version_id) getConfig(slide.active_config_version_id).then(setConfig).catch(() => undefined);
+  }
+
   function afterImport() {
     const cur = patch;
     history.reset();
@@ -865,6 +870,7 @@ export function MainWorkspacePage() {
         onModeChange={(next) => (next !== "patch" ? undefined : noPatches ? toPatchGeneration() : setMode("patch"))}
         onOpenPatch={openPatchFromSlide}
         onReviewPatch={(id) => void openPatchById(id, true)}
+        onClassesCreated={reloadConfig}
       />
     );
   }
@@ -905,7 +911,7 @@ export function MainWorkspacePage() {
             </span>
           </>
         )}
-        <ImportAnnotationsButton slide={slide} onImported={afterImport} />
+        <ImportAnnotationsButton slide={slide} onImported={afterImport} onClassesCreated={reloadConfig} />
         <div className="flex-1" />
         <span className="text-slate-400">
           {isImage ? "Progress" : "Slide Progress"}: {prog.total ? Math.round((prog.done / prog.total) * 100) : 0}% ({prog.done}/{prog.total})

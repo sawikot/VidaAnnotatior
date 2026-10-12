@@ -49,6 +49,7 @@ FORMAT_NAMES = {
     "aperio_xml": "Aperio ImageScope XML",
     "csv": "CSV / TSV table",
     "cytomine": "Cytomine JSON (term IDs)",
+    "mask": "Mask image (pixel values are classes)",
 }
 
 SUPPORTED = "WSI JSON, GeoJSON (QuPath), COCO JSON, Cytomine JSON, ASAP XML, Aperio ImageScope XML, or CSV/TSV"

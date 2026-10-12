@@ -21,10 +21,11 @@ interface Props {
   onImported: (result: ImportAnnotationsResult) => void;
 }
 
-const ACCEPT = ".json,.geojson,.xml,.csv,.tsv,.txt,application/json,application/geo+json,text/xml,text/csv";
+// Text formats, and mask images (their pixel values are the classes).
+const ACCEPT = ".json,.geojson,.xml,.csv,.tsv,.txt,.tif,.tiff,.png,.bmp,application/json,application/geo+json,text/xml,text/csv,image/tiff,image/png";
 
 /** Imports annotations made elsewhere. The server reads the file whatever its format -- this app's
- * WSI JSON, GeoJSON (QuPath), COCO, ASAP or Aperio XML, a CSV of points/boxes/WKT -- into Level-0
+ * WSI JSON, GeoJSON (QuPath), COCO, ASAP or Aperio XML, a CSV of points/boxes/WKT, or a mask image -- into Level-0
  * shapes; the person then maps the file's labels onto the project's classes and chooses whether
  * shapes go into the patches containing them, before anything is saved. Re-importing the same file
  * is safe: duplicates are detected and skipped. */
@@ -38,6 +39,7 @@ export function ImportAnnotationsModal({ open, onClose, slideId, onImported }: P
   const [scaleDraft, setScaleDraft] = useState<string | null>(null); // the adjust box, while open
   const [parsed, setParsed] = useState<ParsedAnnotations | null>(null);
   const [labelMap, setLabelMap] = useState<Record<string, ImportLabelTarget>>({});
+  const [newNames, setNewNames] = useState<Record<string, string>>({}); // label -> the name of the class made of it
   const [assignToPatches, setAssignToPatches] = useState(true);
   // Asked only when the patches cover the tissue alone: null until the person has answered.
   const [area, setArea] = useState<"patches" | "slide" | null>(null);
@@ -51,6 +53,7 @@ export function ImportAnnotationsModal({ open, onClose, slideId, onImported }: P
     setScaleDraft(null);
     setParsed(null);
     setLabelMap({});
+    setNewNames({});
     setArea(null);
     setError(null);
     setResult(null);
@@ -69,6 +72,7 @@ export function ImportAnnotationsModal({ open, onClose, slideId, onImported }: P
     try {
       const p = await parseAnnotationFile(slideId, f, scale ?? undefined);
       setParsed(p);
+      setNewNames({});
       // A label matching a class by name goes to it; shapes without a label come in without a class;
       // anything else is left out until the person picks a class for it.
       setLabelMap(
@@ -92,6 +96,7 @@ export function ImportAnnotationsModal({ open, onClose, slideId, onImported }: P
         annotations: parsed.annotations,
         created_by: `${annotatorName} (imported)`,
         label_map: labelMap,
+        new_names: newNames,
         assign_to_patches: assignToPatches,
         area: askArea && area === "patches" ? "patches" : "slide",
       });
@@ -150,8 +155,9 @@ export function ImportAnnotationsModal({ open, onClose, slideId, onImported }: P
           Reads <strong>WSI JSON</strong> (this app), <strong>GeoJSON</strong> (QuPath and others),{" "}
           <strong>COCO</strong>, <strong>Cytomine</strong> (term IDs matched to each class's Class ID),{" "}
           <strong>ASAP</strong> or <strong>Aperio ImageScope XML</strong>, and <strong>CSV/TSV</strong>{" "}
-          tables (x/y points, xmin/ymin/xmax/ymax boxes, or a WKT column). The format is detected from the content. Nothing
-          is saved until you press Import.
+          tables (x/y points, xmin/ymin/xmax/ymax boxes, or a WKT column) -- and a <strong>mask image</strong> (a TIFF or PNG
+          whose pixel values are the classes, the size of this image or a smaller copy of it): each area becomes an outline.
+          The format is detected from the content. Nothing is saved until you press Import.
         </p>
 
         <label className="flex flex-col gap-1">
@@ -260,35 +266,49 @@ export function ImportAnnotationsModal({ open, onClose, slideId, onImported }: P
               <div className="flex flex-col gap-space-sm">
                 <h3 className="font-headline-sm text-label-lg">Labels</h3>
                 {parsed.classes.length === 0 && (
-                  <Notice>This project has no classes yet; shapes can only be imported without a class.</Notice>
+                  <Notice>This project has no classes yet; make them here from the file's labels (New class), or import the shapes without a class.</Notice>
                 )}
                 <div className="rounded border border-outline-variant divide-y divide-outline-variant">
                   {parsed.labels.map((l) => {
                     const target = labelMap[l.label];
                     return (
-                      <div key={l.label} className="flex items-center gap-space-md px-space-md py-1.5">
-                        <span className={`flex-1 truncate ${l.label ? "" : "italic text-on-surface-variant"}`} title={l.label}>
+                      <div key={l.label} className="flex items-start gap-space-md px-space-md py-1.5">
+                        <span className={`flex-1 truncate mt-1 ${l.label ? "" : "italic text-on-surface-variant"}`} title={l.label}>
                           {l.label || "(no label)"}
                         </span>
-                        <span className="font-mono text-label-md text-on-surface-variant w-16 text-right">{l.count}</span>
-                        <MaterialIcon name="arrow_forward" className="!text-[16px] text-on-surface-variant" />
-                        <select
-                          className={`input !w-56 !py-0.5 ${target === "skip" ? "text-error" : ""}`}
-                          value={String(target)}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            setLabelMap((m) => ({ ...m, [l.label]: v === "skip" || v === "unlabeled" ? v : Number(v) }));
-                          }}
-                        >
-                          {parsed.classes.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                              {c.code != null ? ` (ID ${c.code})` : ""}
-                            </option>
-                          ))}
-                          <option value="unlabeled">Import without a class</option>
-                          <option value="skip">Skip</option>
-                        </select>
+                        <span className="font-mono text-label-md text-on-surface-variant w-16 text-right mt-1">{l.count}</span>
+                        <MaterialIcon name="arrow_forward" className="!text-[16px] text-on-surface-variant mt-1.5" />
+                        <div className="flex flex-col gap-1 w-56">
+                          <select
+                            className={`input !py-0.5 ${target === "skip" ? "text-error" : ""}`}
+                            aria-label={`What "${l.label || "no label"}" becomes`}
+                            value={String(target)}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setLabelMap((m) => ({ ...m, [l.label]: v === "skip" || v === "unlabeled" || v === "new" ? v : Number(v) }));
+                            }}
+                          >
+                            {parsed.classes.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                                {c.code != null ? ` (ID ${c.code})` : ""}
+                              </option>
+                            ))}
+                            {l.label && l.class_id === null && <option value="new">New class...</option>}
+                            <option value="unlabeled">Import without a class</option>
+                            <option value="skip">Skip</option>
+                          </select>
+                          {target === "new" && (
+                            <input
+                              className="input !py-0.5"
+                              aria-label={`Name of the class made of "${l.label}"`}
+                              placeholder="Class name"
+                              maxLength={100}
+                              value={newNames[l.label] ?? l.label}
+                              onChange={(e) => setNewNames((n) => ({ ...n, [l.label]: e.target.value }))}
+                            />
+                          )}
+                        </div>
                       </div>
                     );
                   })}
