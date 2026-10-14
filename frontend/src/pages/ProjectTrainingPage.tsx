@@ -9,6 +9,7 @@ import { RunSplitPanel } from "../features/training/RunSplitPanel";
 import { VersionSelect } from "../features/versions/VersionSelect";
 import { MetricChart, SERIES_COLORS, type Series } from "../features/training/MetricChart";
 import { RunResults } from "../features/training/RunResults";
+import { RunUsagePanel } from "../features/training/RunUsagePanel";
 import { SettingField, defaultSettings, type SettingValue } from "../features/training/SettingField";
 import {
   ApiError,
@@ -553,6 +554,7 @@ export function ProjectTrainingPage() {
                     <Progress done={open.epoch} total={open.epochs} />
                   </div>
                 )}
+                {open.status === "running" && open.usage && <RunUsagePanel usage={open.usage} />}
                 {open.error && (
                   <pre className="rounded bg-error-container text-on-error-container p-space-sm text-label-sm font-mono whitespace-pre-wrap overflow-auto max-h-56" role="alert">
                     {open.error}

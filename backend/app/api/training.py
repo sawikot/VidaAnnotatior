@@ -43,6 +43,10 @@ log = logging.getLogger(__name__)
 # The trainer says hello every few seconds; without one for this long it is taken to be off.
 TRAINER_TIMEOUT_S = 20
 _trainer: dict = {"seen": 0.0, "hardware": None}
+# What the machine was using when each run in progress last reported (graphics card, processor, memory),
+# and when that was. Not kept: it only means something while the run is going.
+_usage: dict[int, tuple[float, dict]] = {}
+USAGE_FRESH_S = 30
 _claim_lock = threading.Lock()  # one run is handed out at a time
 
 
@@ -105,6 +109,7 @@ class RunOut(BaseModel):
     stop_requested: bool
     error: str | None
     stage: str | None = None
+    usage: dict | None = None  # what the machine is using right now; only while it runs
     dataset: dict | None
     epoch: int
     epochs: int
@@ -128,10 +133,15 @@ def _headline(result: dict | None) -> dict | None:
     }
 
 
+def _usage_of(run: TrainingRun) -> dict | None:
+    at, usage = _usage.get(run.id, (0.0, None))
+    return usage if run.status == "running" and time.monotonic() - at < USAGE_FRESH_S else None
+
+
 def _out(run: TrainingRun, with_metrics: bool = False) -> RunOut:
     return RunOut(
         id=run.id, project_id=run.project_id, recipe_id=run.recipe_id, recipe_name=run.recipe_name, task=run.task,
-        settings=run.settings or {}, dataset_options=run.dataset_options, version_id=run.version_id, version_label=run.version_label, split_override=run.split_override, status=run.status, stop_requested=run.stop_requested, error=run.error, stage=run.stage if run.status == "running" else None,
+        settings=run.settings or {}, dataset_options=run.dataset_options, version_id=run.version_id, version_label=run.version_label, split_override=run.split_override, status=run.status, stop_requested=run.stop_requested, error=run.error, stage=run.stage if run.status == "running" else None, usage=_usage_of(run),
         dataset=run.dataset, epoch=run.epoch, epochs=run.epochs, result=run.result if with_metrics else _headline(run.result), device=run.device,
         created_by=run.created_by, created_at=run.created_at, started_at=run.started_at, finished_at=run.finished_at,
         has_model=(run_dir(run.id) / "output" / "model.pt").is_file(),
@@ -381,6 +391,7 @@ class Progress(BaseModel):
     metrics: dict | None = None  # one finished epoch, as the recipe reported it
     device: str | None = None
     stage: str | None = None  # what is going on before the first epoch (installing packages, loading the network)
+    usage: dict | None = None  # what the machine is using right now (trainer.usage)
 
 
 @trainer_router.post("/runs/{run_id}/progress", dependencies=[Depends(require_trainer)])
@@ -388,6 +399,8 @@ def trainer_progress(payload: Progress, run: TrainingRun = Depends(get_run_or_40
     """A heartbeat from a run in progress, carrying an epoch's numbers when one has finished. The
     answer tells the trainer whether to stop."""
     _seen(None)
+    if payload.usage:
+        _usage[run.id] = (time.monotonic(), payload.usage)
     if payload.device:
         run.device = payload.device
     if payload.stage is not None:
@@ -410,6 +423,7 @@ class Finish(BaseModel):
 @trainer_router.post("/runs/{run_id}/finish", dependencies=[Depends(require_trainer)])
 def trainer_finish(payload: Finish, run: TrainingRun = Depends(get_run_or_404), db: Session = Depends(get_db)) -> dict:
     _seen(None)
+    _usage.pop(run.id, None)
     if payload.status not in ("done", "failed", "stopped"):
         raise HTTPException(status_code=422, detail="status must be done, failed or stopped")
     run.status, run.finished_at = payload.status, datetime.utcnow()

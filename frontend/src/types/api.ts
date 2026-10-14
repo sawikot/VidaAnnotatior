@@ -262,6 +262,16 @@ export interface TrainingScores {
   classes?: ({ name: string } & Record<string, number | string>)[];
   figures?: ResultFigure[];
 }
+export interface RunUsage {
+  /** Each graphics card as its driver reports it: everything on the card, not only this run. */
+  gpus?: { index: number; load_pct: number | null; memory_used_mb: number | null; memory_total_mb: number; temperature_c: number | null }[];
+  cpu_pct?: number;
+  ram_used_mb?: number;
+  ram_total_mb?: number;
+  /** The run's own share of the memory: its process and the workers it started. */
+  run_ram_mb?: number;
+}
+
 export interface TrainingRun {
   id: number;
   project_id: number;
@@ -281,6 +291,8 @@ export interface TrainingRun {
   error: string | null;
   /** What the trainer is doing before the first epoch (installing packages, loading the network), in words. */
   stage?: string | null;
+  /** What the machine is using right now, while the run is in progress; only what could be measured. */
+  usage?: RunUsage | null;
   dataset: { classes: { id: number; name: string }[]; sets: Record<string, { slides: string[]; images: number; objects: number }> } | null;
   epoch: number;
   epochs: number;

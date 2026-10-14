@@ -84,6 +84,65 @@ def hardware() -> dict:
     return {"device": "cuda" if gpus else "cpu", "gpus": gpus, "torch": torch.__version__}
 
 
+_GPU_QUERY = ["nvidia-smi", "--query-gpu=index,utilization.gpu,memory.used,memory.total,temperature.gpu", "--format=csv,noheader,nounits"]
+_no_nvidia_smi = False  # set once it turns out not to be there, so it is not looked for every two seconds
+
+
+def _number(text: str) -> float | None:
+    try:
+        return float(text)
+    except ValueError:  # "[N/A]": some cards do not tell
+        return None
+
+
+def _gpu_usage() -> list[dict]:
+    """Each graphics card's load, memory and temperature right now, as the driver tells it (so it counts
+    everything on the card, not only this run). Empty when there is no card or no way to ask."""
+    global _no_nvidia_smi
+    if _no_nvidia_smi:
+        return []
+    try:
+        out = subprocess.run(_GPU_QUERY, capture_output=True, text=True, timeout=5, check=True).stdout
+    except FileNotFoundError:
+        _no_nvidia_smi = True
+        return []
+    except (subprocess.SubprocessError, OSError):
+        return []
+    gpus = []
+    for line in out.strip().splitlines():
+        cells = [_number(c.strip()) for c in line.split(",")]
+        if len(cells) != 5 or cells[0] is None or cells[3] is None:
+            continue
+        index, load, used, total, temperature = cells
+        gpus.append({"index": int(index), "load_pct": load, "memory_used_mb": used, "memory_total_mb": total, "temperature_c": temperature})
+    return gpus
+
+
+def usage(pid: int | None = None) -> dict:
+    """What the machine is using right now: its graphics cards, and -- when psutil is installed -- its
+    processor and memory, with how much of that memory is the run's own (process ``pid`` and the
+    workers it started). Only what could be measured is in the answer."""
+    seen: dict = {}
+    gpus = _gpu_usage()
+    if gpus:
+        seen["gpus"] = gpus
+    try:
+        import psutil
+    except ImportError:
+        return seen
+    memory = psutil.virtual_memory()
+    seen["cpu_pct"] = psutil.cpu_percent(interval=None)  # since the last time it was asked
+    seen["ram_used_mb"] = (memory.total - memory.available) // (1024 * 1024)
+    seen["ram_total_mb"] = memory.total // (1024 * 1024)
+    if pid is not None:
+        try:
+            main = psutil.Process(pid)
+            seen["run_ram_mb"] = sum(p.memory_info().rss for p in [main, *main.children(recursive=True)]) // (1024 * 1024)
+        except psutil.Error:
+            pass  # it ended meanwhile
+    return seen
+
+
 def call(path: str, payload: dict, timeout: float = 30) -> dict:
     request = urllib.request.Request(
         f"{APP_URL}/api/trainer{path}",
@@ -379,9 +438,10 @@ def run_recipe(job: dict, hw: dict) -> None:
         with lock:
             batch, pending[:] = list(pending), []
         stop = False
+        using = usage(process.pid)
         for metrics in batch or [None]:
             try:
-                stop = call(f"/runs/{run_id}/progress", {"metrics": metrics, "device": device}).get("stop", False) or stop
+                stop = call(f"/runs/{run_id}/progress", {"metrics": metrics, "device": device, "usage": using}).get("stop", False) or stop
             except (urllib.error.URLError, OSError) as exc:  # the app is restarting: keep training, tell it later
                 say(f"could not report progress ({exc}); will try again")
                 if metrics is not None:

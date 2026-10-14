@@ -100,6 +100,10 @@ def test_a_run_goes_from_waiting_to_done_through_the_trainer(project):
         answer = trainer(client, f"/runs/{run['id']}/progress", {"metrics": {"epoch": epoch, "epochs": 3, "train_loss": 1 / epoch}, "device": "CPU"})
         assert answer.json() == {"stop": False}
     assert trainer(client, f"/runs/{run['id']}/progress").json() == {"stop": False}  # a heartbeat adds nothing
+    assert client.get(f"/api/training/runs/{run['id']}").json()["usage"] is None  # nothing measured yet
+    using = {"gpus": [{"index": 0, "load_pct": 91, "memory_used_mb": 5120, "memory_total_mb": 8188, "temperature_c": 71}], "cpu_pct": 40.5}
+    trainer(client, f"/runs/{run['id']}/progress", {"usage": using})  # ...but says what the machine is using
+    assert client.get(f"/api/training/runs/{run['id']}").json()["usage"] == using
     seen = client.get(f"/api/training/runs/{run['id']}").json()
     assert (seen["epoch"], len(seen["metrics"]), seen["device"], seen["stage"]) == (2, 2, "CPU", None)
 
@@ -110,6 +114,7 @@ def test_a_run_goes_from_waiting_to_done_through_the_trainer(project):
     trainer(client, f"/runs/{run['id']}/finish", {"status": "done", "result": {"primary_metric": "ap50", "val": {"ap50": 0.8, "classes": [{"name": "Tumor", "ap50": 0.8}], "figures": [{"type": "matrix"}]}}})
     done = client.get(f"/api/training/runs/{run['id']}").json()
     assert (done["status"], done["result"]["val"]["ap50"], done["has_model"]) == ("done", 0.8, True)
+    assert done["usage"] is None  # only while it runs
     assert done["result"]["val"]["figures"] == [{"type": "matrix"}] and done["result"]["val"]["classes"][0]["name"] == "Tumor"
     assert not folder.exists()  # the dataset copy is not kept
     assert client.get(f"/api/training/runs/{run['id']}/log", params={"tail": 2}).text == "two\nthree"
