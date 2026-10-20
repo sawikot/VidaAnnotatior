@@ -5,7 +5,7 @@ import { Field, Toggle } from "../components/formControls";
 import { Button, Card } from "../components/primitives";
 import { CancerTypeSelect } from "../features/projects/CancerTypeSelect";
 import { MVP_TOOLS } from "../features/projects/constants";
-import { DEFAULT_SPLIT, SplitFields, sharesProblem } from "../features/split/SplitFields";
+import { DEFAULT_SPLIT, SplitFields, sharesProblem, unitOf } from "../features/split/SplitFields";
 import { createProject } from "../services/api";
 import type { ProjectType, SplitSettings } from "../types/api";
 import { useUiStore } from "../stores/uiStore";
@@ -145,7 +145,7 @@ export function NewProjectWizardPage() {
         organ: organ.trim() || null,
         description,
         team,
-        split: split.mode === "off" ? null : split,
+        split: split.mode === "off" ? null : { ...split, unit: isImage ? "slide" : split.unit }, // images have no patches to split
         config: isImage
           ? {
               version_label: "v1.0",
@@ -471,11 +471,11 @@ export function NewProjectWizardPage() {
       <Card className="p-space-lg" id="step-8">
         <SectionTitle n={stepNumber("step-8")} title="Train / Validation / Test Split" />
         <p className="text-body-sm text-on-surface-variant mt-space-sm mb-space-md max-w-3xl">
-          Optional. {isImage ? "Each image" : "Each slide, with all of its patches,"} goes to one set, and exports can be sorted into train / val /
+          Optional. {isImage ? "Each image goes to one set" : unitOf(split) === "patch" ? "Each slide's patches are dealt out between the sets" : "Each slide, with all of its patches, goes to one set"}, and exports can be sorted into train / val /
           test folders. {split.mode === "manual" && `You assign the ${isImage ? "images" : "slides"} in the project settings or on the export screen once they are added. `}
           You can set this up or change it later, also at export time.
         </p>
-        <SplitFields value={split} onChange={setSplit} nouns={isImage ? "Images" : "Slides"} />
+        <SplitFields value={split} onChange={setSplit} nouns={isImage ? "Images" : "Slides"} allowPatch={!isImage} />
       </Card>
 
       {/* Sticky footer */}

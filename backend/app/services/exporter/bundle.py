@@ -13,7 +13,8 @@ Layout::
 
 With a train / val / test split, each set is a dataset of its own with that layout, in its own
 folder (``train/annotations/...``, ``train/images/...``, ``val/...``), and ``splits.csv`` lists
-which slide went where. Slides in no set go under ``unassigned/``.
+which slide went where. Slides in no set go under ``unassigned/``. Split by patch, every slide is
+in every set with the patches dealt to it, and ``splits.csv`` lists which patch went where.
 
 The COCO ``file_name`` of every image is exactly its name under ``images/``, so the ZIP is a
 ready-to-train COCO dataset. Images are generated on the fly; nothing is kept on the server.
@@ -117,28 +118,35 @@ def build_bundle(
     max_images: int,
     skipped_slides: list[dict] | None = None,
     split_of: dict[int, str] | None = None,
+    patch_split: dict | None = None,
 ) -> Bundle:
     """Write the ZIP for ``slides`` into a temporary file (deleted when closed).
 
     ``exporter`` may be several formats; each writes its own annotation file(s). Patch images are
     written only with ``options.content == "images"``. ``split_of`` (slide id -> train | val | test |
-    unassigned) writes each set into a folder of its own."""
+    unassigned) writes each set into a folder of its own; so does ``patch_split`` (a random split by
+    patch, see services/dataset_split.py), with every slide's patches dealt out between the sets."""
     exporters = _as_list(exporter)
     several = len(exporters) > 1
-    # (folder prefix, its slides): one group holding everything, or one per set of the split.
-    groups: list[tuple[str, list[Slide]]] = [("", slides)]
-    if split_of is not None:
+    # (folder prefix, its slides, the options its patches are chosen by): one group holding
+    # everything, or one per set of the split.
+    groups: list[tuple[str, list[Slide], ExportOptions]] = [("", slides, options)]
+    if patch_split is not None:
+        groups = [(f"{name}/", slides, replace(options, patch_set=name, patch_split=patch_split)) for name in ("train", "val", "test")]
+    elif split_of is not None:
         sets = ("train", "val", "test", "unassigned")
-        groups = [(f"{name}/", [s for s in slides if split_of.get(s.id, "unassigned") == name]) for name in sets]
-        groups = [(prefix, group) for prefix, group in groups if group]
-    prefix_of = {slide.id: prefix for prefix, group in groups for slide in group}
-    datas = {slide.id: load_export_data(db, slide, options) for slide in slides}
+        groups = [(f"{name}/", [s for s in slides if split_of.get(s.id, "unassigned") == name], options) for name in sets]
+    datas = {(prefix, slide.id): load_export_data(db, slide, opts) for prefix, group, opts in groups for slide in group}
+    if patch_split is not None:  # a slide is in a set only with patches of its own there
+        groups = [(prefix, [s for s in group if datas[(prefix, s.id)].patches], opts) for prefix, group, opts in groups]
+    if split_of is not None or patch_split is not None:
+        groups = [g for g in groups if g[1]]
 
     names: dict[int, str] = {}
     pairs: list = []
     if options.with_images:
-        plans = {slide.id: _image_plan(datas[slide.id], exporters, options) for slide in slides}
-        pairs = [(slide, p) for slide in slides for p in datas[slide.id].patches if p.id in plans[slide.id]]
+        plans = {(prefix, slide.id): _image_plan(datas[(prefix, slide.id)], exporters, opts) for prefix, group, opts in groups for slide in group}
+        pairs = [(slide, p) for prefix, group, _ in groups for slide in group for p in datas[(prefix, slide.id)].patches if p.id in plans[(prefix, slide.id)]]
         if len(pairs) > max_images:
             raise ExportTooLarge(
                 f"{len(pairs):,} images were requested but one download holds at most {max_images:,}. "
@@ -150,6 +158,7 @@ def build_bundle(
             for pid, name in unique_names(pairs, options.image_ext).items()
         }
     options = replace(options, image_names=names)
+    groups = [(prefix, group, replace(opts, image_names=names)) for prefix, group, opts in groups]
 
     skipped: list[dict] = list(skipped_slides or [])  # slides the caller already left out (e.g. no patch grid)
     image_errors: list[dict] = []
@@ -158,11 +167,11 @@ def build_bundle(
         with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             # -------- annotation file(s), per format
             files: list[dict] = []
-            for exp, (prefix, group) in ((e, g) for e in exporters for g in groups):
+            for exp, (prefix, group, group_options) in ((e, g) for e in exporters for g in groups):
                 results = []
                 for slide in group:
                     try:
-                        results.append((slide, exp.export(db, slide, options)))
+                        results.append((slide, exp.export(db, slide, group_options)))
                     except Exception as exc:  # noqa: BLE001 - one bad slide must not lose the rest
                         skipped.append(
                             {"slide_id": slide.id, "slide": slide.filename, "format": exp.format_id, "reason": f"annotation export failed: {exc}"}
@@ -199,8 +208,8 @@ def build_bundle(
                 archive.writestr("mask_classes.json", json.dumps(classes_doc, indent=2))
 
             written = 0
-            for slide in slides if options.with_images else []:
-                data = datas[slide.id]
+            for prefix, slide in ((prefix, s) for prefix, group, _ in groups for s in group) if options.with_images else []:
+                data = datas[(prefix, slide.id)]
                 drawable = [p for p in data.patches if p.id in names]
                 if not drawable:
                     continue
@@ -217,7 +226,6 @@ def build_bundle(
 
                 for patch in drawable:
                     name = names[patch.id]
-                    prefix = prefix_of[slide.id]
                     try:
                         image = render_patch(reader, patch)
                         payload = encode(image, options.image_format)
@@ -245,7 +253,11 @@ def build_bundle(
                     "combined": bool(combine and any(e.mergeable for e in exporters)),
                 },
                 "slides": [{"slide_id": s.id, "slide": s.filename} for s in slides],
-                **({"splits": {prefix.rstrip("/"): [s.filename for s in group] for prefix, group in groups}} if split_of is not None else {}),
+                **({"splits": {prefix.rstrip("/"): [s.filename for s in group] for prefix, group, _ in groups}} if split_of is not None else {}),
+                **(
+                    {"split_by": "patch", "splits": {prefix.rstrip("/"): sum(len(datas[(prefix, s.id)].patches) for s in group) for prefix, group, _ in groups}}
+                    if patch_split is not None else {}
+                ),
                 "annotation_files": files,
                 "image_count": written,
                 "skipped_slides": skipped,
@@ -255,7 +267,16 @@ def build_bundle(
                 table = io.StringIO()
                 writer = csv.writer(table, lineterminator="\n")
                 writer.writerow(["slide_id", "slide", "split"])
-                writer.writerows([s.id, s.filename, prefix.rstrip("/")] for prefix, group in groups for s in group)
+                writer.writerows([s.id, s.filename, prefix.rstrip("/")] for prefix, group, _ in groups for s in group)
+                archive.writestr("splits.csv", table.getvalue())
+            elif patch_split is not None:
+                table = io.StringIO()
+                writer = csv.writer(table, lineterminator="\n")
+                writer.writerow(["slide_id", "slide", "patch_index", "x", "y", "image", "split"])
+                writer.writerows(
+                    [s.id, s.filename, p.patch_index, p.x, p.y, names.get(p.id, ""), prefix.rstrip("/")]
+                    for prefix, group, _ in groups for s in group for p in datas[(prefix, s.id)].patches
+                )
                 archive.writestr("splits.csv", table.getvalue())
             archive.writestr("manifest.json", json.dumps(manifest, indent=2))
     except BaseException:

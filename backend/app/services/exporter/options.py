@@ -56,6 +56,10 @@ class ExportOptions:
     class_ids: frozenset[int] | None = None
     # Leave out the whole-patch shape a Patch Label makes: it is a label, not an object in the patch.
     skip_patch_fills: bool = False
+    # Split by patch (services/dataset_split.py): keep only the patches ``patch_split`` (a random split
+    # by patch) deals to the set ``patch_set``. None: every patch, whatever its set.
+    patch_set: str | None = None
+    patch_split: dict | None = field(default=None, compare=False)
     # patch id -> file name inside images/; filled in by the bundle builder so that an
     # annotation file (COCO) refers to exactly the names that were written into the ZIP.
     image_names: dict[int, str] = field(default_factory=dict, compare=False)

@@ -28,6 +28,7 @@ from app.models.config_version import AnnotationClass, ProjectConfigVersion
 from app.models.patch import Patch
 from app.models.slide import Slide
 
+from app.services.dataset_split import deal_patches
 from app.services.patch_generator import generate_patch_grid
 from app.services.patch_grid import GridSpec, active_grid_filter
 from app.services.projection import Projected, project_slide_annotations
@@ -216,6 +217,14 @@ def load_export_data(db: Session, slide: Slide, options: ExportOptions | None = 
         chosen = random.Random(f"{options.seed}:{slide.id}").sample(candidates, wanted)
         empty_ids = {p.id for p in chosen}
         patches = sorted([*patches, *chosen], key=lambda p: (p.patch_index, p.id))
+    if options.patch_set is not None and options.patch_split is not None:
+        # Annotated and empty patches are dealt each on their own, so every set gets its share of both.
+        sets = {
+            **deal_patches(slide.id, [p.id for p in patches if p.id not in empty_ids], options.patch_split, "annotated"),
+            **deal_patches(slide.id, sorted(empty_ids), options.patch_split, "empty"),
+        }
+        patches = [p for p in patches if sets.get(p.id) == options.patch_set]
+        empty_ids = {p.id for p in patches} & empty_ids
     in_scope_ids = {p.id for p in patches if not p.excluded}
     annotations = [a for a in all_annotations if a.patch_id in in_scope_ids]
 

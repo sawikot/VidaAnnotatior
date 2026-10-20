@@ -15,6 +15,8 @@ class SplitSettings(BaseModel):
     train: int = Field(default=70, ge=0, le=100)  # shares in percent; they add up to 100
     val: int = Field(default=15, ge=0, le=100)
     test: int = Field(default=15, ge=0, le=100)
+    # What is dealt out: whole slides (the default), or -- random only -- each slide's patches.
+    unit: Literal["slide", "patch"] = "slide"
 
 
 class ProjectCreate(BaseModel):

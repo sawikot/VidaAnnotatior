@@ -203,6 +203,7 @@ export interface DatasetOptions {
 export interface TrainingReadiness {
   task: string;
   split_mode: SplitMode;
+  split_unit?: SplitUnit;
   /** The classes that have examples with these options. */
   classes: { id: number; name: string }[];
   /** Every class of the project, to choose from. */
@@ -348,17 +349,21 @@ export interface SlideSuggestState {
 
 export type SplitName = "train" | "val" | "test";
 export type SplitMode = "off" | "random" | "manual";
+/** What a split deals out: whole slides, or (random only, not in an image project) each slide's patches. */
+export type SplitUnit = "slide" | "patch";
 /** How a project's slides are split into train / validation / test; the shares are percentages adding up to 100. */
 export interface SplitSettings {
   mode: SplitMode;
   train: number;
   val: number;
   test: number;
+  /** Absent: by slide. */
+  unit?: SplitUnit;
 }
 /** The split with where each slide (or image) is. */
 /** A split used by one training run in place of the project's (which it does not change). */
 export type RunSplit =
-  | { mode: "random"; train: number; val: number; test: number; seed: number }
+  | { mode: "random"; train: number; val: number; test: number; seed: number; unit?: SplitUnit }
   /** Sets given by hand, for the slides where they differ from the project's (null: not used). */
   | { mode: "manual"; assignments: Record<number, SplitName | null> };
 

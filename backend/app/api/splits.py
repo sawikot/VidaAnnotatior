@@ -43,6 +43,7 @@ def _out(project: Project) -> SplitOut:
         train=config["train"],
         val=config["val"],
         test=config["test"],
+        unit=dataset_split.unit_of(config),
         slides=[
             SplitSlideOut(slide_id=s.id, filename=s.filename, split=s.split if s.split in dataset_split.SPLITS else None)
             for s in slides
@@ -68,7 +69,9 @@ def set_split(payload: SplitUpdate, project: Project = Depends(get_project_or_40
     Turning the split off keeps each slide's set, so turning it back on (or to manual) starts from there."""
     before = project.split_config or {}
     try:
-        config = dataset_split.make_config(payload.mode, payload.train, payload.val, payload.test, seed=before.get("seed"))
+        config = dataset_split.make_config(
+            payload.mode, payload.train, payload.val, payload.test, seed=before.get("seed"), unit=payload.unit, image_project=project.project_type == "image"
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     slides = list(project.slides)
@@ -83,7 +86,8 @@ def set_split(payload: SplitUpdate, project: Project = Depends(get_project_or_40
             by_id[slide_id].split = name
     elif payload.mode == "random":
         shares_changed = any(before.get(name) != config[name] for name in dataset_split.SPLITS)
-        if payload.reshuffle or before.get("mode") != "random" or shares_changed:
+        unit_changed = dataset_split.unit_of(before) != dataset_split.unit_of(config)
+        if payload.reshuffle or before.get("mode") != "random" or shares_changed or unit_changed:
             dataset_split.reshuffle(project, slides)
         else:
             dataset_split.fill(project, slides)

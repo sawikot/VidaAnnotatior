@@ -91,12 +91,12 @@ def _stream(bundle: Bundle, filename: str) -> StreamingResponse:
 
 def _bundle(
     db: Session, slides: list[Slide], exporter, options: ExportOptions, *, combine: bool, label: str, skipped: list[dict] | None = None,
-    split_of: dict[int, str] | None = None,
+    split_of: dict[int, str] | None = None, patch_split: dict | None = None,
 ) -> Bundle:
     try:
         return build_bundle(
             db, slides, exporter, options, combine=combine, label=label,
-            max_images=get_settings().max_export_images, skipped_slides=skipped, split_of=split_of,
+            max_images=get_settings().max_export_images, skipped_slides=skipped, split_of=split_of, patch_split=patch_split,
         )
     except ExportTooLarge as exc:
         raise HTTPException(status_code=413, detail=str(exc)) from exc
@@ -317,15 +317,18 @@ def export_selection(
     slug = _safe_stem(project.slug, "project")
     wants_combined = options.combine if options.combine is not None else (project.project_type == "image" or options.with_images)
 
-    split_of = None
+    split_of = patch_split = None
     if split:
         if dataset_split.mode_of(project) == "off":
             raise HTTPException(status_code=422, detail="This project has no train / val / test split yet; set one up first.")
-        if dataset_split.fill(project, list(project.slides)):  # slides added since the last random deal
-            db.commit()
-        split_of = {s.id: s.split if s.split in dataset_split.SPLITS else dataset_split.UNASSIGNED for s in ready}
+        if dataset_split.unit_of(project.split_config) == "patch":  # every slide in every set, its patches dealt out
+            patch_split = project.split_config
+        else:
+            if dataset_split.fill(project, list(project.slides)):  # slides added since the last random deal
+                db.commit()
+            split_of = {s.id: s.split if s.split in dataset_split.SPLITS else dataset_split.UNASSIGNED for s in ready}
 
-    if len(exporters) == 1 and not options.with_images and split_of is None:
+    if len(exporters) == 1 and not options.with_images and not split:
         exporter = exporters[0]
         single = len(ready) == 1 and not skipped
         if single or (wants_combined and exporter.mergeable):
@@ -342,8 +345,8 @@ def export_selection(
             )
 
     what = exporters[0].format_id if len(exporters) == 1 else "export"
-    bundle = _bundle(db, ready, exporters, options, combine=bool(wants_combined), label=slug, skipped=skipped, split_of=split_of)
-    tail = ("_with_images" if options.with_images else "") + ("_split" if split_of is not None else "")
+    bundle = _bundle(db, ready, exporters, options, combine=bool(wants_combined), label=slug, skipped=skipped, split_of=split_of, patch_split=patch_split)
+    tail = ("_with_images" if options.with_images else "") + ("_split" if split else "")
     return _stream(bundle, f"{slug}_{what}{_suffix(options)}{tail}.zip")
 
 

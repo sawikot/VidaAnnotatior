@@ -18,7 +18,8 @@ written into the run's folder instead of a download. Which export depends on the
       train/images/<class>/<name>.png
       val/...   test/...
 
-Slides in no set, and slides without patches, are left out. How the patches are cut and chosen is
+Slides in no set, and slides without patches, are left out. Split by patch, every slide is in
+every set, with the patches dealt to it (services/dataset_split.py). How the patches are cut and chosen is
 the run's ``DatasetOptions``, which also choose the images' format (PNG, or JPEG to save disk space).
 """
 from __future__ import annotations
@@ -114,7 +115,7 @@ def parse_options(raw: dict | None, project: Project) -> DatasetOptions:
 
 def parse_split(raw: dict | None) -> dict | None:
     """A split of a run's own, checked: None (the project's split, as it is), a random one
-    ({"mode": "random", "train", "val", "test", "seed"}) or sets given slide by slide ({"mode": "manual",
+    ({"mode": "random", "train", "val", "test", "seed", "unit": "slide" | "patch"}) or sets given slide by slide ({"mode": "manual",
     "assignments": {slide id: set or None}}; slides not named keep the project's). It is used for that
     run only: the project's split is not changed. Raises ValueError saying what is wrong."""
     if not raw:
@@ -124,7 +125,9 @@ def parse_split(raw: dict | None) -> dict | None:
     mode = raw.get("mode")
     try:
         if mode == "random":
-            return dataset_split.make_config("random", int(raw.get("train", 0)), int(raw.get("val", 0)), int(raw.get("test", 0)), seed=int(raw.get("seed") or 1))
+            return dataset_split.make_config(
+                "random", int(raw.get("train", 0)), int(raw.get("val", 0)), int(raw.get("test", 0)), seed=int(raw.get("seed") or 1), unit=raw.get("unit") or "slide",
+            )
         if mode == "manual":
             assignments = {str(int(slide_id)): name for slide_id, name in (raw.get("assignments") or {}).items()}
             if any(name is not None and name not in dataset_split.SPLITS for name in assignments.values()):
@@ -145,6 +148,12 @@ def _sets(project: Project, split: dict | None) -> tuple[str, dict[int, str | No
     if split["mode"] == "random":
         return "random", dict(dataset_split.deal([s.id for s in slides], split))
     return "manual", {slide_id: split["assignments"].get(str(slide_id), name) for slide_id, name in own.items()}
+
+
+def _patch_split(project: Project, split: dict | None) -> dict | None:
+    """The split a run deals patches by, when it is split by patch (the run's own, else the project's); else None."""
+    config = split if split is not None else project.split_config
+    return config if dataset_split.unit_of(config) == "patch" else None
 
 
 def _export_options(db: Session, project: Project, task: str, opts: DatasetOptions, seed: int = 0, **more) -> ExportOptions:
@@ -174,8 +183,11 @@ def _usable(db: Session, slide: Slide, opts: DatasetOptions) -> bool:
     return active_grid_filter(db.query(Patch.id).filter(Patch.slide_id == slide.id), slide).first() is not None
 
 
-def _by_set(db: Session, project: Project, opts: DatasetOptions, sets: dict[int, str | None]) -> dict[str, list[Slide]]:
+def _by_set(db: Session, project: Project, opts: DatasetOptions, sets: dict[int, str | None], by_patch: bool = False) -> dict[str, list[Slide]]:
     slides = sorted(project.slides, key=lambda s: s.id)
+    if by_patch:  # every slide is in every set, with the patches dealt to it
+        usable = [s for s in slides if _usable(db, s, opts)]
+        return {name: list(usable) for name in dataset_split.SPLITS}
     return {name: [s for s in slides if sets.get(s.id) == name and _usable(db, s, opts)] for name in dataset_split.SPLITS}
 
 
@@ -216,12 +228,13 @@ def readiness(db: Session, project: Project, task: str, opts: DatasetOptions | N
     if dataset_split.fill(project, list(project.slides)):  # slides added since the last random deal
         db.commit()
     mode, slide_sets = _sets(project, split)
+    by_patch = _patch_split(project, split)
     ids = _class_ids(db, project)
-    export = _export_options(db, project, task, opts)
     classes: dict[int, dict] = {}
     sets: dict[str, dict] = {}
     problems: list[str] = []
-    for name, slides in _by_set(db, project, opts, slide_sets).items():
+    for name, slides in _by_set(db, project, opts, slide_sets, by_patch is not None).items():
+        export = _export_options(db, project, task, opts, **({"patch_set": name, "patch_split": by_patch} if by_patch else {}))
         images = empty = 0
         per_class: dict[int, int] = {}
         for slide in slides:
@@ -250,6 +263,11 @@ def readiness(db: Session, project: Project, task: str, opts: DatasetOptions | N
             problems.append("The training set has only one class; a classifier needs at least two to tell apart.")
 
     warnings = []
+    if by_patch is not None:
+        warnings.append(
+            "Split by patch: patches of the same slide are in training and in validation / test, so the scores "
+            "will look better than they would on a new slide" + (", all the more with overlapping patches." if opts.stride and opts.patch_size and opts.stride < opts.patch_size else ".")
+        )
     if not problems and sets["test"]["images"] == 0:
         warnings.append(f"The test set has no {what}, so there will be no final test score.")
     if not problems and opts.empty_percent > 0 and task != "classification" and sets["train"]["empty"] == 0:
@@ -261,6 +279,7 @@ def readiness(db: Session, project: Project, task: str, opts: DatasetOptions | N
     return {
         "task": task,
         "split_mode": mode,
+        "split_unit": "patch" if by_patch is not None else "slide",
         "classes": sorted(classes.values(), key=lambda c: c["id"]),
         # Every class of the project, for choosing which to learn.
         "project_classes": [{"id": i, "name": n} for n, i in sorted(ids.items(), key=lambda item: item[1])],
@@ -279,8 +298,9 @@ def build_dataset(db: Session, project: Project, run_dir: Path, task: str, opts:
     if dataset_split.fill(project, list(project.slides)):
         db.commit()
     slide_sets = _sets(project, split)[1]
-    by_set = _by_set(db, project, opts, slide_sets)
-    slides = [s for group in by_set.values() for s in group]
+    by_patch = _patch_split(project, split)
+    by_set = _by_set(db, project, opts, slide_sets, by_patch is not None)
+    slides = list({s.id: s for group in by_set.values() for s in group}.values())
     if not by_set["train"] or not by_set["val"]:
         raise ValueError("The training and validation sets both need at least one slide with patches.")
 
@@ -291,7 +311,8 @@ def build_dataset(db: Session, project: Project, run_dir: Path, task: str, opts:
     bundle = build_bundle(
         db, slides, get_exporter("patch_classification" if classification else "coco"),
         _export_options(db, project, task, opts, seed, content="images", image_format=opts.image_format),
-        combine=True, label="dataset", max_images=10**9, split_of={s.id: slide_sets[s.id] for s in slides},
+        combine=True, label="dataset", max_images=10**9,
+        **({"patch_split": by_patch} if by_patch is not None else {"split_of": {s.id: slide_sets[s.id] for s in slides}}),
     )
     try:
         with zipfile.ZipFile(bundle.file) as archive:

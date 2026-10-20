@@ -732,3 +732,22 @@ def test_a_run_can_have_a_split_of_its_own_and_the_projects_stays(project):
     for bad in ({"mode": "random", "train": 50, "val": 10, "test": 10}, {"mode": "manual", "assignments": {a: "holdout"}}, {"mode": "off"}):
         assert client.get(f"/api/projects/{pid}/training/readiness", params={"split": json.dumps(bad)}).status_code == 422
         assert client.post(f"/api/projects/{pid}/training/runs", json={"recipe_id": RECIPE, "split": bad}).status_code == 422
+
+
+def test_a_run_split_by_patch_learns_and_scores_on_patches_of_the_same_slides(project):
+    client, pid, _ = project
+    by_patch = {"mode": "random", "unit": "patch", "train": 50, "val": 50, "test": 0, "seed": 3}
+    ready = client.get(f"/api/projects/{pid}/training/readiness", params={"split": json.dumps(by_patch)}).json()
+    assert ready["problems"] == [] and ready["split_unit"] == "patch"
+    assert any("Split by patch" in w for w in ready["warnings"])
+    # Each slide's two annotated patches: one to training, one to validation.
+    assert {name: (s["slides"], s["images"]) for name, s in ready["sets"].items() if name != "test"} == {"train": (3, 3), "val": (3, 3)}
+
+    run = client.post(f"/api/projects/{pid}/training/runs", json={"recipe_id": RECIPE, "split": by_patch}).json()
+    job = trainer(client, "/claim").json()["run"]
+    assert job["id"] == run["id"]
+    folder = run_dir(job["id"]) / "dataset"
+    layout = json.loads((folder / "dataset.json").read_text())
+    names = {s: {i["file_name"] for i in json.loads((folder / layout["sets"][s]["annotations"]).read_text())["images"]} for s in ("train", "val")}
+    assert len(names["train"]) == len(names["val"]) == 3 and not names["train"] & names["val"]
+    assert client.get(f"/api/projects/{pid}/split").json()["mode"] == "off"  # the project's split is not changed

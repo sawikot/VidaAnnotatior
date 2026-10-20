@@ -94,3 +94,48 @@ def test_an_export_puts_each_set_in_its_own_folder(project):  # noqa: F811
     with zipfile.ZipFile(io.BytesIO(res.content)) as z:
         folders = {n.split("/")[0] for n in z.namelist() if "/" in n}
     assert folders == {"train", "unassigned"}
+
+
+def test_patches_are_dealt_by_the_shares_the_same_way_every_time():
+    from app.services.dataset_split import deal_patches
+
+    config = {"train": 70, "val": 15, "test": 15, "seed": 7}
+    sets = deal_patches(1, list(range(20)), config)
+    assert sorted(sets) == list(range(20))
+    assert [list(sets.values()).count(n) for n in ("train", "val", "test")] == [14, 3, 3]
+    assert deal_patches(1, list(range(20)), config) == sets
+    # A handful of patches still reaches validation or test now and then, not always training.
+    small = [deal_patches(slide, [1, 2, 3], config) for slide in range(40)]
+    assert any(set(s.values()) != {"train"} for s in small)
+
+
+def test_a_split_by_patch_is_random_only_and_leaves_the_slides_alone(env):  # noqa: F811
+    client, pid, _ = env
+    upload(client, pid, [("a.tif", SLIDE)])
+    assert client.put(f"/api/projects/{pid}/split", json={"mode": "manual", "unit": "patch"}).status_code == 422
+    body = client.put(f"/api/projects/{pid}/split", json={"mode": "random", "unit": "patch", "train": 60, "val": 20, "test": 20}).json()
+    assert body["unit"] == "patch" and body["counts"]["unassigned"] == 1  # no slide is given a set
+    image = client.post("/api/projects", json={"name": "Images", "project_type": "image"}).json()["id"]
+    assert client.put(f"/api/projects/{image}/split", json={"mode": "random", "unit": "patch"}).status_code == 422
+
+
+def test_an_export_split_by_patch_deals_one_slides_patches_into_every_set(project):  # noqa: F811
+    client, pid, ids = project
+    client.put(f"/api/projects/{pid}/split", json={"mode": "random", "unit": "patch", "train": 50, "val": 34, "test": 16})
+    params = {"formats": "coco", "content": "images", "patches": "all", "split": "true", "slides": str(ids[0])}
+    res = client.get(f"/api/projects/{pid}/export", params=params)
+    assert res.status_code == 200, res.text
+    with zipfile.ZipFile(io.BytesIO(res.content)) as z:
+        names = z.namelist()
+        manifest = json.loads(z.read("manifest.json"))
+        table = z.read("splits.csv").decode().splitlines()
+        coco = {s: json.loads(z.read(next(n for n in names if n.startswith(f"{s}/annotations/")))) for s in ("train", "val", "test")}
+    images = {s: {n.split("/")[-1] for n in names if n.startswith(f"{s}/images/")} for s in ("train", "val", "test")}
+    assert [len(images[s]) for s in ("train", "val", "test")] == [3, 2, 1]  # the slide's 6 patches
+    assert not (images["train"] & images["val"]) and not (images["train"] & images["test"])
+    assert all({i["file_name"] for i in coco[s]["images"]} == images[s] for s in images)
+    assert manifest["split_by"] == "patch" and manifest["splits"] == {"train": 3, "val": 2, "test": 1}
+    assert table[0] == "slide_id,slide,patch_index,x,y,image,split" and len(table) == 7
+    # The same download again deals the same way.
+    with zipfile.ZipFile(io.BytesIO(client.get(f"/api/projects/{pid}/export", params=params).content)) as z:
+        assert z.read("splits.csv").decode().splitlines() == table

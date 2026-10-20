@@ -4,7 +4,7 @@ import { ApiError, getSplit, saveSplit, type SplitUpdate } from "../../services/
 import { useCan } from "../../stores/authStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { DatasetSplit, SplitMode, SplitName, SplitSettings } from "../../types/api";
-import { SPLIT_LABELS, SPLIT_NAMES, SplitFields, sharesProblem } from "./SplitFields";
+import { SPLIT_LABELS, SPLIT_NAMES, SplitFields, sharesProblem, unitOf } from "./SplitFields";
 
 // Rows drawn at once in a very large image project; the search narrows it.
 const ROW_LIMIT = 200;
@@ -18,8 +18,9 @@ const TONE: Record<SplitName | "unassigned", string> = {
 
 /**
  * The project's train / validation / test split: turn it on, deal the slides out at random by shares,
- * or assign each one by hand. Whole slides (images, in an image project) are assigned, never single
- * patches. Saved with the project, so the export screen and the settings show the same split.
+ * or assign each one by hand. Whole slides (images, in an image project) are assigned -- or, split by
+ * patch, each slide's patches are dealt out between the sets when a dataset is cut. Saved with the
+ * project, so the export screen and the settings show the same split.
  */
 export function SplitPanel({
   projectId,
@@ -43,7 +44,7 @@ export function SplitPanel({
 
   function accept(next: DatasetSplit) {
     setSplit(next);
-    setDraft({ mode: next.mode, train: next.train, val: next.val, test: next.test });
+    setDraft({ mode: next.mode, train: next.train, val: next.val, test: next.test, unit: next.unit ?? "slide" });
     onModeChange?.(next.mode);
   }
 
@@ -67,14 +68,15 @@ export function SplitPanel({
 
   if (!split || !draft) return <Card className="p-space-lg text-body-sm text-on-surface-variant">Loading the split...</Card>;
 
-  const saved: SplitSettings = { mode: split.mode, train: split.train, val: split.val, test: split.test };
+  const saved: SplitSettings = { mode: split.mode, train: split.train, val: split.val, test: split.test, unit: split.unit ?? "slide" };
+  const byPatch = unitOf(saved) === "patch";
   const problem = sharesProblem(draft);
   const sharesChanged = SPLIT_NAMES.some((n) => draft[n] !== saved[n]);
 
   function changeFields(next: SplitSettings) {
     setDraft(next);
-    // Picking a mode takes effect at once; shares wait for Apply so half-typed numbers are never dealt out.
-    if (next.mode !== saved.mode) void save({ ...saved, mode: next.mode });
+    // Picking a mode (or slides / patches) takes effect at once; shares wait for Apply so half-typed numbers are never dealt out.
+    if (next.mode !== saved.mode || unitOf(next) !== unitOf(saved)) void save({ ...saved, mode: next.mode, unit: unitOf(next) });
   }
 
   const needle = query.trim().toLowerCase();
@@ -84,11 +86,13 @@ export function SplitPanel({
   return (
     <Card className="p-space-lg flex flex-col gap-space-md" data-testid="split-panel">
       <p className="text-body-sm text-on-surface-variant max-w-3xl">
-        Each {noun} goes to one set{isImageProject ? "" : ", with all of its patches, so the same tissue is never in both training and test data"}.
+        {byPatch
+          ? "Each slide's patches are dealt out between the sets by the shares, whenever a dataset is exported or a model is trained."
+          : `Each ${noun} goes to one set${isImageProject ? "" : ", with all of its patches, so the same tissue is never in both training and test data"}.`}{" "}
         The split is saved with the project.
       </p>
 
-      <SplitFields value={draft} onChange={changeFields} nouns={nouns} disabled={!canManage || busy} />
+      <SplitFields value={draft} onChange={changeFields} nouns={nouns} disabled={!canManage || busy} allowPatch={!isImageProject} />
       {!canManage && <p className="text-body-sm text-on-surface-variant">Only project managers and administrators can change the split.</p>}
 
       {split.mode === "random" && canManage && (
@@ -100,17 +104,19 @@ export function SplitPanel({
             icon="shuffle"
             disabled={busy || sharesChanged || split.slides.length === 0}
             onClick={() => void save({ ...saved, reshuffle: true })}
-            title={`Deal every ${noun} out again at random`}
+            title={byPatch ? "Deal every slide's patches out again at random" : `Deal every ${noun} out again at random`}
           >
             Shuffle again
           </Button>
           <span className="text-body-sm text-on-surface-variant">
-            New {nouns.toLowerCase()} join a set as they are added; the others stay where they are.
+            {byPatch
+              ? "The same patches go to the same set every time, until you shuffle again or change the shares."
+              : `New ${nouns.toLowerCase()} join a set as they are added; the others stay where they are.`}
           </span>
         </div>
       )}
 
-      {split.mode !== "off" && (
+      {split.mode !== "off" && !byPatch && (
         <>
           <div className="flex items-center gap-space-sm flex-wrap">
             {([...SPLIT_NAMES, "unassigned"] as const).map((name) =>

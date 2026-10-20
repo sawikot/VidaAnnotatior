@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Button } from "../../components/primitives";
 import { getSplit } from "../../services/api";
 import type { DatasetSplit, RunSplit, SplitName, SplitSettings } from "../../types/api";
-import { SPLIT_LABELS, SPLIT_NAMES, SplitFields, sharesProblem } from "../split/SplitFields";
+import { SPLIT_LABELS, SPLIT_NAMES, SplitFields, sharesProblem, unitOf } from "../split/SplitFields";
 
 // Rows drawn at once in a very large image project; the search narrows it.
 const ROW_LIMIT = 200;
@@ -45,7 +45,7 @@ export function RunSplitPanel({
       .then((split) => {
         if (stale) return;
         setBase(split);
-        setDraft({ mode: split.mode, train: split.train, val: split.val, test: split.test });
+        setDraft({ mode: split.mode, train: split.train, val: split.val, test: split.test, unit: split.unit ?? "slide" });
         setMoved({});
       })
       .catch(() => undefined);
@@ -61,8 +61,9 @@ export function RunSplitPanel({
     if (!base) return;
     if (next.mode === "random") {
       if (sharesProblem(next)) return; // half-typed shares: keep what was last valid
-      const asProject = base.mode === "random" && nextSeed === null && SPLIT_NAMES.every((n) => next[n] === base[n]);
-      onChange(asProject ? null : { mode: "random", train: next.train, val: next.val, test: next.test, seed: nextSeed ?? seed });
+      const asProject =
+        base.mode === "random" && nextSeed === null && unitOf(next) === unitOf(base) && SPLIT_NAMES.every((n) => next[n] === base[n]);
+      onChange(asProject ? null : { mode: "random", train: next.train, val: next.val, test: next.test, seed: nextSeed ?? seed, unit: unitOf(next) });
     } else if (next.mode === "manual") {
       const asProject = base.mode === "manual" && Object.keys(nextMoved).length === 0;
       onChange(asProject ? null : { mode: "manual", assignments: nextMoved });
@@ -89,7 +90,7 @@ export function RunSplitPanel({
   }
 
   function reset() {
-    setDraft({ mode: base!.mode, train: base!.train, val: base!.val, test: base!.test });
+    setDraft({ mode: base!.mode, train: base!.train, val: base!.val, test: base!.test, unit: base!.unit ?? "slide" });
     setMoved({});
     onChange(null);
   }
@@ -120,7 +121,7 @@ export function RunSplitPanel({
         )}
       </div>
 
-      <SplitFields value={draft} onChange={changeFields} nouns={nouns} disabled={disabled} hideOff />
+      <SplitFields value={draft} onChange={changeFields} nouns={nouns} disabled={disabled} hideOff allowPatch={!isImageProject} />
 
       {draft.mode === "random" && (
         <div className="flex items-center gap-space-sm flex-wrap">
@@ -128,9 +129,11 @@ export function RunSplitPanel({
             Shuffle again
           </Button>
           <span className="text-body-sm text-on-surface-variant">
-            {value?.mode === "random"
-              ? `${nouns} are dealt out for this run by these shares; the table below shows how many each set gets.`
-              : `${nouns} are in the sets ${where} dealt them to.`}
+            {unitOf(draft) === "patch"
+              ? "Each slide's patches are dealt out for this run by these shares; the table below shows how many each set gets."
+              : value?.mode === "random"
+                ? `${nouns} are dealt out for this run by these shares; the table below shows how many each set gets.`
+                : `${nouns} are in the sets ${where} dealt them to.`}
           </span>
         </div>
       )}

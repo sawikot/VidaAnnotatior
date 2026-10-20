@@ -40,7 +40,7 @@ def list_projects(db: Session = Depends(get_db), user: User = Depends(current_us
 def create_project(payload: ProjectCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Project:
     try:
         split = payload.split
-        split_config = dataset_split.make_config(split.mode, split.train, split.val, split.test) if split else None
+        split_config = dataset_split.make_config(split.mode, split.train, split.val, split.test, unit=split.unit, image_project=payload.project_type == "image") if split else None
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     base_slug = slugify(payload.slug or payload.name)

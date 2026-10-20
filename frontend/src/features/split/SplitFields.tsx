@@ -1,8 +1,16 @@
-import type { SplitMode, SplitName, SplitSettings } from "../../types/api";
+import type { SplitMode, SplitName, SplitSettings, SplitUnit } from "../../types/api";
 
 export const SPLIT_NAMES: SplitName[] = ["train", "val", "test"];
 export const SPLIT_LABELS: Record<SplitName, string> = { train: "Train", val: "Validation", test: "Test" };
-export const DEFAULT_SPLIT: SplitSettings = { mode: "off", train: 70, val: 15, test: 15 };
+export const DEFAULT_SPLIT: SplitSettings = { mode: "off", train: 70, val: 15, test: 15, unit: "slide" };
+
+/** What a split deals out; splits from before the choice are by slide. */
+export const unitOf = (s: Pick<SplitSettings, "mode" | "unit">): SplitUnit => (s.mode === "random" && s.unit === "patch" ? "patch" : "slide");
+
+const UNITS: { id: SplitUnit; title: string; body: string }[] = [
+  { id: "slide", title: "By slide", body: "Each slide goes to one set with all of its patches" },
+  { id: "patch", title: "By patch", body: "Each slide's patches are dealt out between the sets -- for one slide, or too few to split" },
+];
 
 const MODES: { id: SplitMode; title: string; body: (nouns: string) => string }[] = [
   { id: "off", title: "No split", body: () => "Everything is exported as one dataset" },
@@ -30,6 +38,7 @@ export function SplitFields({
   nouns,
   disabled = false,
   hideOff = false,
+  allowPatch = false,
 }: {
   value: SplitSettings;
   onChange: (next: SplitSettings) => void;
@@ -38,8 +47,11 @@ export function SplitFields({
   disabled?: boolean;
   /** Leave out "No split", where a split is needed (training). */
   hideOff?: boolean;
+  /** Offer splitting each slide's patches, not only whole slides (a slide project; images have no patches to split). */
+  allowPatch?: boolean;
 }) {
   const problem = sharesProblem(value);
+  const unit = unitOf(value);
   return (
     <div className="flex flex-col gap-space-md">
       <div role="radiogroup" aria-label="How to split" className={`grid gap-space-sm ${hideOff ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
@@ -52,7 +64,8 @@ export function SplitFields({
               role="radio"
               aria-checked={selected}
               disabled={disabled}
-              onClick={() => onChange({ ...value, mode: m.id })}
+              // Patches are only dealt at random: assigning by hand is slide by slide.
+              onClick={() => onChange({ ...value, mode: m.id, unit: m.id === "random" ? value.unit : "slide" })}
               className={`text-left p-space-md rounded-xl bg-surface-container-lowest shadow-sm transition-shadow disabled:cursor-not-allowed ${
                 selected ? "ring-2 ring-primary" : "hover:shadow-md disabled:opacity-60"
               }`}
@@ -63,6 +76,39 @@ export function SplitFields({
           );
         })}
       </div>
+
+      {value.mode === "random" && allowPatch && (
+        <div className="flex flex-col gap-space-sm">
+          <span className="text-label-md text-on-surface-variant">Split by</span>
+          <div role="radiogroup" aria-label="What to split" className="grid gap-space-sm sm:grid-cols-2">
+            {UNITS.map((u) => {
+              const selected = unit === u.id;
+              return (
+                <button
+                  key={u.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  disabled={disabled}
+                  onClick={() => onChange({ ...value, unit: u.id })}
+                  className={`text-left px-space-md py-space-sm rounded-xl bg-surface-container-lowest shadow-sm transition-shadow disabled:cursor-not-allowed ${
+                    selected ? "ring-2 ring-primary" : "hover:shadow-md disabled:opacity-60"
+                  }`}
+                >
+                  <span className="block font-headline-sm text-label-lg">{u.title}</span>
+                  <span className="block text-body-sm text-on-surface-variant">{u.body}</span>
+                </button>
+              );
+            })}
+          </div>
+          {unit === "patch" && (
+            <p className="text-body-sm text-on-surface-variant max-w-3xl" role="note">
+              Patches of the same slide then end up in both training and validation / test, so the scores will look better than
+              they would on a new slide -- more so with overlapping patches. Split by slide once there are enough slides.
+            </p>
+          )}
+        </div>
+      )}
 
       {value.mode === "random" && (
         <div className="flex flex-col gap-space-sm">
