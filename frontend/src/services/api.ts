@@ -199,8 +199,21 @@ function sendFiles<T>(
     form.append("manifest", JSON.stringify(items.map((i) => i.path)));
 
     xhr.open("POST", `${API_BASE}${path}`);
-    xhr.upload.onprogress = (e) => e.lengthComputable && opts.onProgress?.(e.loaded, e.total);
-    xhr.upload.onload = () => opts.onSent?.();
+    // Firefox fires the upload's "load" only once the server answers, not when the last byte is
+    // sent. A big slide then sits at 100% while the server reads it, which looks like a stalled
+    // upload -- so reaching 100% counts as sent too.
+    let sent = false;
+    const markSent = () => {
+      if (sent) return;
+      sent = true;
+      opts.onSent?.();
+    };
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+      opts.onProgress?.(e.loaded, e.total);
+      if (e.total > 0 && e.loaded >= e.total) markSent();
+    };
+    xhr.upload.onload = markSent;
     xhr.onload = () => {
       let body: unknown = null;
       try {
