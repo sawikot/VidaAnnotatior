@@ -16,12 +16,8 @@ interface WizardClass {
   code?: number | null; // the lab's own Class ID (e.g. a Cytomine term id)
 }
 
-const DEFAULT_CLASSES: WizardClass[] = [
-  { name: "Tumor", color_hex: "#dc2626" },
-  { name: "Stroma", color_hex: "#16a34a" },
-  { name: "Necrosis", color_hex: "#eab308" },
-  { name: "Normal", color_hex: "#2563eb" },
-];
+// One class to start from; it can be renamed or removed (a project may start with no classes).
+const DEFAULT_CLASSES: WizardClass[] = [{ name: "Tumor", color_hex: "#dc2626" }];
 
 // Steps 2-4 only exist for whole-slide projects: an image project has no magnification,
 // patch grid or tissue detection to configure.
@@ -123,13 +119,11 @@ export function NewProjectWizardPage() {
     setClasses((c) => c.filter((_, idx) => idx !== i));
   }
 
+  const classCount = classes.length === 1 ? "1 class" : `${classes.length || "No"} classes`;
+
   async function handleCreate() {
     if (!name.trim()) {
       pushToast("Project name is required", "error");
-      return;
-    }
-    if (classes.length === 0) {
-      pushToast("At least one diagnostic class is required", "error");
       return;
     }
     const splitProblem = sharesProblem(split);
@@ -417,6 +411,11 @@ export function NewProjectWizardPage() {
                 />
               </div>
             ))}
+            {classes.length === 0 && (
+              <p className="text-body-sm text-on-surface-variant">
+                No classes. You can create the project like this and add them later in Settings (an import also adds the classes it brings).
+              </p>
+            )}
             <Button variant="ghost" icon="add" onClick={addClass}>
               Add Diagnostic Category
             </Button>
@@ -483,8 +482,8 @@ export function NewProjectWizardPage() {
         <div className="pointer-events-auto bg-surface-container-lowest rounded-xl shadow-xl border border-outline-variant px-space-lg py-space-md flex items-center gap-space-md">
           <span className="text-body-sm text-on-surface-variant hidden sm:block">
             {isImage
-              ? `${classes.length} classes · image project`
-              : `${classes.length} classes · ${patchWidth}x${patchHeight} @ ${targetMag}x · ${minTissue}% tissue`}
+              ? `${classCount} · image project`
+              : `${classCount} · ${patchWidth}x${patchHeight} @ ${targetMag}x · ${minTissue}% tissue`}
           </span>
           <Button variant="primary" icon="rocket_launch" onClick={handleCreate} disabled={submitting}>
             {submitting ? "Creating..." : "Create Project"}

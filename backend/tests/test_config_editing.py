@@ -85,7 +85,6 @@ def test_cannot_delete_class_used_by_annotations(db):
 @pytest.mark.parametrize(
     "rows,fragment",
     [
-        ([], "At least one"),
         ([("A", "1"), ("a", "2")], "unique"),
         ([("A", "1"), ("B", "1")], "Hotkeys"),
     ],
@@ -95,6 +94,12 @@ def test_invalid_class_lists_rejected(db, rows, fragment):
     items = [AnnotationClassSync(name=n, hotkey=h) for n, h in rows]
     with pytest.raises(ClassSyncError, match=fragment):
         sync_annotation_classes(db, config, items)
+
+
+def test_all_classes_can_be_removed(db):
+    _, config, _, _, _, _ = _seed(db, with_patch=False)  # no annotations use them
+    sync_annotation_classes(db, config, [])
+    assert config.annotation_classes == []
 
 
 def test_update_is_atomic_when_class_edit_is_rejected(db):

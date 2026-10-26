@@ -110,9 +110,6 @@ def sync_annotation_classes(db: Session, config: ProjectConfigVersion, items: li
 
     Validates the whole list before touching anything. Deleting a class that
     annotations still use is refused rather than orphaning them."""
-    if not items:
-        raise ClassSyncError("At least one diagnostic class is required.")
-
     names = [i.name.strip() for i in items]
     if any(not n for n in names):
         raise ClassSyncError("Class names cannot be blank.")

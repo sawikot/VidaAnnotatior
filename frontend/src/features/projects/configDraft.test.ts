@@ -113,7 +113,7 @@ describe("validateDraft", () => {
 
   it("rejects empty, duplicate, and blank classes", () => {
     const base = draftFromConfig(config);
-    expect(validateDraft({ ...base, classes: [] })).toMatch(/At least one/);
+    expect(validateDraft({ ...base, classes: [] })).toBeNull(); // a project may have no classes
     expect(validateDraft({ ...base, classes: [{ name: "A", color_hex: "#000000" }, { name: " a ", color_hex: "#000000" }] })).toMatch(/unique/);
     expect(validateDraft({ ...base, classes: [{ name: " ", color_hex: "#000000" }] })).toMatch(/blank/);
   });

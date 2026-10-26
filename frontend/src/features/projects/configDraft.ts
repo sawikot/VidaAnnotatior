@@ -158,7 +158,6 @@ export function validateDraft(d: ConfigDraft): string | null {
   if (!(d.otsu_sensitivity > 0 && d.otsu_sensitivity <= 1)) return "Otsu sensitivity must be above 0 and at most 1.";
   if (!intIn(d.morph_open_px, 0, 99) || !intIn(d.morph_close_px, 0, 99)) return "Morphology sizes must be whole numbers from 0 to 99.";
   if (!intIn(d.min_component_px, 0, 100_000_000)) return "Minimum component size must be a whole number of pixels.";
-  if (d.classes.length === 0) return "At least one diagnostic class is required.";
   const names = d.classes.map((k) => k.name.trim().toLowerCase());
   if (names.some((n) => !n)) return "Class names cannot be blank.";
   if (new Set(names).size !== names.length) return "Class names must be unique.";
