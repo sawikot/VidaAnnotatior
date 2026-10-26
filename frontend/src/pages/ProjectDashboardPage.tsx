@@ -169,11 +169,11 @@ export function ProjectDashboardPage() {
         <Metric
           label="Total Slides"
           value={String(project.stats.slide_count)}
-          sub={`${project.stats.annotated_slide_count} of them annotated`}
+          sub={`${project.stats.annotated_slide_count ?? 0} of them annotated`}
         />
         <Metric
           label="Annotations"
-          value={project.stats.total_annotations.toLocaleString()}
+          value={(project.stats.total_annotations ?? 0).toLocaleString()}
           sub={project.stats.total_patches ? `${project.stats.annotated_patches.toLocaleString()} patches annotated` : "drawn on the slides"}
         />
         <Metric
