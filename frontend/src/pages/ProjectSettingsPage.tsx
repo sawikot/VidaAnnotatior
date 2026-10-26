@@ -71,7 +71,7 @@ export function ProjectSettingsPage() {
         {project.description && <p className="text-body-md text-on-surface-variant">{project.description}</p>}
       </Card>
 
-      <MembersPanel projectId={pid} canEdit={canManage} currentUserId={user?.id} />
+      <MembersPanel projectId={pid} canEdit={canManage} currentUserId={user?.id} isImage={isImage} />
 
       {!canManage && (
         <p className="text-body-sm text-on-surface-variant">Only project managers and administrators can change this project&apos;s settings.</p>

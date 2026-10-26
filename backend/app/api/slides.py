@@ -14,6 +14,7 @@ from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.api.access import visible_slides
 from app.api.deps import forbid_for_image_project, get_project_or_404, get_slide_or_404, project_view
 from app.core.config import get_settings
 from app.database.session import get_db
@@ -74,11 +75,13 @@ def _extract_and_store_metadata(db: Session, slide: Slide) -> None:
 
 
 @router.get("/projects/{project_id}/slides", response_model=list[SlideOut])
-def list_slides(view: tuple[Session, Project] = Depends(project_view)):
+def list_slides(view: tuple[Session, Project] = Depends(project_view), scope: set[int] | None = Depends(visible_slides)):
     """The project's slides, each with its progress in its active grid (patches, annotated, reviewed),
     so a list can say what each slide needs next. With ``?version=``: the slides of that saved version."""
     db, project = view
     slides = db.query(Slide).filter(Slide.project_id == project.id).order_by(Slide.created_at.desc()).all()
+    if scope is not None:
+        slides = [s for s in slides if s.id in scope]
     out = []
     for slide in slides:
         rows = dict(

@@ -10,7 +10,8 @@ from app.api.access import authorize, current_user, require_admin, require_manag
 from app.core.config import get_settings
 from app.database.session import get_db
 from app.models.project import Project
-from app.models.user import ROLES, ProjectMember, User
+from app.models.slide import Slide
+from app.models.user import ROLES, ProjectMember, ProjectMemberSlide, User
 from app.services import auth
 
 router = APIRouter(tags=["auth"])
@@ -86,9 +87,16 @@ class MemberOut(BaseModel):
     email: str
     role: str
     is_active: bool
+    all_slides: bool = True  # annotators can be limited to slide_ids; everyone else sees every slide
+    slide_ids: list[int] = []
 
 
-class MemberIn(BaseModel):
+class SlideAccessIn(BaseModel):
+    all_slides: bool = True
+    slide_ids: list[int] = []  # when all_slides is false: the slides (or images) they may open
+
+
+class MemberIn(SlideAccessIn):
     user_id: int
 
 
@@ -301,13 +309,37 @@ def new_password_link(user_id: int, _: User = Depends(require_admin), db: Sessio
 
 def _members(db: Session, project_id: int) -> list[MemberOut]:
     rows = (
-        db.query(User)
+        db.query(User, ProjectMember)
         .join(ProjectMember, ProjectMember.user_id == User.id)
         .filter(ProjectMember.project_id == project_id)
         .order_by(User.name.asc())
         .all()
     )
-    return [MemberOut(id=u.id, name=u.name, email=u.email, role=u.role, is_active=u.is_active) for u in rows]
+    out = []
+    for u, m in rows:
+        limited = u.role == "annotator" and not m.all_slides
+        out.append(MemberOut(
+            id=u.id, name=u.name, email=u.email, role=u.role, is_active=u.is_active, all_slides=not limited,
+            slide_ids=sorted(link.slide_id for link in m.slide_links) if limited else [],
+        ))
+    return out
+
+
+def _set_slide_access(db: Session, member: ProjectMember, access: SlideAccessIn) -> None:
+    """Give a member every slide of the project, or only the chosen ones (others may have them too)."""
+    member.all_slides = access.all_slides
+    wanted = set() if access.all_slides else set(access.slide_ids)
+    if wanted:
+        found = {sid for (sid,) in db.query(Slide.id).filter(Slide.project_id == member.project_id, Slide.id.in_(wanted))}
+        unknown = sorted(wanted - found)
+        if unknown:
+            raise HTTPException(status_code=422, detail=f"Not slides of this project: {', '.join(map(str, unknown))}")
+    have = {link.slide_id: link for link in member.slide_links}
+    for sid, link in have.items():
+        if sid not in wanted:
+            member.slide_links.remove(link)
+    for sid in sorted(wanted - have.keys()):
+        member.slide_links.append(ProjectMemberSlide(slide_id=sid))
 
 
 @router.get("/projects/{project_id}/members", response_model=list[MemberOut], dependencies=[Depends(authorize)])
@@ -322,9 +354,23 @@ def add_member(project_id: int, payload: MemberIn, db: Session = Depends(get_db)
     user = db.get(User, payload.user_id)
     if user is None:
         raise HTTPException(status_code=404, detail=f"User {payload.user_id} not found")
-    if db.query(ProjectMember.id).filter(ProjectMember.project_id == project_id, ProjectMember.user_id == user.id).first() is None:
-        db.add(ProjectMember(project_id=project_id, user_id=user.id))
+    member = db.query(ProjectMember).filter(ProjectMember.project_id == project_id, ProjectMember.user_id == user.id).first()
+    if member is None:
+        member = ProjectMember(project_id=project_id, user_id=user.id)
+        db.add(member)
+        _set_slide_access(db, member, payload)
         db.commit()
+    return _members(db, project_id)
+
+
+@router.put("/projects/{project_id}/members/{user_id}/slides", response_model=list[MemberOut], dependencies=[Depends(authorize)])
+def set_member_slides(project_id: int, user_id: int, payload: SlideAccessIn, db: Session = Depends(get_db)) -> list[MemberOut]:
+    """Which slides (or images) an annotator may open: all of them, or the chosen ones."""
+    member = db.query(ProjectMember).filter(ProjectMember.project_id == project_id, ProjectMember.user_id == user_id).first()
+    if member is None:
+        raise HTTPException(status_code=404, detail=f"User {user_id} is not a member of this project")
+    _set_slide_access(db, member, payload)
+    db.commit()
     return _members(db, project_id)
 
 

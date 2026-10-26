@@ -52,8 +52,23 @@ class ProjectMember(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(primary_key=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    # Annotators only: False limits them to the slides (or images) in ``slide_links``. Others always see all.
+    all_slides: Mapped[bool] = mapped_column(Boolean, default=True)
 
     user: Mapped[User] = relationship(back_populates="memberships")
+    slide_links: Mapped[list["ProjectMemberSlide"]] = relationship(cascade="all, delete-orphan")
+
+
+class ProjectMemberSlide(Base):
+    """A slide (or image) assigned to a member who does not see all of the project's slides.
+    One slide can be assigned to any number of members."""
+
+    __tablename__ = "project_member_slides"
+    __table_args__ = (UniqueConstraint("member_id", "slide_id", name="uq_project_member_slide"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    member_id: Mapped[int] = mapped_column(ForeignKey("project_members.id", ondelete="CASCADE"), index=True)
+    slide_id: Mapped[int] = mapped_column(ForeignKey("slides.id", ondelete="CASCADE"), index=True)
 
 
 class UserSession(Base):

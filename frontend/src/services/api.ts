@@ -719,6 +719,14 @@ export interface ProjectMemberInfo {
   email: string;
   role: UserRole;
   is_active: boolean;
+  /** Annotators can be limited to some slides (or images); everyone else always has all. */
+  all_slides: boolean;
+  slide_ids: number[];
+}
+
+export interface SlideAccess {
+  all_slides: boolean;
+  slide_ids: number[];
 }
 
 export interface UserCreated {
@@ -746,7 +754,10 @@ export const deleteUser = (id: number) => request<void>(`/users/${id}`, { method
 export const newPasswordLink = (id: number) => post<UserCreated>(`/users/${id}/password-link`, {});
 
 export const listMembers = (projectId: number) => request<ProjectMemberInfo[]>(`/projects/${projectId}/members`);
-export const addMember = (projectId: number, userId: number) => post<ProjectMemberInfo[]>(`/projects/${projectId}/members`, { user_id: userId });
+export const addMember = (projectId: number, userId: number, access?: SlideAccess) =>
+  post<ProjectMemberInfo[]>(`/projects/${projectId}/members`, { user_id: userId, ...access });
+export const setMemberSlides = (projectId: number, userId: number, access: SlideAccess) =>
+  request<ProjectMemberInfo[]>(`/projects/${projectId}/members/${userId}/slides`, { method: "PUT", body: JSON.stringify(access) });
 export const removeMember = (projectId: number, userId: number) =>
   request<ProjectMemberInfo[]>(`/projects/${projectId}/members/${userId}`, { method: "DELETE" });
 

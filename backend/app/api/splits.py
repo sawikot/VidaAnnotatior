@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.api.access import visible_slides
 from app.api.deps import get_project_or_404, project_view
 from app.database.session import get_db
 from app.models.project import Project
@@ -35,8 +36,9 @@ class SplitOut(SplitSettings):
     counts: dict[str, int]
 
 
-def _out(project: Project) -> SplitOut:
+def _out(project: Project, scope: set[int] | None = None) -> SplitOut:
     slides = sorted(project.slides, key=lambda s: s.id)
+    shown = slides if scope is None else [s for s in slides if s.id in scope]
     config = project.split_config or {"mode": "off", **dataset_split.DEFAULT_SHARES}
     return SplitOut(
         mode=config["mode"],
@@ -46,20 +48,20 @@ def _out(project: Project) -> SplitOut:
         unit=dataset_split.unit_of(config),
         slides=[
             SplitSlideOut(slide_id=s.id, filename=s.filename, split=s.split if s.split in dataset_split.SPLITS else None)
-            for s in slides
+            for s in shown
         ],
         counts=dataset_split.counts(slides),
     )
 
 
 @router.get("/projects/{project_id}/split", response_model=SplitOut)
-def get_split(view: tuple[Session, Project] = Depends(project_view)) -> SplitOut:
+def get_split(view: tuple[Session, Project] = Depends(project_view), scope: set[int] | None = Depends(visible_slides)) -> SplitOut:
     """How the project's slides are split into train / validation / test, and where each slide is.
     With ``?version=``: the split of that saved version."""
     db, project = view
     if dataset_split.fill(project, list(project.slides)):  # slides added since the last random deal
         db.commit()
-    return _out(project)
+    return _out(project, scope)
 
 
 @router.put("/projects/{project_id}/split", response_model=SplitOut)

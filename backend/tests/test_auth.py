@@ -214,3 +214,34 @@ def test_the_main_administrator_stays_and_others_can_be_removed(api):
     assert admin.delete(f"/api/users/{ann['id']}").status_code == 204
     assert session.get("/api/auth/me").status_code == 401
     assert [u["email"] for u in admin.get("/api/users").json()] == ["ada@lab.org", "bea@lab.org"]
+
+
+def test_annotators_can_be_given_only_some_slides(api):
+    admin = setup_admin(api)
+    ann = add_user(admin, "Ann", "ann@lab.org", "annotator")
+    bob = add_user(admin, "Bob", "bob@lab.org", "annotator")
+    pid = admin.post("/api/projects", json={"name": "Work"}).json()["id"]
+    upload = [("files", (f"s{i}.tif", SLIDE, "application/octet-stream")) for i in range(3)]
+    s1, s2, s3 = sorted(s["id"] for s in admin.post(f"/api/projects/{pid}/slides/upload", files=upload).json()["slides"])
+
+    # Ann: only slides 1 and 2, chosen as she is added; Bob: all, then only slide 2 -- shared with Ann
+    members = admin.post(f"/api/projects/{pid}/members", json={"user_id": ann["id"], "all_slides": False, "slide_ids": [s1, s2]}).json()
+    assert next(m for m in members if m["id"] == ann["id"])["slide_ids"] == [s1, s2]
+    admin.post(f"/api/projects/{pid}/members", json={"user_id": bob["id"]})
+    res = admin.put(f"/api/projects/{pid}/members/{bob['id']}/slides", json={"all_slides": False, "slide_ids": [s2]})
+    assert res.status_code == 200
+    assert admin.put(f"/api/projects/{pid}/members/{bob['id']}/slides", json={"all_slides": False, "slide_ids": [999]}).status_code == 422
+
+    annc, bobc = client_for(api, "ann@lab.org"), client_for(api, "bob@lab.org")
+    assert annc.put(f"/api/projects/{pid}/members/{ann['id']}/slides", json={"all_slides": True}).status_code == 403  # not their call
+    assert {s["id"] for s in annc.get(f"/api/projects/{pid}/slides").json()} == {s1, s2}
+    assert {s["id"] for s in bobc.get(f"/api/projects/{pid}/slides").json()} == {s2}
+    assert annc.get(f"/api/slides/{s3}").status_code == 403
+    assert bobc.get(f"/api/slides/{s1}").status_code == 403
+    assert annc.get(f"/api/slides/{s2}").status_code == 200 and bobc.get(f"/api/slides/{s2}").status_code == 200
+    assert annc.get(f"/api/projects/{pid}/slides", params={"version": 1}).status_code == 403
+
+    # back to every slide
+    admin.put(f"/api/projects/{pid}/members/{bob['id']}/slides", json={"all_slides": True})
+    assert {s["id"] for s in bobc.get(f"/api/projects/{pid}/slides").json()} == {s1, s2, s3}
+    assert bobc.get(f"/api/slides/{s1}").status_code == 200

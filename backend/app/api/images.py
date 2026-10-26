@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
+from app.api.access import visible_slides
 from app.api.deps import get_project_or_404
 from app.database.session import get_db
 from app.models.annotation import GeometryAnnotation
@@ -42,6 +43,7 @@ def list_images(
     offset: int = Query(0, ge=0),
     project: Project = Depends(get_project_or_404),
     db: Session = Depends(get_db),
+    scope: set[int] | None = Depends(visible_slides),
 ) -> ImageListResponse:
     """Every image of an image project in a stable order (import order), each with
     its annotation state. Deliberately light -- no pixels -- so the workspace can hold
@@ -67,6 +69,8 @@ def list_images(
         .outerjoin(counts, counts.c.patch_id == Patch.id)
         .filter(Slide.project_id == project.id)
     )
+    if scope is not None:
+        query = query.filter(Slide.id.in_(scope))
     if status:
         query = query.filter(Patch.status.in_([s.strip() for s in status.split(",") if s.strip()]))
 

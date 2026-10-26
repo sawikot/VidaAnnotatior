@@ -6,6 +6,8 @@ Every data route (all routers but the sign-in ones) runs ``authorize``:
 2. the project the route touches -- found from ``project_id``, ``slide_id``, ``patch_id``,
    ``annotation_id``, ``suggestion_id``, ``run_id`` or ``config_id`` in the path -- must be one the user may see: admins see
    every project, everyone else the projects they are a member of (else 403);
+   an annotator given only some of a project's slides reaches only those (else 403), and project-wide
+   lists and exports show them only those (``visible_slides``);
 3. the route must be allowed for the user's role: reading, and the annotation work listed in
    ``ANNOTATOR_WRITES``, for everyone; any other change for managers and admins only (else 403).
 
@@ -23,7 +25,7 @@ from app.models.config_version import ProjectConfigVersion
 from app.models.patch import Patch
 from app.models.slide import Slide
 from app.models.training import Suggestion, TrainedModel, TrainingRun
-from app.models.user import ProjectMember, User
+from app.models.user import ProjectMember, ProjectMemberSlide, User
 from app.services.auth import SESSION_COOKIE, user_for_session
 
 READ_METHODS = {"GET", "HEAD", "OPTIONS"}
@@ -132,6 +134,38 @@ def project_of(db: Session, params: dict) -> int | None:
     return None
 
 
+def slide_of(db: Session, params: dict) -> int | None:
+    """The slide a route's path points into, if it points into one."""
+    if "slide_id" in params:
+        return int(params["slide_id"])
+    if "patch_id" in params:
+        row = db.query(Patch.slide_id).filter(Patch.id == int(params["patch_id"])).first()
+    elif "annotation_id" in params:
+        row = db.query(GeometryAnnotation.slide_id).filter(GeometryAnnotation.id == int(params["annotation_id"])).first()
+    elif "suggestion_id" in params:
+        row = db.query(Suggestion.slide_id).filter(Suggestion.id == int(params["suggestion_id"])).first()
+    else:
+        return None
+    return row[0] if row else None
+
+
+def slide_scope(db: Session, user: User, project_id: int) -> set[int] | None:
+    """The slides of the project this user may reach: None for all of them. Only annotators can be
+    limited; managers and administrators always see every slide of their projects."""
+    if user.role != "annotator":
+        return None
+    member = db.query(ProjectMember).filter(ProjectMember.project_id == project_id, ProjectMember.user_id == user.id).first()
+    if member is None or member.all_slides:
+        return None
+    return {sid for (sid,) in db.query(ProjectMemberSlide.slide_id).filter(ProjectMemberSlide.member_id == member.id)}
+
+
+def visible_slides(request: Request, user: User = Depends(current_user), db: Session = Depends(get_db)) -> set[int] | None:
+    """For project-wide lists and exports: the slides to keep (None: every slide)."""
+    project_id = request.path_params.get("project_id")
+    return None if project_id is None else slide_scope(db, user, int(project_id))
+
+
 def is_member(db: Session, user: User, project_id: int) -> bool:
     if user.is_admin:
         return True
@@ -162,6 +196,13 @@ def authorize(request: Request, user: User = Depends(current_user), db: Session 
         raise HTTPException(status_code=403, detail="Not allowed.")
     if not is_member(db, user, project_id):
         raise HTTPException(status_code=403, detail="You are not a member of this project.")
+    scope = slide_scope(db, user, project_id)
+    if scope is not None:
+        if "version" in request.query_params:  # a saved version has slide ids of its own
+            raise HTTPException(status_code=403, detail="Saved versions are open to people who see every slide of the project.")
+        slide_id = slide_of(db, request.path_params)
+        if slide_id is not None and slide_id not in scope:
+            raise HTTPException(status_code=403, detail="This slide is not assigned to you.")
     if method in READ_METHODS or key in ANNOTATOR_WRITES:
         return user
     if not user.can_manage:
