@@ -245,3 +245,17 @@ def test_annotators_can_be_given_only_some_slides(api):
     admin.put(f"/api/projects/{pid}/members/{bob['id']}/slides", json={"all_slides": True})
     assert {s["id"] for s in bobc.get(f"/api/projects/{pid}/slides").json()} == {s1, s2, s3}
     assert bobc.get(f"/api/slides/{s1}").status_code == 200
+
+
+def test_annotations_on_the_whole_slide_are_counted(api):
+    admin = setup_admin(api)
+    pid = admin.post("/api/projects", json={"name": "Counts"}).json()["id"]
+    upload = [("files", (f"s{i}.tif", SLIDE, "application/octet-stream")) for i in range(2)]
+    s1, s2 = sorted(s["id"] for s in admin.post(f"/api/projects/{pid}/slides/upload", files=upload).json()["slides"])
+    for x in (10, 300):  # drawn without any patches
+        square = [[x, 10], [x + 100, 10], [x + 100, 110], [x, 110]]
+        assert admin.post(f"/api/slides/{s1}/annotations", json={"type": "rectangle", "coordinates_level0": square}).status_code == 201
+    counts = {s["id"]: s["annotation_count"] for s in admin.get(f"/api/projects/{pid}/slides").json()}
+    assert counts == {s1: 2, s2: 0}
+    stats = admin.get(f"/api/projects/{pid}").json()["stats"]
+    assert (stats["total_annotations"], stats["annotated_slide_count"]) == (2, 1)

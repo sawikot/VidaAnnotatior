@@ -110,11 +110,14 @@ const STATUS_STYLES: Record<string, string> = {
   error: "bg-red-100 text-red-800",
 };
 
+// A newly imported slide can be annotated straight away (on the whole slide), so it reads "ready".
+const STATUS_LABELS: Record<string, string> = { imported: "ready" };
+
 export function StatusPill({ status }: { status: string }) {
   const style = STATUS_STYLES[status] ?? "bg-slate-100 text-slate-700";
   return (
     <span className={`px-space-sm py-0.5 rounded-full text-label-sm font-headline-sm capitalize ${style}`}>
-      {status.replace(/_/g, " ")}
+      {(STATUS_LABELS[status] ?? status).replace(/_/g, " ")}
     </span>
   );
 }

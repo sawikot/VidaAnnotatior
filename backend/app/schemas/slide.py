@@ -45,6 +45,7 @@ class SlideOut(BaseModel):
     patch_count: int | None = None
     annotated_patch_count: int | None = None
     reviewed_patch_count: int | None = None
+    annotation_count: int | None = None  # drawn on the whole slide or in its patches
 
     created_at: datetime
     updated_at: datetime

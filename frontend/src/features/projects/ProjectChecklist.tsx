@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { MaterialIcon } from "../../components/MaterialIcon";
 import { Button, Card } from "../../components/primitives";
+import { useCan } from "../../stores/authStore";
 import type { ProjectDetail, Slide } from "../../types/api";
 import { projectChecklist, type ChecklistStep } from "../../utils/nextStep";
 
@@ -25,6 +26,11 @@ export function ProjectChecklist({ project, slides, onAdd }: Props) {
   const pid = project.id;
   const isImage = project.project_type === "image";
   const steps = projectChecklist(project, slides);
+  const canManage = useCan().manage;
+  // WSI: patches are optional (for patch-by-patch work), so they get a line of their own, not a step.
+  const usable = slides.filter((s) => s.status !== "error");
+  const withPatches = usable.filter((s) => ["patches_generated", "annotating", "reviewed"].includes(s.status));
+  const needsPatches = usable.find((s) => !withPatches.includes(s));
 
   function go(step: ChecklistStep) {
     if (step.target === "add") return onAdd();
@@ -37,14 +43,20 @@ export function ProjectChecklist({ project, slides, onAdd }: Props) {
   return (
     <Card className="p-space-md">
       <div className="text-label-md text-on-surface-variant mb-space-sm">Project progress</div>
-      <ol className={`grid grid-cols-2 sm:grid-cols-3 gap-space-sm ${steps.length > 4 ? "lg:grid-cols-6" : "lg:grid-cols-4"}`}>
+      <ol className={`grid grid-cols-2 gap-space-sm ${steps.length > 4 ? "sm:grid-cols-3 lg:grid-cols-6" : "sm:grid-cols-4"}`}>
         {steps.map((step, i) => {
           const canGo = step.target === "add" || (isImage && step.target === "workspace") || step.slideId !== null;
           return (
             <li
               key={step.id}
               className={`rounded-lg p-space-sm flex flex-col gap-1 min-w-0 ${
-                step.current ? "bg-primary-fixed/50 ring-1 ring-primary" : step.done ? "bg-surface-container-low" : "bg-surface-container-lowest"
+                step.current
+                  ? "bg-primary-fixed/50 ring-1 ring-primary"
+                  : step.done
+                    ? "bg-surface-container-low"
+                    : step.optional
+                      ? "bg-surface-container-lowest opacity-70"
+                      : "bg-surface-container-lowest"
               }`}
               aria-current={step.current ? "step" : undefined}
             >
@@ -71,6 +83,20 @@ export function ProjectChecklist({ project, slides, onAdd }: Props) {
           );
         })}
       </ol>
+      {!isImage && usable.length > 0 && (
+        <div className="mt-space-sm pt-space-sm border-t border-outline-variant/50 flex items-center gap-space-sm flex-wrap text-body-sm text-on-surface-variant">
+          <MaterialIcon name="grid_view" className="!text-[18px]" />
+          <span>
+            <span className="text-on-surface">Patches:</span> {withPatches.length} of {usable.length} {usable.length === 1 ? "slide" : "slides"} · optional,
+            for patch-by-patch work
+          </span>
+          {canManage && needsPatches && (
+            <Button variant="ghost" onClick={() => navigate(`/projects/${pid}/slides/${needsPatches.id}/workspace?patches=choose`)}>
+              Make patches
+            </Button>
+          )}
+        </div>
+      )}
     </Card>
   );
 }

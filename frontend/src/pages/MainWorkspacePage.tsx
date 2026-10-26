@@ -155,6 +155,21 @@ export function MainWorkspacePage() {
     setChoosingArea(true);
   }
 
+  // From the dashboard's "Make patches": ask right away (once we know the slide has none).
+  useEffect(() => {
+    if (searchParams.get("patches") !== "choose" || !noPatches) return;
+    if (canManage) setChoosingArea(true);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("patches");
+        return next;
+      },
+      { replace: true },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noPatches]);
+
   async function cutWholeSlide() {
     if (!slide?.active_config_version_id) {
       pushToast("This slide has no configuration", "error");

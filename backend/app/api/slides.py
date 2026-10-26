@@ -82,6 +82,12 @@ def list_slides(view: tuple[Session, Project] = Depends(project_view), scope: se
     slides = db.query(Slide).filter(Slide.project_id == project.id).order_by(Slide.created_at.desc()).all()
     if scope is not None:
         slides = [s for s in slides if s.id in scope]
+    drawn = dict(
+        db.query(GeometryAnnotation.slide_id, func.count(GeometryAnnotation.id))
+        .filter(GeometryAnnotation.slide_id.in_([s.id for s in slides]))
+        .group_by(GeometryAnnotation.slide_id)
+        .all()
+    )
     out = []
     for slide in slides:
         rows = dict(
@@ -93,6 +99,7 @@ def list_slides(view: tuple[Session, Project] = Depends(project_view), scope: se
         item.patch_count = sum(rows.values())
         item.annotated_patch_count = rows.get("annotated", 0) + rows.get("reviewed", 0)
         item.reviewed_patch_count = rows.get("reviewed", 0)
+        item.annotation_count = drawn.get(slide.id, 0)
         out.append(item)
     return out
 

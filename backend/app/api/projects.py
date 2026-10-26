@@ -202,6 +202,14 @@ def _to_detail(db: Session, project: Project) -> ProjectDetailOut:
         or 0.0
     )
 
+    per_slide = (
+        db.query(GeometryAnnotation.slide_id, func.count(GeometryAnnotation.id))
+        .join(Slide, GeometryAnnotation.slide_id == Slide.id)
+        .filter(Slide.project_id == project.id)
+        .group_by(GeometryAnnotation.slide_id)
+        .all()
+    )
+
     active_config = db.get(ProjectConfigVersion, project.active_config_version_id) if project.active_config_version_id else None
 
     stats = ProjectStats(
@@ -212,6 +220,8 @@ def _to_detail(db: Session, project: Project) -> ProjectDetailOut:
         reviewed_patches=reviewed,
         flagged_patches=flagged,
         tissue_area_mm2=round(tissue_area, 2),
+        total_annotations=sum(n for _, n in per_slide),
+        annotated_slide_count=sum(1 for _, n in per_slide if n),
     )
     base = ProjectOut.model_validate(project, from_attributes=True).model_dump()
     return ProjectDetailOut(**base, stats=stats, active_config=active_config)

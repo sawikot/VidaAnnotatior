@@ -15,22 +15,22 @@ export interface SlideStep {
 
 const HAS_PATCHES = ["patches_generated", "annotating", "reviewed"];
 
+const count = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+
 /** What a WSI slide needs next, from its status and its progress in the active patch grid. */
 export function slideNextStep(s: Slide): SlideStep {
   if (s.status === "error") {
     return { label: "Fix import", detail: s.error_message || "The slide could not be read; import it again.", target: null, tone: "problem" };
   }
-  if (s.status === "imported" || !s.status) {
-    return { label: "Find tissue", detail: "Detect the tissue, or draw it, so patches can be cut.", target: "processing", tone: "todo" };
-  }
-  if (s.status === "tissue_detected" || !HAS_PATCHES.includes(s.status)) {
-    return { label: "Generate patches", detail: "Tissue found. Cut it into patches next.", target: "processing", tone: "todo" };
-  }
-  const total = s.patch_count ?? 0;
+  const total = HAS_PATCHES.includes(s.status) ? (s.patch_count ?? 0) : 0;
   const annotated = s.annotated_patch_count ?? 0;
   const reviewed = s.reviewed_patch_count ?? 0;
+  const drawn = s.annotation_count ?? 0;
+  // No patches: the slide is annotated as a whole (patches are optional, made from the workspace).
   if (total === 0) {
-    return { label: "Generate patches", detail: "No patches in the current patch size yet.", target: "processing", tone: "todo" };
+    return drawn === 0
+      ? { label: "Annotate", detail: "Not annotated yet · patches optional.", target: "workspace", tone: "todo" }
+      : { label: "Continue", detail: `${count(drawn, "annotation")} on the whole slide · patches optional.`, target: "workspace", tone: "todo" };
   }
   if (annotated === 0) {
     return { label: "Start annotating", detail: `${total.toLocaleString()} patches ready.`, target: "workspace", tone: "todo" };
@@ -57,21 +57,21 @@ export interface ChecklistStep {
   /** Progress text, e.g. "2 of 3 slides". */
   progress: string;
   done: boolean;
-  /** The step to work on now (the first one not done). */
+  /** The step to work on now (the first one not done and not optional). */
   current: boolean;
+  /** Can be skipped: it does not hold up the steps after it (e.g. review when nothing has patches). */
+  optional?: boolean;
   /** The slide the button should open for this step, if any. */
   slideId: number | null;
   target: StepTarget | "add" | null;
 }
 
-const count = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
 /** The project's path from empty to exported, with how far along each step is. */
 export function projectChecklist(project: ProjectDetail, slides: Slide[]): ChecklistStep[] {
   const isImage = project.project_type === "image";
   const st = project.stats;
   const usable = slides.filter((s) => s.status !== "error");
-  const withTissue = usable.filter((s) => s.status !== "imported");
   const withPatches = usable.filter((s) => HAS_PATCHES.includes(s.status));
   const first = (list: Slide[], pred: (s: Slide) => boolean) => list.find(pred)?.id ?? null;
   const unit = isImage ? "image" : "patch";
@@ -87,52 +87,49 @@ export function projectChecklist(project: ProjectDetail, slides: Slide[]): Check
       target: "add",
     },
   ];
-  if (!isImage) {
-    steps.push(
-      {
-        id: "tissue",
-        title: "Find tissue",
-        progress: `${withTissue.length} of ${count(usable.length, "slide")}`,
-        done: usable.length > 0 && withTissue.length === usable.length,
-        slideId: first(usable, (s) => s.status === "imported"),
-        target: "processing",
-      },
-      {
-        id: "patches",
-        title: "Generate patches",
-        progress: `${withPatches.length} of ${count(usable.length, "slide")}`,
-        done: usable.length > 0 && withPatches.length === usable.length,
-        slideId: first(usable, (s) => !HAS_PATCHES.includes(s.status)),
-        target: "processing",
-      },
-    );
-  }
+  const drawnOn = (s: Slide) => (s.annotation_count ?? 0) > 0 || (s.annotated_patch_count ?? 0) > 0;
+  const annotatedSlides = usable.filter(drawnOn);
   steps.push(
-    {
-      id: "annotate",
-      title: "Annotate",
-      progress: st.total_patches ? `${st.annotated_patches.toLocaleString()} of ${count(st.total_patches, unit, units)}` : `no ${units} yet`,
-      done: st.annotated_patches > 0 && withPatches.length === usable.length,
-      slideId: first(withPatches, (s) => (s.annotated_patch_count ?? 0) === 0) ?? first(withPatches, () => true),
-      target: "workspace",
-    },
+    isImage
+      ? {
+          id: "annotate",
+          title: "Annotate",
+          progress: st.total_patches ? `${st.annotated_patches.toLocaleString()} of ${count(st.total_patches, unit, units)}` : `no ${units} yet`,
+          done: st.annotated_patches > 0 && withPatches.length === usable.length,
+          slideId: first(withPatches, (s) => (s.annotated_patch_count ?? 0) === 0) ?? first(withPatches, () => true),
+          target: "workspace",
+        }
+      : {
+          // A WSI slide is annotated straight away, on the whole slide; tissue and patches are optional.
+          id: "annotate",
+          title: "Annotate",
+          progress: usable.length ? `${annotatedSlides.length} of ${count(usable.length, "slide")} started` : "no slides yet",
+          done: usable.length > 0 && annotatedSlides.length === usable.length,
+          slideId: first(usable, (s) => !drawnOn(s)) ?? first(usable, () => true),
+          target: "workspace",
+        },
     {
       id: "review",
       title: "Review",
-      progress: st.annotated_patches ? `${st.reviewed_patches.toLocaleString()} of ${st.annotated_patches.toLocaleString()} annotated` : "nothing to review yet",
+      progress: st.annotated_patches
+        ? `${st.reviewed_patches.toLocaleString()} of ${st.annotated_patches.toLocaleString()} annotated`
+        : isImage
+          ? "nothing to review yet"
+          : "patch by patch · optional",
       done: st.annotated_patches > 0 && st.reviewed_patches >= st.annotated_patches,
+      optional: !isImage && st.annotated_patches === 0, // reviewing is per patch: nothing to do without patches
       slideId: first(withPatches, (s) => (s.reviewed_patch_count ?? 0) < (s.annotated_patch_count ?? 0)),
       target: "workspace",
     },
     {
       id: "export",
       title: "Export",
-      progress: withPatches.length ? "ready whenever you are" : "after patches exist",
+      progress: isImage ? (withPatches.length ? "ready whenever you are" : "after images exist") : annotatedSlides.length ? "ready whenever you are" : "after annotating",
       done: false,
-      slideId: withPatches[0]?.id ?? null,
+      slideId: isImage ? (withPatches[0]?.id ?? null) : (annotatedSlides[0]?.id ?? null),
       target: "export",
     },
   );
-  const currentIndex = steps.findIndex((s) => !s.done);
+  const currentIndex = steps.findIndex((s) => !s.done && !s.optional);
   return steps.map((s, i) => ({ ...s, current: i === currentIndex }));
 }

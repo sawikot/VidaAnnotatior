@@ -64,6 +64,9 @@ class ProjectStats(BaseModel):
     reviewed_patches: int
     flagged_patches: int
     tissue_area_mm2: float
+    # Everything drawn, on the whole slide or in patches (a slide can be annotated without patches).
+    total_annotations: int = 0
+    annotated_slide_count: int = 0
 
 
 class ProjectDetailOut(ProjectOut):

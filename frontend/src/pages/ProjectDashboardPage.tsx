@@ -52,7 +52,8 @@ export function ProjectDashboardPage() {
 
   const filteredSlides = slides.filter((s) => {
     if (filterTab === "all") return true;
-    if (filterTab === "needs_annotation") return ["imported", "tissue_detected", "patches_generated"].includes(s.status);
+    // Nothing drawn yet, on the whole slide or in patches.
+    if (filterTab === "needs_annotation") return s.status !== "error" && !(s.annotation_count || s.annotated_patch_count);
     if (filterTab === "needs_review") return s.status === "annotating";
     if (filterTab === "completed") return s.status === "reviewed";
     return true;
@@ -96,17 +97,29 @@ export function ProjectDashboardPage() {
                 Import with Annotations
               </Button>
             )}
-            <ExportAllMenu
-              projectId={pid}
-              slideCount={slides.length}
-              projectType={project.project_type}
-              optionsPath={`/projects/${pid}/export`}
-              disabledReason={
-                slides.some((s) => ["patches_generated", "annotating", "reviewed"].includes(s.status))
-                  ? undefined
-                  : "Process at least one slide (generate patches) before exporting"
-              }
-            />
+            {/* Slides annotated only on the whole slide: the Export page cuts patches at export time. */}
+            {!isImage && !slides.some((s) => ["patches_generated", "annotating", "reviewed"].includes(s.status)) ? (
+              <Button
+                icon="download"
+                onClick={() => navigate(`/projects/${pid}/export`)}
+                disabled={!project.stats.total_annotations}
+                title={project.stats.total_annotations ? "Export the annotations; patches are cut at export time" : "Annotate a slide first"}
+              >
+                Export
+              </Button>
+            ) : (
+              <ExportAllMenu
+                projectId={pid}
+                slideCount={slides.length}
+                projectType={project.project_type}
+                optionsPath={`/projects/${pid}/export`}
+                disabledReason={
+                  slides.some((s) => ["patches_generated", "annotating", "reviewed"].includes(s.status))
+                    ? undefined
+                    : "Process at least one slide (generate patches) before exporting"
+                }
+              />
+            )}
             {canManage && (
               <Button icon="edit" onClick={() => setEditOpen(true)}>
                 Edit Details
@@ -153,13 +166,25 @@ export function ProjectDashboardPage() {
         </div>
       ) : (
       <div className="grid grid-cols-2 xl:grid-cols-6 gap-space-md">
-        <Metric label="Total Slides" value={String(project.stats.slide_count)} sub={`${project.stats.processed_slide_count} processed`} />
-        <Metric label="Tissue Extracted" value={`${project.stats.tissue_area_mm2} mm²`} sub="across all slides" />
-        <Metric label="Total Patches" value={project.stats.total_patches.toLocaleString()} sub="virtual, coordinate-only" />
         <Metric
-          label="Annotated"
-          value={project.stats.annotated_patches.toLocaleString()}
-          sub={pct(project.stats.annotated_patches, project.stats.total_patches)}
+          label="Total Slides"
+          value={String(project.stats.slide_count)}
+          sub={`${project.stats.annotated_slide_count} of them annotated`}
+        />
+        <Metric
+          label="Annotations"
+          value={project.stats.total_annotations.toLocaleString()}
+          sub={project.stats.total_patches ? `${project.stats.annotated_patches.toLocaleString()} patches annotated` : "drawn on the slides"}
+        />
+        <Metric
+          label="Total Patches"
+          value={project.stats.total_patches.toLocaleString()}
+          sub={project.stats.total_patches ? `${project.stats.processed_slide_count} slides cut into patches` : "optional"}
+        />
+        <Metric
+          label="Tissue Extracted"
+          value={project.stats.tissue_area_mm2 ? `${project.stats.tissue_area_mm2} mm²` : "--"}
+          sub={project.stats.tissue_area_mm2 ? "across all slides" : "optional, for tissue-only patches"}
         />
         <Metric
           label="Reviewed QA"
@@ -319,6 +344,9 @@ function SlideRow({ slide, projectId, onDelete }: { slide: Slide; projectId: num
   const navigate = useNavigate();
   const canManage = useCan().manage;
   const canAnnotate = ["patches_generated", "annotating", "reviewed"].includes(slide.status);
+  const hasPatches = canAnnotate && (slide.patch_count ?? 0) > 0;
+  // Exportable with patches, or -- cut at export time -- once something is drawn on the whole slide.
+  const canExport = slide.status !== "error" && (hasPatches || (slide.annotation_count ?? 0) > 0);
   const next = slideNextStep(slide);
   const open = (page: string) =>
     navigate(page === "export" ? `/projects/${projectId}/export?slides=${slide.id}` : `/projects/${projectId}/slides/${slide.id}/${page}`);
@@ -355,7 +383,17 @@ function SlideRow({ slide, projectId, onDelete }: { slide: Slide; projectId: num
               {next.label}
             </Button>
           )}
-          <span className={`text-body-sm ${next.tone === "problem" ? "text-error" : "text-on-surface-variant"}`}>{next.detail}</span>
+          <span className={`text-body-sm ${next.tone === "problem" ? "text-error" : "text-on-surface-variant"}`}>
+            {next.detail}
+            {canManage && !hasPatches && slide.status !== "error" && (
+              <>
+                {" "}
+                <button className="text-primary hover:underline" onClick={() => open("workspace?patches=choose")}>
+                  Make patches
+                </button>
+              </>
+            )}
+          </span>
         </div>
       </td>
       <td className="px-space-md py-space-sm">
@@ -367,7 +405,12 @@ function SlideRow({ slide, projectId, onDelete }: { slide: Slide; projectId: num
             disabled={slide.status === "error"}
             title={canAnnotate ? "Annotation workspace" : "Annotation workspace (whole slide only until patches are generated)"}
           />
-          <IconButton icon="file_download" onClick={() => open("export")} disabled={!canAnnotate} title={canAnnotate ? "Export this slide" : "Generate patches first"} />
+          <IconButton
+            icon="file_download"
+            onClick={() => open("export")}
+            disabled={!canExport}
+            title={canExport ? "Export this slide" : "Annotate it first"}
+          />
           {canManage && <IconButton icon="delete" onClick={onDelete} title="Delete this slide and all its data" className="hover:!text-error" />}
         </div>
       </td>

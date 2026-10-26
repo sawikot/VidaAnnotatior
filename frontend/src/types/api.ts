@@ -131,6 +131,9 @@ export interface ProjectStats {
   reviewed_patches: number;
   flagged_patches: number;
   tissue_area_mm2: number;
+  /** Everything drawn, on the whole slide or in patches. */
+  total_annotations: number;
+  annotated_slide_count: number;
 }
 
 // ---- Model training ----
@@ -491,6 +494,8 @@ export interface Slide {
   patch_count?: number | null;
   annotated_patch_count?: number | null;
   reviewed_patch_count?: number | null;
+  /** Everything drawn on it, on the whole slide or in patches; only filled in by the project's slide list. */
+  annotation_count?: number | null;
   active_config_version_id: number | null;
 
   created_at: string;

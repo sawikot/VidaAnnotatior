@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { MaterialIcon } from "../components/MaterialIcon";
 import { Button, Card } from "../components/primitives";
@@ -77,6 +77,20 @@ export function ProjectExportPage() {
   const nouns = isImage ? "images" : "slides";
   const images = options.content === "images";
   const setOptions = (next: ExportOptions) => setOptionsState(normalizeOptions(next));
+
+  // Slides annotated on the whole slide have no patches: then start on "cut at export time" in the
+  // project's patch size, so they can be exported without making patches first. Once only.
+  const pickedGridFor = useRef(false);
+  useEffect(() => {
+    if (pickedGridFor.current || isImage || !slides?.length || !defaultGrid || options.grid) return;
+    pickedGridFor.current = true;
+    if (slides.some((s) => (s.patch_count ?? 0) > 0)) return;
+    // No tissue found on any slide: cut the whole slide (a tissue-only grid would have nothing to cut from).
+    const noTissue = slides.every((s) => !s.tissue_mask_path);
+    const grid = noTissue ? { ...defaultGrid, min_tissue_fraction: 0, include_edge_patches: true } : { ...defaultGrid };
+    setOptions({ ...options, grid });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slides, defaultGrid, isImage]);
 
   useEffect(() => {
     getProject(pid, version)
