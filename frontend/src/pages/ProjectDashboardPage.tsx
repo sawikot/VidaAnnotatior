@@ -325,7 +325,17 @@ function SlideRow({ slide, projectId, onDelete }: { slide: Slide; projectId: num
   return (
     <tr className="border-t border-outline-variant hover:bg-surface-container-low/50">
       <td className="px-space-md py-space-sm">
-        <div className="font-headline-sm text-headline-sm">{slide.filename}</div>
+        {slide.status === "error" ? (
+          <div className="font-headline-sm text-headline-sm">{slide.filename}</div>
+        ) : (
+          <button
+            className="font-headline-sm text-headline-sm text-left hover:text-primary hover:underline"
+            onClick={() => open("workspace")}
+            title="Open in the annotation workspace"
+          >
+            {slide.filename}
+          </button>
+        )}
         <div className="text-label-sm text-secondary font-mono">{slide.format}</div>
       </td>
       <td className="px-space-md py-space-sm font-mono text-label-md">

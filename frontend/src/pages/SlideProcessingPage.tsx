@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { MaterialIcon } from "../components/MaterialIcon";
 import { Button, Card, Modal } from "../components/primitives";
 import { WsiViewer, type ViewportBbox } from "../features/viewer/WsiViewer";
@@ -46,10 +46,14 @@ export function SlideProcessingPage() {
   const [gridRefresh, setGridRefresh] = useState(0);
   // Which part of the slide Generate Coords cuts: the tissue (by the configuration's threshold) or all of it.
   const [patchArea, setPatchArea] = useState<"tissue" | "whole">("tissue");
+  // Sent here from the workspace's "Tissue area only": stay on tissue, and go back there once patches exist.
+  const [searchParams] = useSearchParams();
+  const askedTissue = searchParams.get("area") === "tissue";
+  const returnToWorkspace = searchParams.get("return") === "workspace";
   // Start from what the slide's current patches cover (a whole-slide grid has no tissue threshold: "_t0").
   useEffect(() => {
-    if (slide?.active_grid_key) setPatchArea(/_t0(_|$)/.test(slide.active_grid_key) ? "whole" : "tissue");
-  }, [slide?.active_grid_key]);
+    if (slide?.active_grid_key && !askedTissue) setPatchArea(/_t0(_|$)/.test(slide.active_grid_key) ? "whole" : "tissue");
+  }, [slide?.active_grid_key, askedTissue]);
   const [confirmReplace, setConfirmReplace] = useState(false);
   // Whole slide: tissue plays no part, so its outline, its drawing tools and its settings are put away
   // (kept as they are, for when Tissue only is picked again).
@@ -221,6 +225,10 @@ export function SlideProcessingPage() {
           (res.annotations_moved_to_slide ? `, ${res.annotations_moved_to_slide} annotations kept on the whole slide` : ""),
         "success",
       );
+      if (returnToWorkspace) {
+        navigate(`/projects/${pid}/slides/${sid}/workspace?mode=patch`);
+        return;
+      }
       setMode("grid");
       setGridRefresh((n) => n + 1);
       refresh();

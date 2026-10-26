@@ -13,11 +13,13 @@ import { SuggestionsPanel } from "../features/suggestions/SuggestionsPanel";
 import { neighbour, progress, type ImageFilter } from "../features/images/imageNav";
 import { AnnotationModeSwitch, rememberMode, rememberedMode, type AnnotationMode } from "../features/annotations/AnnotationModeSwitch";
 import { WsiAnnotationView, type WsiFocus } from "../features/annotations/WsiAnnotationView";
+import { PatchAreaChoice } from "../features/annotations/PatchAreaChoice";
 import { HOTKEYS, visibleTools as toolsFor } from "../features/annotations/tools";
 import { PatchGridOverlay, PATCH_STATUS_COLORS } from "../features/viewer/PatchGridOverlay";
 import { WsiViewer, type ViewportBbox } from "../features/viewer/WsiViewer";
 import { GridSwitcher } from "../features/grids/GridSwitcher";
 import {
+  generatePatches,
   createAnnotation,
   createSlideAnnotation,
   deleteAnnotation,
@@ -143,14 +145,36 @@ export function MainWorkspacePage() {
     });
   }
 
-  /** Patch view asked for on a slide that has no patches: off to where they are made. */
+  /** Patch view asked for on a slide that has no patches: ask whether to cut the full slide or its tissue. */
+  const [choosingArea, setChoosingArea] = useState(false);
   function toPatchGeneration() {
     if (!canManage) {
       pushToast("This slide has no patches yet. Ask a project manager to generate them; until then it is annotated as a whole.", "info");
       return;
     }
-    pushToast("This slide has no patches yet. Generate them here, then open the workspace again.", "info");
-    navigate(`/projects/${pid}/slides/${sid}/processing`);
+    setChoosingArea(true);
+  }
+
+  async function cutWholeSlide() {
+    if (!slide?.active_config_version_id) {
+      pushToast("This slide has no configuration", "error");
+      return;
+    }
+    try {
+      const res = await generatePatches(sid, slide.active_config_version_id, undefined, true);
+      await afterGridChange();
+      setChoosingArea(false);
+      setMode("patch");
+      pushToast(`Generated ${res.kept.toLocaleString()} patches over the whole slide`, "success");
+    } catch (e) {
+      pushToast(e instanceof Error ? e.message : "Patch generation failed", "error");
+    }
+  }
+
+  function toTissueProcessing() {
+    setChoosingArea(false);
+    // Slide Processing brings you back here, in patch view, once the patches are generated.
+    navigate(`/projects/${pid}/slides/${sid}/processing?area=tissue&return=workspace`);
   }
 
   function showPatchOnSlide() {
@@ -860,6 +884,8 @@ export function MainWorkspacePage() {
 
   if (wsiActive) {
     return (
+      <>
+      <PatchAreaChoice open={choosingArea} onClose={() => setChoosingArea(false)} onWholeSlide={cutWholeSlide} onTissue={toTissueProcessing} />
       <WsiAnnotationView
         slide={slide}
         config={config}
@@ -872,6 +898,7 @@ export function MainWorkspacePage() {
         onReviewPatch={(id) => void openPatchById(id, true)}
         onClassesCreated={reloadConfig}
       />
+      </>
     );
   }
 

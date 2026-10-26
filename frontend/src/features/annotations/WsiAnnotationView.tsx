@@ -379,7 +379,7 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
       {/* Strip */}
       <div className="bg-[#0b1329] border-b border-[#1e293b] px-space-md py-1.5 flex items-center gap-space-md text-body-sm flex-wrap">
         <span className="font-headline-sm">{slide.filename}</span>
-        <AnnotationModeSwitch mode="wsi" onChange={onModeChange} patchTitle={noPatches ? "No patches yet: opens Slide Processing to generate them" : undefined} />
+        <AnnotationModeSwitch mode="wsi" onChange={onModeChange} patchTitle={noPatches ? "No patches yet: choose the full slide or its tissue area to cut into patches" : undefined} />
         {noPatches && <span className="text-label-sm text-amber-300">No patches yet · whole-slide annotation only</span>}
         <span className="font-mono text-label-sm text-cyan-300">
           {width.toLocaleString()} × {height.toLocaleString()} px · Level-0
