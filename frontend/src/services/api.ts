@@ -709,6 +709,8 @@ export interface AuthUser {
   is_active: boolean;
   has_password: boolean;
   project_count: number;
+  /** The first administrator: always an administrator, never disabled or removed. */
+  is_owner: boolean;
 }
 
 export interface ProjectMemberInfo {
@@ -740,6 +742,7 @@ export const listUsers = () => request<AuthUser[]>("/users");
 export const createUser = (body: { name: string; email: string; role: UserRole; password?: string }) => post<UserCreated>("/users", body);
 export const updateUser = (id: number, body: { name?: string; role?: UserRole; is_active?: boolean }) =>
   request<AuthUser>(`/users/${id}`, { method: "PUT", body: JSON.stringify(body) });
+export const deleteUser = (id: number) => request<void>(`/users/${id}`, { method: "DELETE" });
 export const newPasswordLink = (id: number) => post<UserCreated>(`/users/${id}/password-link`, {});
 
 export const listMembers = (projectId: number) => request<ProjectMemberInfo[]>(`/projects/${projectId}/members`);

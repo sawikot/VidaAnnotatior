@@ -194,3 +194,23 @@ def test_annotators_annotate_and_review_under_their_own_name(api, tmp_path, monk
     batch = annotator.post(f"/api/slides/{sid}/patches/label", json={"patch_ids": [patch["id"]], "label": "Mixed"})
     assert batch.status_code == 200  # labelling many patches is annotation work too
     assert annotator.delete(f"/api/annotations/{res.json()['id']}").status_code == 204
+
+
+def test_the_main_administrator_stays_and_others_can_be_removed(api):
+    admin = setup_admin(api)
+    main = admin.get("/api/auth/me").json()
+    assert main["is_owner"] is True
+    add_user(admin, "Bea", "bea@lab.org", "admin")
+    other_admin = client_for(api, "bea@lab.org")
+    # even with a second administrator, the main one cannot be demoted, disabled or removed
+    assert other_admin.put(f"/api/users/{main['id']}", json={"role": "manager"}).status_code == 409
+    assert other_admin.put(f"/api/users/{main['id']}", json={"is_active": False}).status_code == 409
+    assert other_admin.delete(f"/api/users/{main['id']}").status_code == 409
+
+    ann = add_user(admin, "Ann", "ann@lab.org", "annotator")
+    assert ann["is_owner"] is False
+    session = client_for(api, "ann@lab.org")
+    assert session.delete(f"/api/users/{main['id']}").status_code == 403
+    assert admin.delete(f"/api/users/{ann['id']}").status_code == 204
+    assert session.get("/api/auth/me").status_code == 401
+    assert [u["email"] for u in admin.get("/api/users").json()] == ["ada@lab.org", "bea@lab.org"]

@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy import func
+from sqlalchemy.orm import Session, object_session
 
 from app.api.access import authorize, current_user, require_admin, require_manager
 from app.core.config import get_settings
@@ -23,12 +24,15 @@ class UserOut(BaseModel):
     is_active: bool
     has_password: bool = False
     project_count: int = 0
+    is_owner: bool = False  # the first administrator: always an administrator, never disabled or removed
 
     @classmethod
     def of(cls, user: User) -> "UserOut":
+        db = object_session(user)
         return cls(
             id=user.id, email=user.email, name=user.name, role=user.role, is_active=user.is_active,
             has_password=bool(user.password_hash), project_count=len(user.memberships),
+            is_owner=db is not None and user.id == _owner_id(db),
         )
 
 
@@ -120,6 +124,11 @@ def _check_password(password: str) -> None:
 def _check_role(role: str) -> None:
     if role not in ROLES:
         raise HTTPException(status_code=422, detail=f"role must be one of: {', '.join(ROLES)}")
+
+
+def _owner_id(db: Session) -> int | None:
+    """The first account, made at setup: the app's main administrator."""
+    return db.query(func.min(User.id)).scalar()
 
 
 def _active_admins(db: Session) -> int:
@@ -242,6 +251,8 @@ def update_user(user_id: int, payload: UserUpdateIn, admin: User = Depends(requi
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+    if user.id == _owner_id(db) and ((payload.role is not None and payload.role != "admin") or payload.is_active is False):
+        raise HTTPException(status_code=409, detail="The main administrator always stays an active administrator.")
     losing_admin = user.role == "admin" and user.is_active and (
         (payload.role is not None and payload.role != "admin") or payload.is_active is False
     )
@@ -258,6 +269,20 @@ def update_user(user_id: int, payload: UserUpdateIn, admin: User = Depends(requi
             auth.end_all_sessions(db, user)  # disabled: signed out everywhere at once
     db.commit()
     return UserOut.of(user)
+
+
+@router.delete("/users/{user_id}", status_code=204, response_model=None)
+def delete_user(user_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)) -> None:
+    """Remove an account. Their annotations, reviews and runs stay, without a name attached."""
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+    if user.id == _owner_id(db):
+        raise HTTPException(status_code=409, detail="The main administrator cannot be removed.")
+    if user.id == admin.id:
+        raise HTTPException(status_code=409, detail="You cannot remove your own account.")
+    db.delete(user)
+    db.commit()
 
 
 @router.post("/users/{user_id}/password-link", response_model=UserCreatedOut)

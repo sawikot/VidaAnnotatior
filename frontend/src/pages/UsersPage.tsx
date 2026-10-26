@@ -3,7 +3,7 @@ import { Navigate } from "react-router-dom";
 import { MaterialIcon } from "../components/MaterialIcon";
 import { Button, Card, Modal } from "../components/primitives";
 import { Field } from "../components/formControls";
-import { createUser, listUsers, newPasswordLink, passwordLinkUrl, updateUser, type AuthUser, type UserRole } from "../services/api";
+import { createUser, deleteUser, listUsers, newPasswordLink, passwordLinkUrl, updateUser, type AuthUser, type UserRole } from "../services/api";
 import { ROLE_LABELS, useCan } from "../stores/authStore";
 import { useUiStore } from "../stores/uiStore";
 
@@ -35,6 +35,17 @@ export function UsersPage() {
       pushToast(`${updated.name} updated`, "success");
     } catch (e) {
       pushToast(e instanceof Error ? e.message : "Could not update", "error");
+    }
+  }
+
+  async function remove(user: AuthUser) {
+    if (!window.confirm(`Remove ${user.name} (${user.email})? They can no longer sign in. Their annotations and reviews are kept.`)) return;
+    try {
+      await deleteUser(user.id);
+      setUsers((list) => list?.filter((u) => u.id !== user.id) ?? null);
+      pushToast(`${user.name} removed`, "success");
+    } catch (e) {
+      pushToast(e instanceof Error ? e.message : "Could not remove", "error");
     }
   }
 
@@ -80,22 +91,27 @@ export function UsersPage() {
                   <div className="text-on-surface">
                     {u.name}
                     {u.id === me?.id && <span className="ml-1 text-on-surface-variant">(you)</span>}
+                    {u.is_owner && <span className="ml-1 text-label-sm text-primary">Main administrator</span>}
                   </div>
                   <div className="text-label-sm text-on-surface-variant">{u.email}</div>
                 </td>
                 <td className="px-space-sm py-space-sm">
-                  <select
-                    className="input !w-auto !py-1"
-                    value={u.role}
-                    aria-label={`Role of ${u.name}`}
-                    onChange={(e) => change(u, { role: e.target.value as UserRole })}
-                  >
-                    {(Object.keys(ROLE_LABELS) as UserRole[]).map((r) => (
-                      <option key={r} value={r}>
-                        {ROLE_LABELS[r]}
-                      </option>
-                    ))}
-                  </select>
+                  {u.is_owner ? (
+                    <span title="The main administrator always stays an administrator">{ROLE_LABELS.admin}</span>
+                  ) : (
+                    <select
+                      className="input !w-auto !py-1"
+                      value={u.role}
+                      aria-label={`Role of ${u.name}`}
+                      onChange={(e) => change(u, { role: e.target.value as UserRole })}
+                    >
+                      {(Object.keys(ROLE_LABELS) as UserRole[]).map((r) => (
+                        <option key={r} value={r}>
+                          {ROLE_LABELS[r]}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </td>
                 <td className="px-space-sm py-space-sm text-right font-mono">{u.role === "admin" ? "all" : u.project_count}</td>
                 <td className="px-space-sm py-space-sm">
@@ -112,10 +128,15 @@ export function UsersPage() {
                     <Button variant="ghost" icon="link" onClick={() => sendLink(u)} disabled={!u.is_active} title="A one-time link to set or reset the password">
                       Password link
                     </Button>
-                    {u.id !== me?.id && (
-                      <Button variant="ghost" icon={u.is_active ? "block" : "check_circle"} onClick={() => change(u, { is_active: !u.is_active })}>
-                        {u.is_active ? "Disable" : "Enable"}
-                      </Button>
+                    {u.id !== me?.id && !u.is_owner && (
+                      <>
+                        <Button variant="ghost" icon={u.is_active ? "block" : "check_circle"} onClick={() => change(u, { is_active: !u.is_active })}>
+                          {u.is_active ? "Disable" : "Enable"}
+                        </Button>
+                        <Button variant="ghost" icon="delete" onClick={() => remove(u)} title="Remove this account">
+                          Remove
+                        </Button>
+                      </>
                     )}
                   </div>
                 </td>
