@@ -29,6 +29,10 @@ interface AnnotationUiState {
   setShapeMode: (mode: ShapeMode) => void;
   activeClassId: number | null;
   setActiveClassId: (id: number | null) => void;
+  /** Classes whose annotations are not drawn (both views; kept while moving between patches and slides). */
+  hiddenClassIds: number[];
+  toggleClassHidden: (id: number) => void;
+  showAllClasses: () => void;
   saveState: SaveState;
   setSaveState: (state: SaveState) => void;
 }
@@ -47,6 +51,10 @@ export const useAnnotationStore = create<AnnotationUiState>((set) => ({
   setShapeMode: (shapeMode) => set({ shapeMode }),
   activeClassId: null,
   setActiveClassId: (activeClassId) => set({ activeClassId }),
+  hiddenClassIds: [],
+  toggleClassHidden: (id) =>
+    set((s) => ({ hiddenClassIds: s.hiddenClassIds.includes(id) ? s.hiddenClassIds.filter((x) => x !== id) : [...s.hiddenClassIds, id] })),
+  showAllClasses: () => set({ hiddenClassIds: [] }),
   saveState: "idle",
   setSaveState: (saveState) => set({ saveState }),
 }));

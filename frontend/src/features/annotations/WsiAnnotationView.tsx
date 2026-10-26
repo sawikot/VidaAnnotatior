@@ -11,6 +11,7 @@ import {
   updateAnnotation,
 } from "../../services/api";
 import { useAnnotationStore } from "../../stores/annotationStore";
+import { ClassChips, visibleByClass } from "./ClassChips";
 import { useUiStore } from "../../stores/uiStore";
 import type { ConfigVersion, GeometryAnnotation, GeometryType, Slide, Suggestion } from "../../types/api";
 import type { Point } from "../../utils/coordinates";
@@ -70,6 +71,7 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
   const tool = useAnnotationStore((s) => s.tool);
   const setTool = useAnnotationStore((s) => s.setTool);
   const activeClassId = useAnnotationStore((s) => s.activeClassId);
+  const hiddenClassIds = useAnnotationStore((s) => s.hiddenClassIds);
   const setActiveClassId = useAnnotationStore((s) => s.setActiveClassId);
   const saveState = useAnnotationStore((s) => s.saveState);
   const setSaveState = useAnnotationStore((s) => s.setSaveState);
@@ -122,14 +124,14 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
   };
 
   const shapes = useMemo(() => {
-    const own = slideAnnotations.map(toLevel0Shape);
+    const own = visibleByClass(slideAnnotations, hiddenClassIds).map(toLevel0Shape);
     if (!showPatchDrawn) return own;
-    const inPatches = patchDrawn.map((a) => {
+    const inPatches = visibleByClass(patchDrawn, hiddenClassIds).map((a) => {
       const b = a.patch_bounds_l0;
       return { ...toLevel0Shape(a), bounds: b ? { x0: b[0], y0: b[1], x1: b[2], y1: b[3] } : undefined };
     });
     return [...inPatches, ...own];
-  }, [slideAnnotations, patchDrawn, showPatchDrawn]);
+  }, [slideAnnotations, patchDrawn, showPatchDrawn, hiddenClassIds]);
   const isPatchDrawn = (id: number | null) => patchDrawn.some((a) => a.id === id);
   const selected = slideAnnotations.find((a) => a.id === selectedId) ?? patchDrawn.find((a) => a.id === selectedId) ?? null;
   const selectedInPatch = selected != null && selected.patch_id != null;
@@ -406,21 +408,7 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
               <IconButton key={t.id} icon={t.icon} active={effectiveTool === t.id} onClick={() => setTool(t.id)} title={`${t.label} (${t.key})`} />
             ))}
             <div className="w-px h-6 bg-slate-700 mx-1" />
-            {classes.map((c, i) => (
-              <button
-                key={c.id}
-                onClick={() => setActiveClassId(c.id)}
-                className="px-space-sm h-8 rounded text-label-md flex items-center gap-1.5"
-                style={{
-                  backgroundColor: activeClassId === c.id ? `${c.color_hex}33` : "transparent",
-                  color: activeClassId === c.id ? c.color_hex : "#94a3b8",
-                  boxShadow: activeClassId === c.id ? `inset 0 0 0 1px ${c.color_hex}80` : undefined,
-                }}
-              >
-                {i < 9 && <span className="font-mono">{i + 1}</span>}
-                {c.name}
-              </button>
-            ))}
+            <ClassChips classes={classes} />
             <div className="w-px h-6 bg-slate-700 mx-1" />
             <ToggleChip label="Patch grid" checked={showGrid} onChange={setShowGrid} />
             <ToggleChip label={`Patch annotations (${patchDrawn.length})`} checked={showPatchDrawn} onChange={setShowPatchDrawn} />

@@ -14,6 +14,7 @@ import { neighbour, progress, type ImageFilter } from "../features/images/imageN
 import { AnnotationModeSwitch, rememberMode, rememberedMode, type AnnotationMode } from "../features/annotations/AnnotationModeSwitch";
 import { WsiAnnotationView, type WsiFocus } from "../features/annotations/WsiAnnotationView";
 import { PatchAreaChoice } from "../features/annotations/PatchAreaChoice";
+import { ClassChips, visibleByClass } from "../features/annotations/ClassChips";
 import { HOTKEYS, visibleTools as toolsFor } from "../features/annotations/tools";
 import { PatchGridOverlay, PATCH_STATUS_COLORS } from "../features/viewer/PatchGridOverlay";
 import { WsiViewer, type ViewportBbox } from "../features/viewer/WsiViewer";
@@ -70,6 +71,7 @@ export function MainWorkspacePage() {
   const tool = useAnnotationStore((s) => s.tool);
   const setTool = useAnnotationStore((s) => s.setTool);
   const activeClassId = useAnnotationStore((s) => s.activeClassId);
+  const hiddenClassIds = useAnnotationStore((s) => s.hiddenClassIds);
   const setActiveClassId = useAnnotationStore((s) => s.setActiveClassId);
   const saveState = useAnnotationStore((s) => s.saveState);
   const setSaveState = useAnnotationStore((s) => s.setSaveState);
@@ -505,15 +507,15 @@ export function MainWorkspacePage() {
     const sx = patch.width_l0 / patch.width;
     const sy = patch.height_l0 / patch.height;
     const bounds = { x0: -patch.x / sx, y0: -patch.y / sy, x1: (slide.width_l0 - patch.x) / sx, y1: (slide.height_l0 - patch.y) / sy };
-    return projectSlideShapes(slideAnnotations, patch).map((shape) => ({ ...shape, bounds }));
-  }, [slideAnnotations, patch, isImage, slide?.width_l0, slide?.height_l0]);
+    return projectSlideShapes(visibleByClass(slideAnnotations, hiddenClassIds), patch).map((shape) => ({ ...shape, bounds }));
+  }, [slideAnnotations, patch, isImage, slide?.width_l0, slide?.height_l0, hiddenClassIds]);
 
   // Overlapping patches' annotations, in this patch's pixels. Each is kept inside its own patch when moved.
   const borrowedShapes = useMemo<LayerShape[]>(() => {
     if (!patch) return [];
     const sx = patch.width_l0 / patch.width;
     const sy = patch.height_l0 / patch.height;
-    return borrowed.map(({ annotation: a, owner }) => ({
+    return borrowed.filter(({ annotation: a }) => visibleByClass([a], hiddenClassIds).length).map(({ annotation: a, owner }) => ({
       id: a.id,
       type: a.type,
       points: (a.coordinates_level0 as [number, number][]).map((pt) => level0ToLocal(patch, pt)),
@@ -527,7 +529,7 @@ export function MainWorkspacePage() {
         y1: (owner.y + owner.height_l0 - patch.y) / sy,
       },
     }));
-  }, [borrowed, patch]);
+  }, [borrowed, patch, hiddenClassIds]);
 
   const patchOrigin = useMemo(() => {
     if (!patch) return null;
@@ -1001,21 +1003,7 @@ export function MainWorkspacePage() {
               <IconButton key={t.id} icon={t.icon} active={tool === t.id} onClick={() => setTool(t.id)} title={`${t.label} (${t.key})`} />
             ))}
             <div className="w-px h-6 bg-slate-700 mx-1" />
-            {classes.map((c, i) => (
-              <button
-                key={c.id}
-                onClick={() => setActiveClassId(c.id)}
-                className="px-space-sm h-8 rounded text-label-md flex items-center gap-1.5"
-                style={{
-                  backgroundColor: activeClassId === c.id ? `${c.color_hex}33` : "transparent",
-                  color: activeClassId === c.id ? c.color_hex : "#94a3b8",
-                  boxShadow: activeClassId === c.id ? `inset 0 0 0 1px ${c.color_hex}80` : undefined,
-                }}
-              >
-                {i < 9 && <span className="font-mono">{i + 1}</span>}
-                {c.name}
-              </button>
-            ))}
+            <ClassChips classes={classes} />
             <div className="w-px h-6 bg-slate-700 mx-1" />
             <IconButton icon="zoom_in" onClick={() => zoomAt(1.25)} title="Zoom in (mouse wheel)" />
             <IconButton icon="zoom_out" onClick={() => zoomAt(1 / 1.25)} title="Zoom out (mouse wheel)" />
@@ -1040,7 +1028,7 @@ export function MainWorkspacePage() {
               patchHeight={patch.height}
               tool={tool}
               zoom={effectiveZoom}
-              annotations={underFills(annotations)}
+              annotations={underFills(visibleByClass(annotations, hiddenClassIds))}
               borrowed={[...onSlide, ...borrowedShapes]}
               classes={classes}
               selectedId={selectedAnnId}
