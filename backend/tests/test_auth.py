@@ -216,6 +216,24 @@ def test_the_main_administrator_stays_and_others_can_be_removed(api):
     assert [u["email"] for u in admin.get("/api/users").json()] == ["ada@lab.org", "bea@lab.org"]
 
 
+def test_opening_a_version_keeps_the_slides_assigned_to_annotators(api):
+    admin = setup_admin(api)
+    ann = add_user(admin, "Ann", "ann@lab.org", "annotator")
+    pid = admin.post("/api/projects", json={"name": "Work"}).json()["id"]
+    upload = [("files", (f"s{i}.tif", SLIDE, "application/octet-stream")) for i in range(3)]
+    slides = admin.post(f"/api/projects/{pid}/slides/upload", files=upload).json()["slides"]
+    chosen = next(s for s in slides if s["filename"] == "s1.tif")
+    admin.post(f"/api/projects/{pid}/members", json={"user_id": ann["id"], "all_slides": False, "slide_ids": [chosen["id"]]})
+    saved = admin.post(f"/api/projects/{pid}/versions", json={"name": "v1"})
+    assert saved.status_code == 201, saved.text
+    version_id = saved.json()["versions"][0]["id"]
+
+    assert admin.post(f"/api/projects/{pid}/versions/{version_id}/switch", json={"discard_changes": True}).status_code == 200
+
+    seen = client_for(api, "ann@lab.org").get(f"/api/projects/{pid}/slides").json()
+    assert [s["filename"] for s in seen] == ["s1.tif"]
+
+
 def test_annotators_can_be_given_only_some_slides(api):
     admin = setup_admin(api)
     ann = add_user(admin, "Ann", "ann@lab.org", "annotator")

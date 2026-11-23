@@ -253,7 +253,11 @@ export function ProjectDashboardPage() {
 
         {filteredSlides.length === 0 ? (
           <div className="p-space-xl text-center text-on-surface-variant">
-            No slides yet. Click "Add WSI Slides" to import a .svs/.tif/.tiff/.ndpi file.
+            {slides.length > 0
+              ? "No slides in this list."
+              : stats.slide_count > 0
+                ? `This project has ${stats.slide_count.toLocaleString()} slides, but none are assigned to you. Ask a project manager or an administrator to assign them.`
+                : 'No slides yet. Click "Add WSI Slides" to import a .svs/.tif/.tiff/.ndpi file.'}
           </div>
         ) : (
           <div className="overflow-x-auto">
