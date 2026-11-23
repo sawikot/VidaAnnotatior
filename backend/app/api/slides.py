@@ -35,7 +35,7 @@ from app.services import reader_cache, versioning
 from app.services.patch_grid import IMAGE_GRID_KEY, active_grid_filter, grid_key_of
 from app.services.tissue_mask import auto_mask_path
 from app.services.image_import import IMAGE_EXTENSIONS, ImageDiscovery, ImageItem, discover_images
-from app.services.deepzoom_service import DeepZoomAdapter, purge_slide_tiles, render_thumbnail_bytes, render_tile_bytes
+from app.services.deepzoom_service import DeepZoomAdapter, purge_slide_tiles, render_region_preview_bytes, render_thumbnail_bytes, render_tile_bytes
 from app.services.multipart_stream import ReceivedFile, receive_multipart
 from app.services.wsi_bundles import (
     ARCHIVE_EXTENSIONS,
@@ -561,6 +561,26 @@ def get_thumbnail(
         data = render_thumbnail_bytes(reader, slide.id, max_size)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return Response(content=data, media_type="image/jpeg", headers=image_headers(slide, v))
+
+
+@router.get("/slides/{slide_id}/region-preview")
+def get_region_preview(
+    slide: Slide = Depends(get_slide_or_404),
+    x: int = Query(..., description="Level-0 left of the square"),
+    y: int = Query(..., description="Level-0 top of the square"),
+    side: int = Query(..., gt=0, description="Level-0 side of the square"),
+    size: int = Query(96, ge=32, le=256, description="Side of the picture, in pixels"),
+    v: str | None = None,
+):
+    """A small picture of a square of the slide: what an annotation in a list is shown with."""
+    try:
+        reader = reader_cache.get_reader_for_slide(slide)
+        data = render_region_preview_bytes(reader, slide.id, x, y, side, size)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return Response(content=data, media_type="image/jpeg", headers=image_headers(slide, v))
 
 

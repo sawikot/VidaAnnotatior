@@ -25,6 +25,19 @@ def shape(id, kind, coords, class_id=1):
     return NS(id=id, type=kind, coordinates_level0=coords, class_id=class_id)
 
 
+def test_a_slide_with_more_annotations_than_a_page_can_be_read_whole(grid):
+    client, slide_id, _, classes, _ = grid
+    made = [make(client, slide_id, "point", [[i + 1, 1]], classes["Tumor"]).json()["id"] for i in range(5)]
+    seen, after = [], 0
+    while True:
+        page = client.get(f"/api/slides/{slide_id}/annotations", params={"limit": 2, "after_id": after}).json()
+        seen += [a["id"] for a in page]
+        if len(page) < 2:
+            break
+        after = page[-1]["id"]
+    assert seen == made
+
+
 # ------------------------------------------------------------------- projection
 
 
@@ -111,6 +124,19 @@ def grid(env):  # noqa: F811
 
 def make(client, slide_id, kind, coords, class_id=None, **extra):
     return client.post(f"/api/slides/{slide_id}/annotations", json={"type": kind, "coordinates_level0": coords, "class_id": class_id, **extra})
+
+
+@pytest.mark.parametrize("x,y,side", [(100, 100, 200), (-40, -40, 120), (1400, 900, 300), (0, 0, 1536)])
+def test_a_region_preview_is_a_small_square_even_past_the_slides_edge(grid, x, y, side):
+    client, slide_id, _, _, _ = grid
+    res = client.get(f"/api/slides/{slide_id}/region-preview", params={"x": x, "y": y, "side": side, "size": 96})
+    assert res.status_code == 200 and res.headers["content-type"] == "image/jpeg"
+    assert Image.open(io.BytesIO(res.content)).size == (96, 96)
+
+
+def test_a_region_preview_wholly_off_the_slide_is_refused(grid):
+    client, slide_id, _, _, _ = grid
+    assert client.get(f"/api/slides/{slide_id}/region-preview", params={"x": 9000, "y": 0, "side": 100}).status_code == 422
 
 
 def by_origin(patches):

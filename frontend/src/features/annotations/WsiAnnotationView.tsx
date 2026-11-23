@@ -1,6 +1,6 @@
 import OpenSeadragon from "openseadragon";
 import { useAuthStore } from "../../stores/authStore";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IconButton } from "../../components/primitives";
 import {
   createAnnotation,
@@ -28,6 +28,8 @@ import { WsiSuggestionsPanel } from "../suggestions/WsiSuggestionsPanel";
 import { ShapeLayer } from "./ShapeLayer";
 import { HOTKEYS, PAN_TOOL, visibleTools } from "./tools";
 import { useAnnotationHistory } from "./useAnnotationHistory";
+import { ShapeMarkers, useViewCulling } from "./useViewCulling";
+import { AnnotationList } from "./AnnotationList";
 
 /** Where to bring the view when the whole-slide mode opens: a patch's footprint, or a shape to select. */
 export interface WsiFocus {
@@ -132,6 +134,7 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
     });
     return [...inPatches, ...own];
   }, [slideAnnotations, patchDrawn, showPatchDrawn, hiddenClassIds]);
+  const culled = useViewCulling(shapes, bbox, scale, selectedId);
   const isPatchDrawn = (id: number | null) => patchDrawn.some((a) => a.id === id);
   const selected = slideAnnotations.find((a) => a.id === selectedId) ?? patchDrawn.find((a) => a.id === selectedId) ?? null;
   const selectedInPatch = selected != null && selected.patch_id != null;
@@ -173,6 +176,21 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
     if (focus.rect) fitRect(focus.rect.x, focus.rect.y, focus.rect.width, focus.rect.height);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewerReady, focus]);
+
+  // A stable callback: the viewer re-renders this view every frame of a pan, and the lists must not follow.
+  const pickFromList = useCallback(
+    (a: GeometryAnnotation) => {
+      setTool("select");
+      setSelectedId(a.id);
+      const b = shapeBounds(a.type, a.coordinates_level0 as Point[]);
+      const viewer = viewerRef.current;
+      if (!viewer) return;
+      const [w, h] = [Math.max(b.maxX - b.minX, 200), Math.max(b.maxY - b.minY, 200)];
+      const margin = Math.max(w, h) * 0.15;
+      viewer.viewport.fitBounds(viewer.viewport.imageToViewportRectangle(new OpenSeadragon.Rect(b.minX - margin, b.minY - margin, w + 2 * margin, h + 2 * margin)));
+    },
+    [setTool],
+  );
 
   // ---- saving
   async function guarded(label: string, work: () => Promise<void>) {
@@ -434,12 +452,14 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
               }}
             >
               {showGrid && <PatchGridOverlay slideId={slide.id} bbox={bbox} />}
+              <ShapeMarkers markers={culled.markers} classes={classes} />
               <ShapeLayer
                 width={width}
                 height={height}
                 scale={scale}
                 tool={effectiveTool}
                 shapes={shapes}
+                drawnShapes={culled.detailed}
                 classes={classes}
                 selectedId={selectedId}
                 onSelect={setSelectedId}
@@ -455,6 +475,7 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
             </div>
             <div className="absolute top-3 left-3 z-10 px-space-sm py-1 rounded bg-black/50 text-label-sm text-slate-300 pointer-events-none">
               {effectiveTool === "pan" ? "Drag to move around · scroll to zoom" : "Hold Space to move around · scroll to zoom"}
+              {culled.markerCount > 0 && <div className="text-amber-300">{culled.markerCount.toLocaleString()} small objects shown as dots · zoom in to edit them</div>}
             </div>
           </div>
         </div>
@@ -470,64 +491,35 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
 
           <div>
             <div className="text-label-md text-on-surface-variant mb-1">Objects on the slide ({slideAnnotations.length})</div>
-            <div className="flex flex-col gap-1">
-              {slideAnnotations.map((a) => {
-                const cls = classes.find((c) => c.id === a.class_id);
-                return (
-                  <div
-                    key={a.id}
-                    onClick={() => {
-                      setTool("select");
-                      setSelectedId(a.id);
-                      const b = shapeBounds(a.type, a.coordinates_level0 as Point[]);
-                      fitRect(b.minX, b.minY, Math.max(b.maxX - b.minX, 200), Math.max(b.maxY - b.minY, 200));
-                    }}
-                    className={`flex items-center justify-between px-space-sm py-1.5 rounded bg-surface-container-lowest shadow-sm cursor-pointer ${
-                      selectedId === a.id ? "ring-1 ring-primary" : ""
-                    }`}
-                  >
-                    <span className="flex items-center gap-1.5 text-label-md">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cls?.color_hex ?? "#94a3b8" }} />
-                      {cls?.name ?? "Unclassed"} #{a.id}
-                    </span>
-                    <span className="text-label-sm text-on-surface-variant capitalize">{a.type.replace("_", " ")}</span>
-                  </div>
-                );
-              })}
-              {slideAnnotations.length === 0 && (
-                <div className="text-body-sm text-on-surface-variant">Nothing yet. Pick a tool above and draw on the slide.</div>
-              )}
-            </div>
+            <AnnotationList
+              annotations={slideAnnotations}
+              classes={classes}
+              slideId={slide.id}
+              slideWidth={width}
+              slideHeight={height}
+              imageVersion={slide.image_version}
+              selectedId={selectedId}
+              onPick={pickFromList}
+            />
+            {slideAnnotations.length === 0 && (
+              <div className="text-body-sm text-on-surface-variant">Nothing yet. Pick a tool above and draw on the slide.</div>
+            )}
           </div>
 
           {showPatchDrawn && patchDrawn.length > 0 && (
             <div>
               <div className="text-label-md text-on-surface-variant mb-1">Drawn in patches ({patchDrawn.length})</div>
-              <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">
-                {patchDrawn.map((a) => {
-                  const cls = classes.find((c) => c.id === a.class_id);
-                  return (
-                    <div
-                      key={a.id}
-                      onClick={() => {
-                        setTool("select");
-                        setSelectedId(a.id);
-                        const b = shapeBounds(a.type, a.coordinates_level0 as Point[]);
-                        fitRect(b.minX, b.minY, Math.max(b.maxX - b.minX, 200), Math.max(b.maxY - b.minY, 200));
-                      }}
-                      className={`flex items-center justify-between px-space-sm py-1.5 rounded bg-surface-container-lowest shadow-sm cursor-pointer ${
-                        selectedId === a.id ? "ring-1 ring-primary" : ""
-                      }`}
-                    >
-                      <span className="flex items-center gap-1.5 text-label-md">
-                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cls?.color_hex ?? "#94a3b8" }} />
-                        {cls?.name ?? "Unclassed"} #{a.id}
-                      </span>
-                      <span className="text-label-sm text-on-surface-variant capitalize">{a.type.replace("_", " ")}</span>
-                    </div>
-                  );
-                })}
-              </div>
+              <AnnotationList
+                annotations={patchDrawn}
+                classes={classes}
+                slideId={slide.id}
+                slideWidth={width}
+                slideHeight={height}
+                imageVersion={slide.image_version}
+                selectedId={selectedId}
+                onPick={pickFromList}
+              />
+
             </div>
           )}
 

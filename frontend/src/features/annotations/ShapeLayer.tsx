@@ -49,6 +49,8 @@ interface Props {
   tool: AnnotationTool;
   /** The shapes that can be drawn, selected and edited here. */
   shapes: LayerShape[];
+  /** The part of `shapes` to put on screen, when there are too many to draw. Tools still work on all of `shapes`. */
+  drawnShapes?: LayerShape[];
   /** Shapes from the other view, shown faintly for context; pressing one calls `onBackgroundPress`. */
   background?: LayerShape[];
   onBackgroundPress?: (id: number) => void;
@@ -106,6 +108,7 @@ export function ShapeLayer({
   scale,
   tool,
   shapes,
+  drawnShapes,
   background = [],
   onBackgroundPress,
   classes,
@@ -512,7 +515,7 @@ export function ShapeLayer({
         />
       ))}
 
-      {shapes.map((shape) => (
+      {(drawnShapes ?? shapes).map((shape) => (
         <ShapeView
           key={shape.id}
           shape={edit?.id === shape.id ? { ...shape, points: edit.preview } : shape}

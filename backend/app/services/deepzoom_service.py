@@ -171,6 +171,46 @@ def render_thumbnail_bytes(reader: WSIReader, slide_id: int, max_size: int) -> b
     return data
 
 
+_PREVIEW_MAX_READ = 2048  # px: a wider read (a big area of a slide with no pyramid) is cut from the overview instead
+
+
+def render_region_preview_bytes(reader: WSIReader, slide_id: int, x: int, y: int, side: int, size: int) -> bytes:
+    """A small square JPEG of the Level-0 square at (x, y), for lists of annotations. Read from the coarsest
+    level still sharp enough. Any part of the square beyond the slide stays dark, so the picture always
+    maps exactly onto the square that was asked for. Kept in memory and purged with the slide's tiles."""
+    cache_key = (slide_id, "preview", x, y, side, size)
+    cached = _tile_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    meta = reader.get_metadata()
+    x0, y0 = max(x, 0), max(y, 0)
+    x1, y1 = min(x + side, meta.width), min(y + side, meta.height)
+    if x1 <= x0 or y1 <= y0:
+        raise ValueError("The area is outside the slide")
+
+    wanted = side / size
+    level = max((i for i, d in enumerate(meta.level_downsamples) if d <= wanted), key=lambda i: meta.level_downsamples[i], default=0)
+    ds = meta.level_downsamples[level]
+    read_w, read_h = max(1, math.ceil((x1 - x0) / ds)), max(1, math.ceil((y1 - y0) / ds))
+    if max(read_w, read_h) > _PREVIEW_MAX_READ:
+        overview = reader.get_thumbnail(1024).convert("RGB")
+        sx, sy = overview.width / meta.width, overview.height / meta.height
+        region = overview.crop((int(x0 * sx), int(y0 * sy), max(math.ceil(x1 * sx), int(x0 * sx) + 1), max(math.ceil(y1 * sy), int(y0 * sy) + 1)))
+    else:
+        region = reader.read_region(x0, y0, level, read_w, read_h).convert("RGB")
+
+    scale = size / side
+    canvas = Image.new("RGB", (size, size), (15, 23, 42))
+    fitted = region.resize((max(1, round((x1 - x0) * scale)), max(1, round((y1 - y0) * scale))), Image.Resampling.BILINEAR)
+    canvas.paste(fitted, (round((x0 - x) * scale), round((y0 - y) * scale)))
+    buf = io.BytesIO()
+    canvas.save(buf, format="JPEG", quality=80)
+    data = buf.getvalue()
+    _tile_cache.put(cache_key, data)
+    return data
+
+
 def render_tile_bytes(adapter: DeepZoomAdapter, slide_id: int, dzi_level: int, col: int, row: int) -> bytes:
     cache_key = (slide_id, dzi_level, col, row)
     cached = _tile_cache.get(cache_key)

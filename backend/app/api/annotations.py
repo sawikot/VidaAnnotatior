@@ -47,13 +47,17 @@ def list_slide_annotations(
     slide: Slide = Depends(get_slide_or_404),
     db: Session = Depends(get_db),
     limit: int = Query(5000, ge=1, le=20000),
+    after_id: int = Query(0, ge=0, description="Return annotations with a larger id: the last id of the previous page"),
     scope: Literal["all", "patch", "slide"] = Query("all", description="patch: drawn in a patch; slide: drawn on the whole slide"),
 ):
-    """All geometry annotations for a slide, in Level-0 space -- used by the
-    Full WSI Annotation Overview screen. Not bbox-filtered server-side (the
-    stitched overlay needs the whole slide's annotations to render correctly
-    even when panned out), but capped by `limit` as a safety valve."""
-    q = db.query(GeometryAnnotation).options(joinedload(GeometryAnnotation.patch)).filter(GeometryAnnotation.slide_id == slide.id)
+    """A slide's geometry annotations in Level-0 space, one page at a time in id order. `limit` is
+    the size of a page: a client wanting them all asks again with `after_id` until a page comes
+    back short."""
+    q = (
+        db.query(GeometryAnnotation)
+        .options(joinedload(GeometryAnnotation.patch))
+        .filter(GeometryAnnotation.slide_id == slide.id, GeometryAnnotation.id > after_id)
+    )
     if slide.active_config_version_id is not None:
         q = q.filter(GeometryAnnotation.config_version_id == slide.active_config_version_id)
     if scope == "patch":

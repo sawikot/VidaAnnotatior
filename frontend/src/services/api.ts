@@ -269,6 +269,9 @@ export const thumbnailUrl = (slideId: number, maxSize = 512, version?: string) =
   `${API_BASE}/slides/${slideId}/thumbnail?max_size=${maxSize}${versionParam(version)}`;
 export const dynamicPatchUrl = (slideId: number, x: number, y: number, width: number, height: number, level = 0, version?: string) =>
   `${API_BASE}/slides/${slideId}/patch?x=${x}&y=${y}&width=${width}&height=${height}&level=${level}${versionParam(version)}`;
+/** A small picture of a Level-0 square of the slide. */
+export const regionPreviewUrl = (slideId: number, x: number, y: number, side: number, size = 96, version?: string) =>
+  `${API_BASE}/slides/${slideId}/region-preview?x=${x}&y=${y}&side=${side}&size=${size}${versionParam(version)}`;
 /**
  * A patch preview for cards and thumbnails: the same area, read from the coarsest level of the slide's
  * pyramid that still gives at least `minSide` pixels across -- far less to read and send than full size.
@@ -412,8 +415,17 @@ export const listPatchAnnotations = (patchId: number) =>
 export const listOverlappingAnnotations = (patchId: number) =>
   request<OverlappingAnnotation[]>(`/patches/${patchId}/overlapping-annotations`);
 /** "patch": drawn in a patch; "slide": drawn on the whole slide (WSI mode); "all" (default): both. */
-export const listSlideAnnotations = (slideId: number, scope: "all" | "patch" | "slide" = "all") =>
-  request<GeometryAnnotation[]>(`/slides/${slideId}/annotations${scope === "all" ? "" : `?scope=${scope}`}`);
+export async function listSlideAnnotations(slideId: number, scope: "all" | "patch" | "slide" = "all") {
+  const pageSize = 5000;
+  const all: GeometryAnnotation[] = [];
+  for (let afterId = 0; ; ) {
+    const scopeParam = scope === "all" ? "" : `&scope=${scope}`;
+    const page = await request<GeometryAnnotation[]>(`/slides/${slideId}/annotations?limit=${pageSize}&after_id=${afterId}${scopeParam}`);
+    for (const a of page) all.push(a);
+    if (page.length < pageSize) return all;
+    afterId = page[page.length - 1].id;
+  }
+}
 /** An annotation drawn directly on the whole slide: Level-0 pixel coordinates, belonging to no patch. */
 export const createSlideAnnotation = (
   slideId: number,

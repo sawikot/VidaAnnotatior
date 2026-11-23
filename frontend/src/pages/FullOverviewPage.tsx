@@ -7,7 +7,9 @@ import { PatchGridOverlay } from "../features/viewer/PatchGridOverlay";
 import { getConfig, getSlide, listSlideAnnotations } from "../services/api";
 import { TissueMaskOutline } from "../features/tissue/TissueMaskOutline";
 import type { ConfigVersion, GeometryAnnotation, Slide } from "../types/api";
+import type { Point } from "../utils/coordinates";
 import { circleGeometry, isLineShape, shapeArea } from "../utils/shapes";
+import { ShapeMarkers, useViewCulling } from "../features/annotations/useViewCulling";
 
 import { useImageProjectRedirect } from "../features/images/useImageProjectRedirect";
 
@@ -20,6 +22,7 @@ export function FullOverviewPage() {
   const [config, setConfig] = useState<ConfigVersion | null>(null);
   const [annotations, setAnnotations] = useState<GeometryAnnotation[]>([]);
   const [bbox, setBbox] = useState<ViewportBbox | null>(null);
+  const [scale, setScale] = useState(0.05);
   const [showAnnotations, setShowAnnotations] = useState(true);
   const [showGrid, setShowGrid] = useState(false);
   const [showMask, setShowMask] = useState(false);
@@ -45,6 +48,16 @@ export function FullOverviewPage() {
     }
     return map;
   }, [annotations]);
+
+  // Every annotation counts in the metrics; only those in view are put on screen.
+  const shown = useMemo(
+    () =>
+      annotations
+        .filter((a) => !hiddenClasses.has(a.class_id ?? -1))
+        .map((a) => ({ id: a.id, type: a.type, points: a.coordinates_level0 as Point[], class_id: a.class_id, annotation: a })),
+    [annotations, hiddenClasses],
+  );
+  const culled = useViewCulling(shown, bbox, scale, null);
 
   const totalAreaPx = useMemo(() => [...byClass.values()].reduce((s, v) => s + v.areaPx, 0), [byClass]);
   const mppFactor = (slide?.mpp_x ?? 0.25) * (slide?.mpp_y ?? 0.25);
@@ -74,15 +87,15 @@ export function FullOverviewPage() {
 
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 relative">
-          <WsiViewer slideId={sid} version={slide.image_version} className="w-full h-full" onViewportChange={setBbox}>
+          <WsiViewer slideId={sid} version={slide.image_version} className="w-full h-full" onViewportChange={(b, _zoom, s) => { setBbox(b); setScale(s); }}>
             {showMask && slide.tissue_mask_path && (
               <TissueMaskOutline slideId={sid} refreshKey={slide.tissue_mask_path} />
             )}
             {showGrid && <PatchGridOverlay slideId={sid} bbox={bbox} />}
+            {showAnnotations && <ShapeMarkers markers={culled.markers} classes={classes} />}
             {showAnnotations &&
-              annotations
-                .filter((a) => !hiddenClasses.has(a.class_id ?? -1))
-                .map((a) => {
+              culled.detailed
+                .map(({ annotation: a }) => {
                   const cls = classes.find((c) => c.id === a.class_id);
                   const color = cls?.color_hex ?? "#94a3b8";
                   const opacity = opacities[a.class_id ?? -1] ?? 0.55;
