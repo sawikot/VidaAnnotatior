@@ -45,7 +45,7 @@ from app.models.patch import Patch
 from app.models.project import Project
 from app.models.slide import Slide
 from app.models.training import Suggestion, TrainedModel
-from app.models.user import ProjectMemberSlide, User
+from app.models.user import ProjectMember, ProjectMemberSlide, User
 from app.models.version import ProjectVersion
 from app.services import project_storage, reader_cache
 from app.services.deepzoom_service import purge_slide_tiles
@@ -375,12 +375,21 @@ def switch_to(db: Session, project: Project, version: ProjectVersion, storage_ro
     masks = _masks_dir(storage_root, project.id)
     staged = masks.with_name("_masks.opening")
     # Who is assigned which slide belongs to the project, not to a version, but the links go with the
-    # slide rows. A slide's file says which slide it is, whatever id it comes back under.
-    assigned = db.execute(
+    # slide rows. A slide's file says which slide it is, whatever id it comes back under, and a slide
+    # this version lacks stays assigned for when a version that has it is opened.
+    assigned: dict[int, set[str]] = {
+        member_id: set(files or [])
+        for member_id, files in db.execute(
+            select(ProjectMember.id, ProjectMember.assigned_files).where(ProjectMember.project_id == project.id, ProjectMember.all_slides.is_(False))
+        )
+    }
+    for member_id, file_path in db.execute(
         select(ProjectMemberSlide.member_id, Slide.file_path)
         .join(Slide, ProjectMemberSlide.slide_id == Slide.id)
-        .where(Slide.project_id == project.id)
-    ).all()
+        .where(Slide.project_id == project.id, Slide.file_path.isnot(None))
+    ):
+        if member_id in assigned:
+            assigned[member_id].add(file_path)
     try:
         db.execute(delete(ProjectMemberSlide).where(ProjectMemberSlide.slide_id.in_(slides)))
         db.execute(delete(Suggestion).where(Suggestion.slide_id.in_(slides)))
@@ -403,9 +412,12 @@ def switch_to(db: Session, project: Project, version: ProjectVersion, storage_ro
             ids_by_file: dict[str, list[int]] = {}
             for slide_id, file_path in db.execute(select(Slide.id, Slide.file_path).where(Slide.project_id == project.id)):
                 ids_by_file.setdefault(file_path, []).append(slide_id)
-            links = {(member_id, slide_id) for member_id, file_path in assigned for slide_id in ids_by_file.get(file_path, [])}
+            links = {(member_id, slide_id) for member_id, files in assigned.items() for file_path in files for slide_id in ids_by_file.get(file_path, [])}
             if links:
                 db.execute(insert(ProjectMemberSlide), [{"member_id": m, "slide_id": s} for m, s in sorted(links)])
+            for member_id, files in assigned.items():
+                db.execute(update(ProjectMember).where(ProjectMember.id == member_id).values(assigned_files=sorted(files)))
+            db.expire_all()
 
         # The masks as they were, under the ids the slides have now; swapped in once the rows are in.
         project_storage.remove_tree(staged)

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base, TimestampMixin
@@ -54,6 +54,9 @@ class ProjectMember(Base, TimestampMixin):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     # Annotators only: False limits them to the slides (or images) in ``slide_links``. Others always see all.
     all_slides: Mapped[bool] = mapped_column(Boolean, default=True)
+    # The assigned slides by stored file. ``slide_links`` only reaches slides in the version now open, and
+    # slide rows are recreated when a version is opened; this is what the links are rebuilt from.
+    assigned_files: Mapped[list | None] = mapped_column(JSON, default=None)
 
     user: Mapped[User] = relationship(back_populates="memberships")
     slide_links: Mapped[list["ProjectMemberSlide"]] = relationship(cascade="all, delete-orphan")

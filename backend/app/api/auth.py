@@ -340,6 +340,13 @@ def _set_slide_access(db: Session, member: ProjectMember, access: SlideAccessIn)
             member.slide_links.remove(link)
     for sid in sorted(wanted - have.keys()):
         member.slide_links.append(ProjectMemberSlide(slide_id=sid))
+    if access.all_slides:
+        member.assigned_files = None
+        return
+    # Assignments to slides that are not in the version open now are kept for when they come back.
+    here = {sid: path for sid, path in db.query(Slide.id, Slide.file_path).filter(Slide.project_id == member.project_id) if path}
+    elsewhere = set(member.assigned_files or []) - set(here.values())
+    member.assigned_files = sorted(elsewhere | {here[sid] for sid in wanted if sid in here})
 
 
 @router.get("/projects/{project_id}/members", response_model=list[MemberOut], dependencies=[Depends(authorize)])

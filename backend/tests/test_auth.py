@@ -234,6 +234,47 @@ def test_opening_a_version_keeps_the_slides_assigned_to_annotators(api):
     assert [s["filename"] for s in seen] == ["s1.tif"]
 
 
+def test_an_assignment_survives_a_version_without_that_slide_and_later_edits(api):
+    admin = setup_admin(api)
+    ann = add_user(admin, "Ann", "ann@lab.org", "annotator")
+    pid = admin.post("/api/projects", json={"name": "Work"}).json()["id"]
+    upload = [("files", (f"s{i}.tif", SLIDE, "application/octet-stream")) for i in range(3)]
+    by_name = {s["filename"]: s["id"] for s in admin.post(f"/api/projects/{pid}/slides/upload", files=upload).json()["slides"]}
+    slides_url = f"/api/projects/{pid}/members/{ann['id']}/slides"
+    admin.post(f"/api/projects/{pid}/members", json={"user_id": ann["id"], "all_slides": False, "slide_ids": [by_name["s1.tif"]]})
+    annc = client_for(api, "ann@lab.org")
+    seen = lambda: sorted(s["filename"] for s in annc.get(f"/api/projects/{pid}/slides").json())
+
+    def save(name):
+        versions = admin.post(f"/api/projects/{pid}/versions", json={"name": name}).json()["versions"]
+        return next(v["id"] for v in versions if v["name"] == name)
+
+    def open_version(version_id):
+        assert admin.post(f"/api/projects/{pid}/versions/{version_id}/switch", json={"discard_changes": True}).status_code == 200
+
+    with_s1 = save("with s1")
+    assert admin.delete(f"/api/slides/{by_name['s1.tif']}").status_code == 204
+    without_s1 = save("without s1")
+    open_version(without_s1)
+    assert seen() == []
+
+    # Assigned another slide while s1 is not here: s1 is still theirs when it returns.
+    current = {s["filename"]: s["id"] for s in admin.get(f"/api/projects/{pid}/slides").json()}
+    assert admin.put(slides_url, json={"all_slides": False, "slide_ids": [current["s2.tif"]]}).status_code == 200
+    assert seen() == ["s2.tif"]
+    open_version(with_s1)
+    assert seen() == ["s1.tif", "s2.tif"]
+    open_version(without_s1)
+    assert seen() == ["s2.tif"]
+
+    # Giving all slides, then limiting again, starts from what is chosen then.
+    assert admin.put(slides_url, json={"all_slides": True}).status_code == 200
+    current = {s["filename"]: s["id"] for s in admin.get(f"/api/projects/{pid}/slides").json()}
+    assert admin.put(slides_url, json={"all_slides": False, "slide_ids": [current["s0.tif"]]}).status_code == 200
+    open_version(with_s1)
+    assert seen() == ["s0.tif"]
+
+
 def test_annotators_can_be_given_only_some_slides(api):
     admin = setup_admin(api)
     ann = add_user(admin, "Ann", "ann@lab.org", "annotator")
