@@ -85,6 +85,7 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
   const height = slide.height_l0 ?? 0;
 
   const [patchDrawn, setPatchDrawn] = useState<GeometryAnnotation[]>([]);
+  const [patchLoading, setPatchLoading] = useState<number | null>(null); // how many have arrived, while loading
   const [showPatchDrawn, setShowPatchDrawn] = useState(true);
   const [showGrid, setShowGrid] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]); // a model's, waiting anywhere on the slide
@@ -142,7 +143,13 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
   useEffect(() => {
     setTool("pan"); // start on the safe tool: a stray drag must move the view, not draw
     let cancelled = false;
-    listSlideAnnotations(slide.id, "patch").then((list) => !cancelled && setPatchDrawn(list));
+    setPatchDrawn([]);
+    setPatchLoading(0);
+    // Light: this view draws in Level-0 only. Shown page by page, so a busy slide is usable at once.
+    listSlideAnnotations(slide.id, "patch", { light: true, onPage: (soFar) => !cancelled && (setPatchDrawn(soFar), setPatchLoading(soFar.length)) })
+      .then((list) => !cancelled && setPatchDrawn(list))
+      .catch(() => undefined)
+      .finally(() => !cancelled && setPatchLoading(null));
     return () => {
       cancelled = true;
     };
@@ -272,7 +279,9 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
     // Undo puts it back where it was: in its patch (in that patch's pixels), or on the whole slide.
     const recreate = () =>
       patchId != null
-        ? createAnnotation(patchId, { ...common, coordinates_patch_local: target.coordinates_patch_local as Point[] })
+        ? getPatch(patchId).then((owner) =>
+            createAnnotation(patchId, { ...common, coordinates_patch_local: (target.coordinates_level0 as Point[]).map((pt) => level0ToLocal(owner, pt)) }),
+          )
         : createSlideAnnotation(slide.id, { ...common, coordinates_level0: target.coordinates_level0 as Point[] });
     await guarded("delete annotation", async () => {
       await deleteAnnotation(target.id);
@@ -387,7 +396,7 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
   function afterImport() {
     history.reset();
     listSlideAnnotations(slide.id, "slide").then(setSlideAnnotations).catch(() => undefined);
-    listSlideAnnotations(slide.id, "patch").then(setPatchDrawn).catch(() => undefined);
+    listSlideAnnotations(slide.id, "patch", { light: true }).then(setPatchDrawn).catch(() => undefined);
   }
 
   if (!width || !height) {
@@ -429,7 +438,7 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
             <ClassChips classes={classes} />
             <div className="w-px h-6 bg-slate-700 mx-1" />
             <ToggleChip label="Patch grid" checked={showGrid} onChange={setShowGrid} />
-            <ToggleChip label={`Patch annotations (${patchDrawn.length})`} checked={showPatchDrawn} onChange={setShowPatchDrawn} />
+            <ToggleChip label={patchLoading != null ? `Patch annotations (loading ${patchLoading}…)` : `Patch annotations (${patchDrawn.length})`} checked={showPatchDrawn} onChange={setShowPatchDrawn} />
           </div>
 
           <ToolOptions tool={tool} />

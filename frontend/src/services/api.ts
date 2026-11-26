@@ -414,15 +414,23 @@ export const listPatchAnnotations = (patchId: number) =>
 /** Annotations drawn in other patches that reach into this one (patches overlap when stride < size). */
 export const listOverlappingAnnotations = (patchId: number) =>
   request<OverlappingAnnotation[]>(`/patches/${patchId}/overlapping-annotations`);
-/** "patch": drawn in a patch; "slide": drawn on the whole slide (WSI mode); "all" (default): both. */
-export async function listSlideAnnotations(slideId: number, scope: "all" | "patch" | "slide" = "all") {
+/** "patch": drawn in a patch; "slide": drawn on the whole slide (WSI mode); "all" (default): both.
+ * `light` leaves out patch-local coordinates (sent empty), for views that draw in Level-0 only.
+ * `onPage` gets everything so far after each page, so a view can show shapes while the rest arrive. */
+export async function listSlideAnnotations(
+  slideId: number,
+  scope: "all" | "patch" | "slide" = "all",
+  opts: { light?: boolean; onPage?: (soFar: GeometryAnnotation[]) => void } = {},
+) {
   const pageSize = 5000;
   const all: GeometryAnnotation[] = [];
+  const scopeParam = scope === "all" ? "" : `&scope=${scope}`;
+  const lightParam = opts.light ? "&light=true" : "";
   for (let afterId = 0; ; ) {
-    const scopeParam = scope === "all" ? "" : `&scope=${scope}`;
-    const page = await request<GeometryAnnotation[]>(`/slides/${slideId}/annotations?limit=${pageSize}&after_id=${afterId}${scopeParam}`);
+    const page = await request<GeometryAnnotation[]>(`/slides/${slideId}/annotations?limit=${pageSize}&after_id=${afterId}${scopeParam}${lightParam}`);
     for (const a of page) all.push(a);
     if (page.length < pageSize) return all;
+    opts.onPage?.([...all]);
     afterId = page[page.length - 1].id;
   }
 }

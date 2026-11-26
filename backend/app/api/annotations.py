@@ -49,6 +49,7 @@ def list_slide_annotations(
     limit: int = Query(5000, ge=1, le=20000),
     after_id: int = Query(0, ge=0, description="Return annotations with a larger id: the last id of the previous page"),
     scope: Literal["all", "patch", "slide"] = Query("all", description="patch: drawn in a patch; slide: drawn on the whole slide"),
+    light: bool = Query(False, description="Leave out coordinates_patch_local (sent empty): for views that draw in Level-0 only"),
 ):
     """A slide's geometry annotations in Level-0 space, one page at a time in id order. `limit` is
     the size of a page: a client wanting them all asks again with `after_id` until a page comes
@@ -64,7 +65,13 @@ def list_slide_annotations(
         q = q.filter(GeometryAnnotation.patch_id.isnot(None))
     elif scope == "slide":
         q = q.filter(GeometryAnnotation.patch_id.is_(None))
-    return q.order_by(GeometryAnnotation.id.asc()).limit(limit).all()
+    rows = q.order_by(GeometryAnnotation.id.asc()).limit(limit).all()
+    if not light:
+        return rows
+    out = [GeometryAnnotationOut.model_validate(a) for a in rows]
+    for o in out:
+        o.coordinates_patch_local = []
+    return out
 
 
 def _require_inside_slide(slide: Slide, coords: list[list[float]]) -> None:

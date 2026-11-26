@@ -232,7 +232,15 @@ export function MainWorkspacePage() {
   }
 
   useEffect(() => {
-    listSlideAnnotations(sid, "slide").then(setSlideAnnotations).catch(() => setSlideAnnotations([]));
+    let cancelled = false;
+    setSlideAnnotations([]);
+    // Shown page by page: on a busy slide the first shapes appear while the rest are still arriving.
+    listSlideAnnotations(sid, "slide", { onPage: (soFar) => !cancelled && setSlideAnnotations(soFar) })
+      .then((list) => !cancelled && setSlideAnnotations(list))
+      .catch(() => !cancelled && setSlideAnnotations([]));
+    return () => {
+      cancelled = true;
+    };
   }, [sid]);
 
   useEffect(() => {

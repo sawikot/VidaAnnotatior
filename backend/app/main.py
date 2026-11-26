@@ -2,6 +2,7 @@ import shutil
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 
 from app.api import annotations, auth, configs, dataset_import, export, images, patches, processing, projects, recipes, slides, splits, suggestions, system, training, versions
@@ -14,6 +15,24 @@ from app.services import project_storage
 settings = get_settings()
 
 app = FastAPI(title=settings.app_name)
+
+
+class AnnotationGZip:
+    """Gzips annotation lists, which are large JSON (long outlines compress 5-10x). Only those routes:
+    tiles and downloads are already compressed, and gzipping them again would only cost CPU."""
+
+    def __init__(self, inner) -> None:
+        self.inner = inner
+        self.gzip = GZipMiddleware(inner, minimum_size=2048, compresslevel=5)
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] == "http" and scope["path"].endswith("annotations"):
+            await self.gzip(scope, receive, send)
+        else:
+            await self.inner(scope, receive, send)
+
+
+app.add_middleware(AnnotationGZip)
 
 app.add_middleware(
     CORSMiddleware,
