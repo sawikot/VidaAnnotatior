@@ -21,9 +21,9 @@ class AnnotationGZip:
     """Gzips annotation lists, which are large JSON (long outlines compress 5-10x). Only those routes:
     tiles and downloads are already compressed, and gzipping them again would only cost CPU."""
 
-    def __init__(self, inner) -> None:
-        self.inner = inner
-        self.gzip = GZipMiddleware(inner, minimum_size=2048, compresslevel=5)
+    def __init__(self, app) -> None:  # Starlette passes it as app=
+        self.inner = app
+        self.gzip = GZipMiddleware(app, minimum_size=2048, compresslevel=5)
 
     async def __call__(self, scope, receive, send) -> None:
         if scope["type"] == "http" and scope["path"].endswith("annotations"):
