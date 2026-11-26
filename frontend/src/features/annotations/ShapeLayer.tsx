@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { pointsAttr, scaleStep } from "../../utils/displayPoints";
 import { screenToSvgPoint, type Point } from "../../utils/coordinates";
 import {
   circleGeometry,
@@ -144,6 +145,11 @@ export function ShapeLayer({
   const [drawTool, setDrawTool] = useState<AnnotationTool>(tool);
   if (tool !== "pan" && tool !== drawTool) setDrawTool(tool); // adjusting state to a prop, during render
   const px = (n: number) => n / scale;
+  // Shapes are drawn at a rounded scale and skip redrawing while nothing about them changes, so a pan or a
+  // zoom animation (which re-renders this layer every frame) does not rework thousands of them.
+  const step = scaleStep(scale);
+  const beginEditRef = useRef<(e: React.PointerEvent, shape: LayerShape, handle: Handle | null) => void>(() => undefined);
+  const beginEditStable = useCallback((e: React.PointerEvent, shape: LayerShape, handle: Handle | null) => beginEditRef.current(e, shape, handle), []);
   const unit = 1 / scale;
   const classColor = (id: number | null) => classes.find((c) => c.id === id)?.color_hex ?? PREVIEW;
   const setGesture = (on: boolean) => {
@@ -277,6 +283,7 @@ export function ShapeLayer({
     }
   }
 
+  beginEditRef.current = beginEdit;
   function beginEdit(e: React.PointerEvent, shape: LayerShape, handle: Handle | null) {
     e.stopPropagation(); // a press on a shape or its handle is not a press on the background
     onSelect(shape.id);
@@ -508,10 +515,10 @@ export function ShapeLayer({
           shape={shape}
           color={classColor(shape.class_id)}
           selected={false}
-          px={px}
+          scale={step}
           muted
           interactive={tool === "select" && !!onBackgroundPress}
-          onPress={() => onBackgroundPress?.(shape.id)}
+          onPress={onBackgroundPress}
         />
       ))}
 
@@ -522,9 +529,9 @@ export function ShapeLayer({
           color={classColor(shape.class_id)}
           selected={shape.id === selectedId}
           interactive={tool === "select"}
-          px={px}
+          scale={step}
           fill={fillOpacity}
-          onBeginEdit={(e, handle) => beginEdit(e, shape, handle)}
+          onBeginEdit={beginEditStable}
         />
       ))}
 
@@ -621,14 +628,14 @@ function BrushPreview({ path, cursor, radius, color, px }: { path: Point[]; curs
   );
 }
 
-function ShapeView({
+const ShapeView = memo(function ShapeView({
   shape,
   color,
   selected,
   interactive,
   muted = false,
   fill,
-  px,
+  scale,
   onBeginEdit,
   onPress,
 }: {
@@ -641,18 +648,22 @@ function ShapeView({
   muted?: boolean;
   /** Fill opacity of an ordinary shape; default 0.25. */
   fill?: number;
-  px: (n: number) => number;
-  onBeginEdit?: (e: React.PointerEvent, handle: Handle | null) => void;
-  onPress?: () => void;
+  /** Screen px per unit, rounded (scaleStep): strokes and handles keep their size on screen. */
+  scale: number;
+  onBeginEdit?: (e: React.PointerEvent, shape: LayerShape, handle: Handle | null) => void;
+  onPress?: (id: number) => void;
 }) {
   const { type, points } = shape;
+  const px = (n: number) => n / scale;
+  // The selected shape is drawn with every point (its handles sit on them); the others lose detail under a pixel.
+  const attr = () => (selected ? points.map((p) => p.join(",")).join(" ") : pointsAttr(points, scale));
   const strokeWidth = px(selected ? 3 : 2);
   const dashed = muted ? `${px(5)} ${px(4)}` : type === "freehand" || type === "freehand_line" ? `${px(4)} ${px(2)}` : shape.unsure ? `${px(3)} ${px(3)}` : undefined;
   const fillOpacity = muted ? 0.08 : shape.excluded ? 0.06 : (fill ?? 0.25);
   const opacity = muted ? 0.75 : shape.excluded ? 0.4 : 1;
   const wrapper = {
     "data-shape": shape.id,
-    onPointerDown: interactive ? (e: React.PointerEvent) => (muted ? (e.stopPropagation(), onPress?.()) : onBeginEdit?.(e, null)) : undefined,
+    onPointerDown: interactive ? (e: React.PointerEvent) => (muted ? (e.stopPropagation(), onPress?.(shape.id)) : onBeginEdit?.(e, shape, null)) : undefined,
     style: { cursor: interactive ? (muted ? "pointer" : "move") : "default", pointerEvents: interactive ? "auto" : "none" },
   } as const;
 
@@ -665,7 +676,7 @@ function ShapeView({
           const size = px(isEdge ? 8 : 9);
           const radius = spot.handle.kind === "radius";
           return (
-            <g key={i} style={{ cursor: "grab" }} onPointerDown={(e) => onBeginEdit?.(e, spot.handle)}>
+            <g key={i} style={{ cursor: "grab" }} onPointerDown={(e) => onBeginEdit?.(e, shape, spot.handle)}>
               <circle cx={x} cy={y} r={px(11)} fill="transparent" />
               {isEdge ? (
                 <rect x={x - size / 2} y={y - size / 2} width={size} height={size} fill={color} stroke="white" strokeWidth={px(1.5)} />
@@ -687,7 +698,7 @@ function ShapeView({
   }
 
   if (isLineShape(type)) {
-    const path = points.map((p) => p.join(",")).join(" ");
+    const path = attr();
     return (
       <g {...wrapper}>
         {/* a wide invisible stroke: a 2 px line is otherwise nearly impossible to click */}
@@ -711,7 +722,7 @@ function ShapeView({
   return (
     <g {...wrapper}>
       <polygon
-        points={points.map((p) => p.join(",")).join(" ")}
+        points={attr()}
         fill={color}
         fillOpacity={fillOpacity}
         stroke={color}
@@ -722,4 +733,4 @@ function ShapeView({
       {handles}
     </g>
   );
-}
+});

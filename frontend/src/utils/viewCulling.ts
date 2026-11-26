@@ -34,8 +34,11 @@ export interface Culled<T> {
 }
 
 /** The most shapes drawn in full at once; beyond this the smallest in view become dots. */
-export const MAX_DETAILED = 2000;
+export const MAX_DETAILED = 1000;
 const MARKER_PX = 4;
+/** A shape smaller than this on screen is a dot whatever the count: its outline would be a smudge anyway,
+ * and each one drawn in full costs the browser as much as a large one. */
+export const MIN_DETAILED_PX = 6;
 
 export function shapeBox(type: GeometryType, points: Point[]): Box {
   if (type === "circle" && points.length >= 2) {
@@ -75,11 +78,14 @@ export function cullShapes<T extends CullableShape>(
   const inView = view ? items.filter((it) => overlaps(it.box, view)) : items;
   const kept = keepId == null ? undefined : items.find((it) => it.shape.id === keepId);
   const keptOutside = kept && !inView.includes(kept) ? [kept.shape] : [];
-  if (inView.length <= maxDetailed) {
+  const minSide = MIN_DETAILED_PX / scale;
+  const tiny = (b: Box) => b.x1 - b.x0 < minSide && b.y1 - b.y0 < minSide;
+  if (inView.length <= maxDetailed && !inView.some((it) => tiny(it.box))) {
     return { detailed: [...keptOutside, ...inView.map((it) => it.shape)], markers: [], markerCount: 0 };
   }
 
-  const threshold = inView.map((it) => boxArea(it.box)).sort((a, b) => b - a)[maxDetailed - 1];
+  const areas = inView.filter((it) => !tiny(it.box)).map((it) => boxArea(it.box)).sort((a, b) => b - a);
+  const threshold = areas.length > maxDetailed ? areas[maxDetailed - 1] : 0;
   const size = +(MARKER_PX / scale).toFixed(2);
   const paths = new Map<number | null, string[]>();
   const detailed: T[] = [...keptOutside];
@@ -88,7 +94,7 @@ export function cullShapes<T extends CullableShape>(
   for (const { shape, box } of inView) {
     if (shape.id === keepId) {
       detailed.push(shape);
-    } else if (taken < maxDetailed && boxArea(box) >= threshold) {
+    } else if (taken < maxDetailed && !tiny(box) && boxArea(box) >= threshold) {
       detailed.push(shape);
       taken += 1;
     } else {

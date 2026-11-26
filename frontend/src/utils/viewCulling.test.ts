@@ -12,7 +12,7 @@ const ids = (list: CullableShape[]) => list.map((s) => s.id);
 
 describe("cullShapes", () => {
   it("skips shapes outside the view", () => {
-    const out = cullShapes(indexShapes([square(1, 10, 5), square(2, 500, 5)]), view, 1, null);
+    const out = cullShapes(indexShapes([square(1, 10, 8), square(2, 500, 8)]), view, 1, null);
     expect(ids(out.detailed)).toEqual([1]);
     expect(out.markerCount).toBe(0);
   });
@@ -22,7 +22,7 @@ describe("cullShapes", () => {
   });
 
   it("keeps the selected shape even when it is out of view", () => {
-    expect(ids(cullShapes(indexShapes([square(1, 10, 5), square(2, 500, 5)]), view, 1, 2).detailed).sort()).toEqual([1, 2]);
+    expect(ids(cullShapes(indexShapes([square(1, 10, 8), square(2, 500, 8)]), view, 1, 2).detailed).sort()).toEqual([1, 2]);
   });
 
   it("over the cap, draws the largest and leaves none of the others out", () => {
@@ -34,10 +34,18 @@ describe("cullShapes", () => {
   });
 
   it("respects the cap when every shape is the same size", () => {
-    const shapes = Array.from({ length: 10 }, (_, i) => square(i + 1, i, 1));
+    const shapes = Array.from({ length: 10 }, (_, i) => square(i + 1, i, 8));
     const out = cullShapes(indexShapes(shapes), view, 1, null, 3);
     expect(out.detailed).toHaveLength(3);
     expect(out.markerCount).toBe(7);
+  });
+
+  it("draws a shape too small to see on screen as a dot, even under the cap", () => {
+    const out = cullShapes(indexShapes([square(1, 10, 3), square(2, 50, 20)]), view, 1, null);
+    expect(ids(out.detailed)).toEqual([2]);
+    expect(out.markerCount).toBe(1);
+    // the same shape zoomed in is big enough to draw in full
+    expect(ids(cullShapes(indexShapes([square(1, 10, 3)]), view, 4, null).detailed)).toEqual([1]);
   });
 
   it("measures an outline too long to spread into Math.min", () => {
