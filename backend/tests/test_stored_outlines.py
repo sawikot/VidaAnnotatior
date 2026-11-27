@@ -97,3 +97,23 @@ def test_an_older_database_is_cleaned_once_in_batches(tmp_path):
         conn.execute(text("UPDATE geometry_annotations SET coordinates_level0 = :c WHERE id = 3"), {"c": json.dumps(ring)})
     assert _thin_stored_outlines(eng) == 0
     assert len(_stored(eng)[2][1]) == len(ring)
+
+
+def test_a_row_edited_while_the_cleanup_runs_is_left_as_the_edit_saved_it(tmp_path, monkeypatch):
+    import app.services.geometry as geometry
+
+    ring = dense_ring()
+    eng = _engine_with([("polygon", ring, []), ("polygon", ring, [])], tmp_path)
+    real = geometry.thin_annotation_coords
+    edited = [[1, 1], [9, 1], [9, 9], [1, 9], [1, 5]]
+
+    def edit_row_2_meanwhile(*args):  # the app saves an edit between the cleanup's read and its write
+        with eng.begin() as conn:
+            conn.execute(text("UPDATE geometry_annotations SET coordinates_level0 = :c, updated_at = '2026-02-02 00:00:00.000000'"
+                              " WHERE id = 2"), {"c": json.dumps(edited)})
+        return real(*args)
+
+    monkeypatch.setattr(geometry, "thin_annotation_coords", edit_row_2_meanwhile)
+    assert _thin_stored_outlines(eng) == 1  # both looked thinnable when read; only the untouched one is written
+    assert 20 < len(_stored(eng)[0][1]) < 100
+    assert _stored(eng)[1][1] == edited  # the edit wins

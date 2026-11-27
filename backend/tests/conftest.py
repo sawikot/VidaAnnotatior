@@ -20,6 +20,7 @@ def isolated_storage(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "wsi_storage_dir", tmp_path / "isolated_uploads")
     monkeypatch.setattr(settings, "wsi_watch_dir", tmp_path / "isolated_watch")
     monkeypatch.setattr(settings, "training_dir", tmp_path / "isolated_training")
+    monkeypatch.setattr(settings, "thin_outlines_on_start", False)  # a background thread would race the test's database
     # What the app remembers about the trainer between requests must not leak from test to test.
     from app.api import recipes as recipes_api, training as training_api
 

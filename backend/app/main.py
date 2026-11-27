@@ -1,4 +1,6 @@
+import logging
 import shutil
+import threading
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +11,7 @@ from app.api import annotations, auth, configs, dataset_import, export, images, 
 from app.api.access import authorize
 from app.core.config import get_settings
 from app.database.session import SessionLocal, init_db
+from app.database.session import _thin_stored_outlines as thin_stored_outlines
 from app.models.project import Project
 from app.services import project_storage
 
@@ -55,6 +58,16 @@ def on_startup() -> None:
     with SessionLocal() as db:
         project_ids = [pid for (pid,) in db.query(Project.id)]
     project_storage.remove_orphaned_project_dirs(settings.wsi_storage_dir, project_ids)
+    # Slow on a large database, so after startup and in the background: the server answers meanwhile.
+    if settings.thin_outlines_on_start:
+        threading.Thread(target=_thin_outlines_in_background, name="thin-stored-outlines", daemon=True).start()
+
+
+def _thin_outlines_in_background() -> None:
+    try:
+        thin_stored_outlines()
+    except Exception:  # noqa: BLE001  -- a failure must not take the server down; it is tried again next start
+        logging.getLogger(__name__).exception("Thinning stored outlines failed; it will be tried again at the next start")
 
 
 @app.get(f"{settings.api_prefix}/health")

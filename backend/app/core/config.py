@@ -50,6 +50,8 @@ class Settings(BaseSettings):
 
     # The released version this is (set in the Docker image; "dev" when run from the source).
     app_version: str = "dev"
+    # Thin stored outlines once, in the background after startup (database/session.py). Off in tests.
+    thin_outlines_on_start: bool = True
 
     # The updater service that switches versions (docker-compose.yml). Empty: not running under
     # Docker, so versions are not switched from the app. The secret is written by the updater.
