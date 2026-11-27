@@ -153,21 +153,75 @@ def validate_shape(shape_type: str, coords: list[list[float]]) -> None:
         raise ValueError("a line must have a length and a circle a radius greater than zero")
 
 
-def thin_outline(shape_type: str, coords: list, min_gap: float = 1.0, digits: int = 1) -> list:
-    """An outline for display: points closer than ``min_gap`` (Level-0 px) to the last one kept are dropped
-    and the rest rounded to ``digits`` decimals. Imported outlines can carry tens of thousands of points a
-    fraction of a pixel apart, with float noise (45352.979999999996); this keeps their look at any zoom for
-    a small part of the size. Points, rectangles, circles and short shapes are returned as they are."""
+# Outlines are stored without points that lie within this distance (Level-0 px) of the line through the
+# points kept around them. Imported outlines can carry tens of thousands of points a fraction of a pixel apart,
+# which no zoom can show but every load reads. A quarter pixel keeps every corner, so an outline traced along
+# pixel edges (a mask) still covers exactly the same pixels; only points on (nearly) straight runs go.
+THIN_TOLERANCE_L0 = 0.25
+
+
+def thin_indices(shape_type: str, coords: list, tolerance: float = THIN_TOLERANCE_L0) -> list[int] | None:
+    """Which points of an outline to keep (Douglas-Peucker): a point goes when it lies within ``tolerance``
+    of the segment between the points kept either side of it. The first and last always stay. None when all
+    are kept (points, rectangles, circles, short shapes, or nothing to drop)."""
+    n = len(coords)
+    if shape_type in ("point", "rectangle", "circle") or n <= 4:
+        return None
+    tol2 = tolerance * tolerance
+    keep = bytearray(n)
+    keep[0] = keep[n - 1] = 1
+    stack = [(0, n - 1)]
+    while stack:
+        i, j = stack.pop()
+        if j <= i + 1:
+            continue
+        ax, ay = coords[i][0], coords[i][1]
+        dx, dy = coords[j][0] - ax, coords[j][1] - ay
+        seg2 = dx * dx + dy * dy
+        far, far_d2 = -1, tol2
+        for k in range(i + 1, j):
+            px, py = coords[k][0] - ax, coords[k][1] - ay
+            if seg2 == 0:
+                d2 = px * px + py * py
+            else:
+                t = (px * dx + py * dy) / seg2
+                t = 0.0 if t < 0 else 1.0 if t > 1 else t
+                ex, ey = px - t * dx, py - t * dy
+                d2 = ex * ex + ey * ey
+            if d2 > far_d2:
+                far, far_d2 = k, d2
+        if far >= 0:
+            keep[far] = 1
+            stack.append((i, far))
+            stack.append((far, j))
+    kept = [k for k in range(n) if keep[k]]
+    if len(kept) == n or len(kept) < (2 if shape_type in LINE_TYPES else 3):
+        return None
+    return kept
+
+
+def _rounded(coords: list, digits: int) -> list:
+    return [[round(p[0], digits), round(p[1], digits)] for p in coords]
+
+
+def thin_outline(shape_type: str, coords: list, tolerance: float = THIN_TOLERANCE_L0, digits: int = 2) -> list:
+    """An outline without the points thin_indices drops, rounded to ``digits`` decimals (float noise such
+    as 45352.979999999996 goes). Its look is unchanged at any zoom, for a small part of the size."""
     if shape_type in ("point", "rectangle", "circle") or len(coords) <= 4:
         return coords
-    gap2 = min_gap * min_gap
-    first = coords[0]
-    kept = [[round(first[0], digits), round(first[1], digits)]]
-    lx, ly = first[0], first[1]
-    for x, y in coords[1:-1]:
-        if (x - lx) * (x - lx) + (y - ly) * (y - ly) >= gap2:
-            kept.append([round(x, digits), round(y, digits)])
-            lx, ly = x, y
-    last = coords[-1]
-    kept.append([round(last[0], digits), round(last[1], digits)])
-    return kept if len(kept) >= (2 if shape_type in LINE_TYPES else 3) else coords
+    keep = thin_indices(shape_type, coords, tolerance)
+    return _rounded(coords if keep is None else [coords[i] for i in keep], digits)
+
+
+def thin_annotation_coords(shape_type: str, level0: list, patch_local: list) -> tuple[list, list]:
+    """Both copies of an annotation's outline thinned alike: points are chosen in Level-0 (where 1 px is
+    the finest the slide has) and the same ones kept in the patch-local copy, so the two still match."""
+    if shape_type in ("point", "rectangle", "circle") or len(level0) <= 4:
+        return level0, patch_local
+    keep = thin_indices(shape_type, level0)
+    paired = len(patch_local) == len(level0)
+    if keep is not None:
+        level0 = [level0[i] for i in keep]
+        if paired:
+            patch_local = [patch_local[i] for i in keep]
+    return _rounded(level0, 2), (_rounded(patch_local, 2) if paired else patch_local)

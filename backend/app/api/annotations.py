@@ -49,8 +49,7 @@ def list_slide_annotations(
     limit: int = Query(5000, ge=1, le=20000),
     after_id: int = Query(0, ge=0, description="Return annotations with a larger id: the last id of the previous page"),
     scope: Literal["all", "patch", "slide"] = Query("all", description="patch: drawn in a patch; slide: drawn on the whole slide"),
-    light: bool = Query(False, description="For views that draw in Level-0 only: coordinates_patch_local is sent empty, and "
-                        "outlines drop points under 1 Level-0 px apart (geometry.thin_outline)"),
+    light: bool = Query(False, description="For views that draw in Level-0 only: coordinates_patch_local is sent empty"),
 ):
     """A slide's geometry annotations in Level-0 space, one page at a time in id order. `limit` is
     the size of a page: a client wanting them all asks again with `after_id` until a page comes
@@ -69,10 +68,10 @@ def list_slide_annotations(
     rows = q.order_by(GeometryAnnotation.id.asc()).limit(limit).all()
     if not light:
         return rows
+    # Outlines are stored thinned already (models/annotation.py); this only leaves out the patch-local copy.
     out = [GeometryAnnotationOut.model_validate(a) for a in rows]
     for o in out:
         o.coordinates_patch_local = []
-        o.coordinates_level0 = thin_outline(o.type, o.coordinates_level0)
     return out
 
 
@@ -427,6 +426,8 @@ def import_entries(
         except ValueError:
             counts["invalid"] += 1  # a malformed entry must not sink the rest of the file
             continue
+        # Stored thinned (models/annotation.py), so compared thinned: a re-import is still seen as a duplicate.
+        entry.coordinates = thin_outline(entry.type, entry.coordinates)
 
         label = (entry.label or "").strip()
         target = label_map.get(label)

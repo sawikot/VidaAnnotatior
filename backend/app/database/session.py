@@ -54,6 +54,7 @@ def init_db() -> None:
     _link_patch_labels()
     _upgrade_enabled_tools()
     _allow_slide_level_annotations()
+    _thin_stored_outlines()
 
 
 def _add_missing_columns(bind=None) -> None:
@@ -330,3 +331,60 @@ def _allow_slide_level_annotations(bind=None) -> None:
             raw.isolation_level = original_isolation
         finally:
             raw.close()
+
+
+def _thin_stored_outlines(bind=None, batch: int = 2000) -> int:
+    """Once: store every outline thinned, as new ones are (models/annotation.py). Imported outlines could
+    carry millions of points a fraction of a pixel apart, which every load had to read; each shape moves by
+    under a Level-0 pixel. Works through the table a batch at a time, each batch its own transaction, and
+    notes when it has finished so later startups skip it. Returns how many annotations changed."""
+    import json
+    import logging
+
+    from sqlalchemy import bindparam, text
+
+    from app.models.annotation import GeometryAnnotation
+    from app.services.geometry import thin_annotation_coords
+
+    marker = "thin_stored_outlines"
+    bind = bind or engine
+    with bind.begin() as conn:
+        conn.execute(text("CREATE TABLE IF NOT EXISTS app_migrations (name VARCHAR(100) PRIMARY KEY)"))
+        if conn.execute(text("SELECT 1 FROM app_migrations WHERE name = :n"), {"n": marker}).first():
+            return 0
+
+    table = GeometryAnnotation.__table__
+    update = (
+        table.update()
+        .where(table.c.id == bindparam("row_id"))
+        .values(coordinates_level0=bindparam("l0"), coordinates_patch_local=bindparam("local"))
+    )
+    load = lambda raw: json.loads(raw) if isinstance(raw, (str, bytes)) else (raw or [])  # noqa: E731
+    changed = 0
+    last_id = 0
+    while True:
+        with bind.begin() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT id, type, coordinates_level0, coordinates_patch_local FROM geometry_annotations"
+                    " WHERE id > :last ORDER BY id LIMIT :n"
+                ),
+                {"last": last_id, "n": batch},
+            ).fetchall()
+            if not rows:
+                break
+            updates = []
+            for row_id, shape_type, raw_l0, raw_local in rows:
+                l0, local = load(raw_l0), load(raw_local)
+                new_l0, new_local = thin_annotation_coords(shape_type, l0, local)
+                if new_l0 != l0 or new_local != local:
+                    updates.append({"row_id": row_id, "l0": new_l0, "local": new_local})
+            if updates:
+                conn.execute(update, updates)
+            changed += len(updates)
+            last_id = rows[-1][0]
+    with bind.begin() as conn:
+        conn.execute(text("INSERT INTO app_migrations (name) VALUES (:n)"), {"n": marker})
+    if changed:
+        logging.getLogger(__name__).info("Thinned %d stored annotation outlines", changed)
+    return changed

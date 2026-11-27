@@ -47,3 +47,27 @@ class GeometryAnnotation(Base, TimestampMixin):
         p = self.patch
         return None if p is None else [p.x, p.y, p.x + p.width_l0, p.y + p.height_l0]
     annotation_class: Mapped["AnnotationClass | None"] = relationship("AnnotationClass")
+
+
+from sqlalchemy import event, inspect  # noqa: E402
+
+
+def _thin_on_save(mapper, connection, target: GeometryAnnotation) -> None:  # noqa: ARG001
+    """Every outline is stored thinned (services/geometry.thin_annotation_coords), however it was made:
+    drawn, edited, imported or accepted from a model. Only when its coordinates were set or changed."""
+    from app.services.geometry import thin_annotation_coords
+
+    state = inspect(target)
+    if state.persistent and not (
+        state.attrs.coordinates_level0.history.has_changes() or state.attrs.coordinates_patch_local.history.has_changes()
+    ):
+        return
+    level0, local = thin_annotation_coords(target.type, target.coordinates_level0 or [], target.coordinates_patch_local or [])
+    if level0 is not target.coordinates_level0:
+        target.coordinates_level0 = level0
+    if local is not target.coordinates_patch_local:
+        target.coordinates_patch_local = local
+
+
+event.listen(GeometryAnnotation, "before_insert", _thin_on_save)
+event.listen(GeometryAnnotation, "before_update", _thin_on_save)
