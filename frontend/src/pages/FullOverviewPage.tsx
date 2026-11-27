@@ -92,7 +92,7 @@ export function FullOverviewPage() {
               <TissueMaskOutline slideId={sid} refreshKey={slide.tissue_mask_path} />
             )}
             {showGrid && <PatchGridOverlay slideId={sid} bbox={bbox} />}
-            {showAnnotations && <ShapeMarkers markers={culled.markers} classes={classes} />}
+            {showAnnotations && <ShapeMarkers markers={culled.markers} classes={classes} size={culled.markerSize} />}
             {showAnnotations &&
               culled.detailed
                 .map(({ annotation: a }) => {

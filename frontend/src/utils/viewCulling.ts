@@ -21,16 +21,18 @@ export interface Indexed<T> {
   box: Box;
 }
 
-/** Dots for one class, as a single SVG path: thousands of them cost the browser one element. */
-export interface MarkerPath {
+/** Dots for one class: the centres of the shapes, as x, y pairs in one flat list. */
+export interface MarkerSet {
   classId: number | null;
-  d: string;
+  points: number[];
 }
 
 export interface Culled<T> {
   detailed: T[];
-  markers: MarkerPath[];
+  markers: MarkerSet[];
   markerCount: number;
+  /** The side of a dot, in the shapes' units (a few screen pixels at the scale they were worked out for). */
+  markerSize: number;
 }
 
 /** The most shapes drawn in full at once; beyond this the smallest in view become dots. */
@@ -81,13 +83,13 @@ export function cullShapes<T extends CullableShape>(
   const minSide = MIN_DETAILED_PX / scale;
   const tiny = (b: Box) => b.x1 - b.x0 < minSide && b.y1 - b.y0 < minSide;
   if (inView.length <= maxDetailed && !inView.some((it) => tiny(it.box))) {
-    return { detailed: [...keptOutside, ...inView.map((it) => it.shape)], markers: [], markerCount: 0 };
+    return { detailed: [...keptOutside, ...inView.map((it) => it.shape)], markers: [], markerCount: 0, markerSize: MARKER_PX / scale };
   }
 
   const areas = inView.filter((it) => !tiny(it.box)).map((it) => boxArea(it.box)).sort((a, b) => b - a);
   const threshold = areas.length > maxDetailed ? areas[maxDetailed - 1] : 0;
-  const size = +(MARKER_PX / scale).toFixed(2);
-  const paths = new Map<number | null, string[]>();
+  const size = MARKER_PX / scale;
+  const sets = new Map<number | null, number[]>();
   const detailed: T[] = [...keptOutside];
   let taken = 0;
   let markerCount = 0;
@@ -98,13 +100,11 @@ export function cullShapes<T extends CullableShape>(
       detailed.push(shape);
       taken += 1;
     } else {
-      const x = +((box.x0 + box.x1 - size) / 2).toFixed(1);
-      const y = +((box.y0 + box.y1 - size) / 2).toFixed(1);
-      const list = paths.get(shape.class_id) ?? [];
-      list.push(`M${x} ${y}h${size}v${size}h-${size}z`);
-      paths.set(shape.class_id, list);
+      const list = sets.get(shape.class_id) ?? [];
+      list.push((box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2);
+      sets.set(shape.class_id, list);
       markerCount += 1;
     }
   }
-  return { detailed, markers: [...paths].map(([classId, parts]) => ({ classId, d: parts.join("") })), markerCount };
+  return { detailed, markers: [...sets].map(([classId, points]) => ({ classId, points })), markerCount, markerSize: size };
 }

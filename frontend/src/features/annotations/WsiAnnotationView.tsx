@@ -395,7 +395,7 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
    * in its patches, so show both again, and drop undo steps that predate them. */
   function afterImport() {
     history.reset();
-    listSlideAnnotations(slide.id, "slide").then(setSlideAnnotations).catch(() => undefined);
+    listSlideAnnotations(slide.id, "slide", { light: true }).then(setSlideAnnotations).catch(() => undefined);
     listSlideAnnotations(slide.id, "patch", { light: true }).then(setPatchDrawn).catch(() => undefined);
   }
 
@@ -461,7 +461,7 @@ export function WsiAnnotationView({ slide, config, slideAnnotations, setSlideAnn
               }}
             >
               {showGrid && <PatchGridOverlay slideId={slide.id} bbox={bbox} />}
-              <ShapeMarkers markers={culled.markers} classes={classes} />
+              <ShapeMarkers markers={culled.markers} classes={classes} size={culled.markerSize} />
               <ShapeLayer
                 width={width}
                 height={height}

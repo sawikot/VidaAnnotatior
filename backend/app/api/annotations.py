@@ -36,7 +36,7 @@ from app.services.annotation_import import FORMAT_NAMES, ImportFormatError, pars
 from app.services.config_versioning import add_class
 from app.services.patch_grid import GridSpec
 from app.services.patch_labels import on_fill_class_changed, on_fill_deleted
-from app.services.geometry import circle_center_radius, polygon_bounds, validate_shape
+from app.services.geometry import circle_center_radius, polygon_bounds, thin_outline, validate_shape
 from app.services.coordinate_transform import PatchOrigin, polygon_level0_to_patch_local, polygon_patch_local_to_level0
 
 router = APIRouter(tags=["annotations"])
@@ -49,7 +49,8 @@ def list_slide_annotations(
     limit: int = Query(5000, ge=1, le=20000),
     after_id: int = Query(0, ge=0, description="Return annotations with a larger id: the last id of the previous page"),
     scope: Literal["all", "patch", "slide"] = Query("all", description="patch: drawn in a patch; slide: drawn on the whole slide"),
-    light: bool = Query(False, description="Leave out coordinates_patch_local (sent empty): for views that draw in Level-0 only"),
+    light: bool = Query(False, description="For views that draw in Level-0 only: coordinates_patch_local is sent empty, and "
+                        "outlines drop points under 1 Level-0 px apart (geometry.thin_outline)"),
 ):
     """A slide's geometry annotations in Level-0 space, one page at a time in id order. `limit` is
     the size of a page: a client wanting them all asks again with `after_id` until a page comes
@@ -71,6 +72,7 @@ def list_slide_annotations(
     out = [GeometryAnnotationOut.model_validate(a) for a in rows]
     for o in out:
         o.coordinates_patch_local = []
+        o.coordinates_level0 = thin_outline(o.type, o.coordinates_level0)
     return out
 
 

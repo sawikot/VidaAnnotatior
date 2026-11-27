@@ -151,3 +151,23 @@ def validate_shape(shape_type: str, coords: list[list[float]]) -> None:
         raise ValueError("a freehand line needs at least 2 points")
     if shape_type in ("line", "circle") and not has_extent(shape_type, coords):
         raise ValueError("a line must have a length and a circle a radius greater than zero")
+
+
+def thin_outline(shape_type: str, coords: list, min_gap: float = 1.0, digits: int = 1) -> list:
+    """An outline for display: points closer than ``min_gap`` (Level-0 px) to the last one kept are dropped
+    and the rest rounded to ``digits`` decimals. Imported outlines can carry tens of thousands of points a
+    fraction of a pixel apart, with float noise (45352.979999999996); this keeps their look at any zoom for
+    a small part of the size. Points, rectangles, circles and short shapes are returned as they are."""
+    if shape_type in ("point", "rectangle", "circle") or len(coords) <= 4:
+        return coords
+    gap2 = min_gap * min_gap
+    first = coords[0]
+    kept = [[round(first[0], digits), round(first[1], digits)]]
+    lx, ly = first[0], first[1]
+    for x, y in coords[1:-1]:
+        if (x - lx) * (x - lx) + (y - ly) * (y - ly) >= gap2:
+            kept.append([round(x, digits), round(y, digits)])
+            lx, ly = x, y
+    last = coords[-1]
+    kept.append([round(last[0], digits), round(last[1], digits)])
+    return kept if len(kept) >= (2 if shape_type in LINE_TYPES else 3) else coords

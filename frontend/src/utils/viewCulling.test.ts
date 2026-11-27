@@ -30,7 +30,7 @@ describe("cullShapes", () => {
     const out = cullShapes(indexShapes(shapes), view, 1, null, 2);
     expect(ids(out.detailed).sort()).toEqual([2, 4]);
     expect(out.markerCount).toBe(2);
-    expect(out.markers[0].d.match(/M/g)).toHaveLength(2);
+    expect(out.markers[0].points).toHaveLength(4); // two dots, x and y each
   });
 
   it("respects the cap when every shape is the same size", () => {

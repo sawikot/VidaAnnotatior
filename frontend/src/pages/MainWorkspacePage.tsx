@@ -139,7 +139,7 @@ export function MainWorkspacePage() {
     rememberMode(next);
     history.reset();
     // Pick up changes made elsewhere (another tab, another annotator) each time the view changes.
-    listSlideAnnotations(sid, "slide").then(setSlideAnnotations).catch(() => undefined);
+    listSlideAnnotations(sid, "slide", { light: true }).then(setSlideAnnotations).catch(() => undefined);
     setSearchParams((prev) => {
       const params = new URLSearchParams(prev);
       params.set("mode", next);
@@ -235,7 +235,7 @@ export function MainWorkspacePage() {
     let cancelled = false;
     setSlideAnnotations([]);
     // Shown page by page: on a busy slide the first shapes appear while the rest are still arriving.
-    listSlideAnnotations(sid, "slide", { onPage: (soFar) => !cancelled && setSlideAnnotations(soFar) })
+    listSlideAnnotations(sid, "slide", { light: true, onPage: (soFar) => !cancelled && setSlideAnnotations(soFar) })
       .then((list) => !cancelled && setSlideAnnotations(list))
       .catch(() => !cancelled && setSlideAnnotations([]));
     return () => {
@@ -395,7 +395,7 @@ export function MainWorkspacePage() {
   function afterImport() {
     const cur = patch;
     history.reset();
-    listSlideAnnotations(sid, "slide").then(setSlideAnnotations).catch(() => undefined);
+    listSlideAnnotations(sid, "slide", { light: true }).then(setSlideAnnotations).catch(() => undefined);
     if (!cur) return;
     listPatchAnnotations(cur.id).then(setAnnotations).catch(() => undefined);
     getPatch(cur.id).then(setPatch).catch(() => undefined); // its status may have changed
