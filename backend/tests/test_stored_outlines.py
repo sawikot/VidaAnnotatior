@@ -117,3 +117,23 @@ def test_a_row_edited_while_the_cleanup_runs_is_left_as_the_edit_saved_it(tmp_pa
     assert _thin_stored_outlines(eng) == 1  # both looked thinnable when read; only the untouched one is written
     assert 20 < len(_stored(eng)[0][1]) < 100
     assert _stored(eng)[1][1] == edited  # the edit wins
+
+
+def test_until_the_cleanup_is_done_lists_thin_as_they_send(tmp_path, monkeypatch):
+    from sqlalchemy.orm import Session
+
+    import app.database.session as session_module
+    from app.services.geometry import thin_for_display
+
+    monkeypatch.setattr(session_module, "_outlines_thinned", False)
+    eng = _engine_with([("polygon", dense_ring(), [])], tmp_path)
+    with Session(eng) as db:
+        assert session_module.outlines_thinned(db) is False  # no marker table yet
+    assert _thin_stored_outlines(eng) == 1
+    with Session(eng) as db:
+        assert session_module.outlines_thinned(db) is True
+
+    sent = thin_for_display("polygon", dense_ring())
+    assert 500 < len(sent) < 700 and all(round(v, 2) == v for p in sent for v in p)
+    rect = [[0.123456, 0], [10, 10]]
+    assert thin_for_display("rectangle", rect) is rect

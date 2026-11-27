@@ -366,7 +366,12 @@ def _thin_stored_outlines(bind=None, batch: int = 2000) -> int:
         " WHERE id = :row_id AND CAST(updated_at AS TEXT) = :seen_at"
     )
     load = lambda raw: json.loads(raw) if isinstance(raw, (str, bytes)) else (raw or [])  # noqa: E731
+    log = logging.getLogger(__name__)
+    with bind.connect() as conn:
+        total = conn.execute(text("SELECT COUNT(*) FROM geometry_annotations")).scalar() or 0
+    log.warning("Thinning stored outlines: %d annotations to check", total)
     changed = 0
+    seen = 0
     last_id = 0
     while True:
         # Read and work outside any transaction, so the app's own writes are never held up by the thinning.
@@ -384,8 +389,27 @@ def _thin_stored_outlines(bind=None, batch: int = 2000) -> int:
             with bind.begin() as conn:
                 changed += sum(conn.execute(write, u).rowcount for u in updates)
         last_id = rows[-1][0]
+        seen += len(rows)
+        if seen // 50_000 != (seen - len(rows)) // 50_000:
+            log.warning("Thinning stored outlines: %d of %d checked, %d thinned", seen, total, changed)
     with bind.begin() as conn:
         conn.execute(text("INSERT INTO app_migrations (name) VALUES (:n)"), {"n": marker})
-    if changed:
-        logging.getLogger(__name__).info("Thinned %d stored annotation outlines", changed)
+    log.warning("Thinning stored outlines: done, %d of %d thinned", changed, total)
     return changed
+
+
+_outlines_thinned = False
+
+
+def outlines_thinned(db) -> bool:
+    """Whether the one-time thinning of stored outlines has finished. Until then, lists thin as they send."""
+    global _outlines_thinned
+    if not _outlines_thinned:
+        from sqlalchemy import text
+        from sqlalchemy.exc import DBAPIError
+
+        try:
+            _outlines_thinned = db.execute(text("SELECT 1 FROM app_migrations WHERE name = 'thin_stored_outlines'")).first() is not None
+        except DBAPIError:  # no such table yet
+            db.rollback()
+    return _outlines_thinned

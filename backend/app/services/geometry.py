@@ -225,3 +225,23 @@ def thin_annotation_coords(shape_type: str, level0: list, patch_local: list) -> 
         if paired:
             patch_local = [patch_local[i] for i in keep]
     return _rounded(level0, 2), (_rounded(patch_local, 2) if paired else patch_local)
+
+
+def thin_for_display(shape_type: str, coords: list, min_gap: float = 1.0) -> list:
+    """A quick thinning for sending only, never stored: points under ``min_gap`` Level-0 px from the last one
+    kept are dropped, rounded to 2 decimals. One pass, so cheap enough on millions of points per request;
+    unlike thin_outline it may cut a corner by under a pixel, which no zoom can show."""
+    if shape_type in ("point", "rectangle", "circle") or len(coords) <= 4:
+        return coords
+    gap2 = min_gap * min_gap
+    kept = [coords[0]]
+    lx, ly = coords[0][0], coords[0][1]
+    for p in coords[1:-1]:
+        x, y = p[0], p[1]
+        if (x - lx) * (x - lx) + (y - ly) * (y - ly) >= gap2:
+            kept.append(p)
+            lx, ly = x, y
+    kept.append(coords[-1])
+    if len(kept) < (2 if shape_type in LINE_TYPES else 3):
+        return coords
+    return [[round(p[0], 2), round(p[1], 2)] for p in kept]

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_patch_or_404, get_slide_or_404
-from app.database.session import get_db
+from app.database.session import get_db, outlines_thinned
 from app.models.annotation import GeometryAnnotation
 from app.models.config_version import AnnotationClass, ProjectConfigVersion
 from app.models.patch import Patch
@@ -36,7 +36,7 @@ from app.services.annotation_import import FORMAT_NAMES, ImportFormatError, pars
 from app.services.config_versioning import add_class
 from app.services.patch_grid import GridSpec
 from app.services.patch_labels import on_fill_class_changed, on_fill_deleted
-from app.services.geometry import circle_center_radius, polygon_bounds, thin_outline, validate_shape
+from app.services.geometry import circle_center_radius, polygon_bounds, thin_for_display, thin_outline, validate_shape
 from app.services.coordinate_transform import PatchOrigin, polygon_level0_to_patch_local, polygon_patch_local_to_level0
 
 router = APIRouter(tags=["annotations"])
@@ -68,10 +68,14 @@ def list_slide_annotations(
     rows = q.order_by(GeometryAnnotation.id.asc()).limit(limit).all()
     if not light:
         return rows
-    # Outlines are stored thinned already (models/annotation.py); this only leaves out the patch-local copy.
+    # Outlines are stored thinned (models/annotation.py). Until the one-time thinning of older rows has
+    # finished (database/session.py), they are thinned here as they are sent, so busy slides stay light.
+    thin_here = not outlines_thinned(db)
     out = [GeometryAnnotationOut.model_validate(a) for a in rows]
     for o in out:
         o.coordinates_patch_local = []
+        if thin_here:
+            o.coordinates_level0 = thin_for_display(o.type, o.coordinates_level0)
     return out
 
 
