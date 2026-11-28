@@ -46,6 +46,7 @@ import type { ConfigVersion, GeometryAnnotation, GeometryType, ImageSummary, Ove
 import type { Point } from "../utils/coordinates";
 import type { BrushChange } from "../utils/brush";
 import type { LayerShape } from "../features/annotations/ShapeLayer";
+import { SlideSidebar } from "../features/slides/SlideSidebar";
 import { level0ToLocal, localToLevel0, localToLocal, projectSlideShapes } from "../utils/slideProjection";
 
 type AnnotationFields = Partial<
@@ -911,6 +912,9 @@ export function MainWorkspacePage() {
     return (
       <>
       <PatchAreaChoice open={choosingArea} onClose={() => setChoosingArea(false)} onWholeSlide={cutWholeSlide} onTissue={toTissueProcessing} />
+      <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+      <SlideSidebar projectId={pid} currentId={sid} />
+      <div className="flex-1 min-w-0">
       <WsiAnnotationView
         slide={slide}
         config={config}
@@ -923,6 +927,8 @@ export function MainWorkspacePage() {
         onReviewPatch={(id) => void openPatchById(id, true)}
         onClassesCreated={reloadConfig}
       />
+      </div>
+      </div>
       </>
     );
   }
@@ -980,6 +986,7 @@ export function MainWorkspacePage() {
       </div>
 
       <div className="flex-1 flex overflow-hidden">
+        {!isImage && <SlideSidebar projectId={pid} currentId={sid} />}
         {/* Left: navigator */}
         <div className="w-64 bg-[#0f172a] border-r border-[#1e293b] flex flex-col overflow-hidden">
           {isImage ? (

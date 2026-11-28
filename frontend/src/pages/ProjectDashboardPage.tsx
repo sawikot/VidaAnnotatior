@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useCan } from "../stores/authStore";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button, Card, IconButton, StatusPill } from "../components/primitives";
@@ -7,6 +7,7 @@ import { EditProjectModal } from "../features/projects/EditProjectModal";
 import { AddSlideModal } from "../features/slides/AddSlideModal";
 import { DatasetImportModal } from "../features/import/DatasetImportModal";
 import { DeleteSlideModal, type DeleteTarget } from "../features/slides/DeleteSlideModal";
+import { SlidePicture } from "../features/slides/SlideSidebar";
 import { ProjectChecklist } from "../features/projects/ProjectChecklist";
 import { VersionsPanel } from "../features/versions/VersionsPanel";
 import { slideNextStep } from "../utils/nextStep";
@@ -50,6 +51,7 @@ export function ProjectDashboardPage() {
       .catch(() => pushToast("Failed to load project", "error"));
   }
 
+  const [rowsShown, setRowsShown] = useState(ROW_STEP);
   const filteredSlides = slides.filter((s) => {
     if (filterTab === "all") return true;
     // Nothing drawn yet, on the whole slide or in patches.
@@ -264,7 +266,7 @@ export function ProjectDashboardPage() {
             <table className="w-full text-body-md">
               <thead className="bg-surface-container-low text-label-md text-on-surface-variant">
                 <tr>
-                  <th className="text-left px-space-md py-space-sm">Slide</th>
+                  <th className="text-left px-space-md py-space-sm" colSpan={2}>Slide</th>
                   <th className="text-left px-space-md py-space-sm">Dimensions (L0)</th>
                   <th className="text-left px-space-md py-space-sm">Tissue %</th>
                   <th className="text-left px-space-md py-space-sm">Status</th>
@@ -273,11 +275,13 @@ export function ProjectDashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredSlides.map((s) => (
+                {filteredSlides.slice(0, rowsShown).map((s) => (
                   <SlideRow key={s.id} slide={s} projectId={pid} onDelete={() => setDeleteTarget(slideDeleteTarget(s))} />
                 ))}
               </tbody>
             </table>
+            {/* Rows are added as the end comes into view: a project of thousands of slides opens as fast as a small one. */}
+            {rowsShown < filteredSlides.length && <MoreRows onVisible={() => setRowsShown((n) => n + ROW_STEP)} left={filteredSlides.length - rowsShown} />}
           </div>
         )}
       </Card>
@@ -356,6 +360,9 @@ function SlideRow({ slide, projectId, onDelete }: { slide: Slide; projectId: num
     navigate(page === "export" ? `/projects/${projectId}/export?slides=${slide.id}` : `/projects/${projectId}/slides/${slide.id}/${page}`);
   return (
     <tr className="border-t border-outline-variant hover:bg-surface-container-low/50">
+      <td className="pl-space-md py-space-sm w-16">
+        <SlidePicture slide={slide} className="w-14 h-14" />
+      </td>
       <td className="px-space-md py-space-sm">
         {slide.status === "error" ? (
           <div className="font-headline-sm text-headline-sm">{slide.filename}</div>
@@ -419,5 +426,26 @@ function SlideRow({ slide, projectId, onDelete }: { slide: Slide; projectId: num
         </div>
       </td>
     </tr>
+  );
+}
+
+const ROW_STEP = 100;
+
+/** Asks for more rows once it scrolls into view. */
+function MoreRows({ onVisible, left }: { onVisible: () => void; left: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const callback = useRef(onVisible);
+  callback.current = onVisible;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && callback.current(), { rootMargin: "400px" });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [left]);
+  return (
+    <div ref={ref} className="p-space-md text-center text-body-sm text-on-surface-variant">
+      {left.toLocaleString()} more slides...
+    </div>
   );
 }
